@@ -19,6 +19,7 @@ import my_lib.sensor_data
 import my_lib.webapp.config
 
 import unit_cooler.controller.engine
+import unit_cooler.controller.sensor
 
 blueprint = flask.Blueprint("cooler-stat", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
 
@@ -66,7 +67,8 @@ get_last_message.last_message = None
 
 def get_stats(config, message_queue):
     # NOTE: データを受け渡しのは面倒なので、直接計算してしまう
-    mode = unit_cooler.controller.engine.judge_cooling_mode(config)
+    sense_data = unit_cooler.controller.sensor.get_sense_data(config)
+    mode = unit_cooler.controller.engine.judge_cooling_mode(config, sense_data)
 
     return {
         "watering": watering_list(config),

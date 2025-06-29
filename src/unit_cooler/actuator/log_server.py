@@ -3,10 +3,11 @@
 電磁弁の作動ログを WebUI で提供します。
 
 Usage:
-  log_server.py [-c CONFIG] [-D]
+  log_server.py [-c CONFIG] [-p PORT] [-D]
 
 Options:
   -c CONFIG         : CONFIG を設定ファイルとして読み込んで実行します。[default: config.yaml]
+  -p PORT           : Web サーバーを動作させるポートを指定します。[default: 5000]
   -D                : デバッグモードで動作します。
 """
 
@@ -113,6 +114,7 @@ if __name__ == "__main__":
     args = docopt.docopt(__doc__)
 
     config_file = args["-c"]
+    port = int(args["-p"])
     debug_mode = args["-D"]
 
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
@@ -120,4 +122,4 @@ if __name__ == "__main__":
     config = my_lib.config.load(config_file)
     event_queue = multiprocessing.Queue()
 
-    log_server_handle = start(config, event_queue)
+    log_server_handle = start(config, event_queue, port)
