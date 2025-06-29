@@ -99,9 +99,15 @@ def judge_cooling_mode(config, sense_data):
 
 
 def gen_control_msg(config, dummy_mode=False, speedup=1):
-    sense_data = unit_cooler.controller.sensor.get_sense_data(config)
-    mode = dummy_cooling_mode() if dummy_mode else judge_cooling_mode(config, sense_data)
+    if dummy_mode:
+        sense_data = {}
+        mode = dummy_cooling_mode()
+    else:
+        sense_data = unit_cooler.controller.sensor.get_sense_data(config)
+        mode = judge_cooling_mode(config, sense_data)
+
     mode_index = min(mode["cooling_mode"], len(unit_cooler.controller.message.CONTROL_MESSAGE_LIST) - 1)
+
     control_msg = copy.deepcopy(unit_cooler.controller.message.CONTROL_MESSAGE_LIST[mode_index])
 
     # NOTE: 参考として、どのモードかも通知する

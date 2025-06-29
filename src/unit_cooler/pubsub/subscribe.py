@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import json
 import logging
 
+import my_lib.json_util
 import zmq
 
 import unit_cooler.const
@@ -30,7 +30,7 @@ def start_client(server_host, server_port, func, msg_count=0, should_terminate=N
 
         try:
             ch, json_str = socket.recv_string().split(" ", 1)
-            json_data = json.loads(json_str)
+            json_data = my_lib.json_util.loads(json_str)
             logging.debug("recv %s", json_data)
             func(json_data)
 

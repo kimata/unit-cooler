@@ -16,10 +16,10 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
-import json
 import logging
 import time
 
+import my_lib.json_util
 import zmq
 
 import unit_cooler.const
@@ -75,7 +75,7 @@ def start_server(server_port, func, interval_sec, msg_count=0):
                 pass  # イベントなし
 
             start_time = time.time()
-            socket.send_string(f"{unit_cooler.const.PUBSUB_CH} {json.dumps(func())}")
+            socket.send_string(f"{unit_cooler.const.PUBSUB_CH} {my_lib.json_util.dumps(func())}")
 
             if msg_count != 0:
                 send_count += 1
