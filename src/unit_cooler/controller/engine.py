@@ -62,10 +62,8 @@ def dummy_cooling_mode():
 dummy_cooling_mode.prev_mode = 0
 
 
-def judge_cooling_mode(config):
+def judge_cooling_mode(config, sense_data):
     logging.info("Judge cooling mode")
-
-    sense_data = unit_cooler.controller.sensor.get_sense_data(config)
 
     try:
         cooler_activity = unit_cooler.controller.sensor.get_cooler_activity(sense_data)
@@ -101,12 +99,15 @@ def judge_cooling_mode(config):
 
 
 def gen_control_msg(config, dummy_mode=False, speedup=1):
-    mode = dummy_cooling_mode() if dummy_mode else judge_cooling_mode(config)
+    sense_data = unit_cooler.controller.sensor.get_sense_data(config)
+    mode = dummy_cooling_mode() if dummy_mode else judge_cooling_mode(config, sense_data)
     mode_index = min(mode["cooling_mode"], len(unit_cooler.controller.message.CONTROL_MESSAGE_LIST) - 1)
     control_msg = copy.deepcopy(unit_cooler.controller.message.CONTROL_MESSAGE_LIST[mode_index])
 
     # NOTE: 参考として、どのモードかも通知する
     control_msg["mode_index"] = mode_index
+    # NOTE: メトリクス用に、センサーデータも送る
+    control_msg["sense_data"] = sense_data
 
     if dummy_mode:
         control_msg["duty"]["on_sec"] = max(control_msg["duty"]["on_sec"] / speedup, ON_SEC_MIN)
