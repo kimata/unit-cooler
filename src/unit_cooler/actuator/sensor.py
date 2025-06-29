@@ -85,7 +85,7 @@ def get_flow(force_power_on=True):
         flow = None
         # エラーメトリクス記録
         try:
-            from unit_cooler.actuator.api.metrics import record_error
+            from unit_cooler.actuator.webapi.metrics import record_error
 
             record_error("sensor_read_error", "Flow sensor read failed")
         except ImportError:
@@ -98,7 +98,7 @@ def get_flow(force_power_on=True):
 
     # センサー読み取りメトリクス記録
     try:
-        from unit_cooler.actuator.api.metrics import record_sensor_read
+        from unit_cooler.actuator.webapi.metrics import record_sensor_read
 
         record_sensor_read("flow_sensor", flow)
     except ImportError:

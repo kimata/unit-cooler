@@ -65,7 +65,7 @@ def add(message, level=unit_cooler.const.LOG_LEVEL.INFO):
         unit_cooler.util.notify_error(config, message)
         # エラーメトリクス記録
         try:
-            from unit_cooler.actuator.api.metrics import record_error
+            from unit_cooler.actuator.webapi.metrics import record_error
 
             record_error("work_log_error", message)
         except ImportError:
@@ -73,7 +73,7 @@ def add(message, level=unit_cooler.const.LOG_LEVEL.INFO):
     elif level == unit_cooler.const.LOG_LEVEL.WARN:
         # 警告メトリクス記録
         try:
-            from unit_cooler.actuator.api.metrics import record_warning
+            from unit_cooler.actuator.webapi.metrics import record_warning
 
             record_warning("work_log_warning", message)
         except ImportError:

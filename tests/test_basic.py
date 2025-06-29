@@ -1366,7 +1366,7 @@ def test_actuator_leak(  # noqa: PLR0913
 
     mock_gpio(mocker)
     mocker.patch("unit_cooler.actuator.sensor.get_flow", return_value=20)
-    sense_data_mock = create_fetch_data_mock()
+    sense_data_mock = create_fetch_data_mock({})
     mocker.patch("my_lib.sensor_data.fetch_data", return_value=sense_data_mock)
 
     # NOTE: このテストはダミーモードを使わないので、judge_cooling_mode を差し替える

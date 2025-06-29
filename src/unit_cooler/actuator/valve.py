@@ -102,7 +102,7 @@ def set_state(valve_state):
 
             # メトリクス記録
             try:
-                from unit_cooler.actuator.api.metrics import record_valve_operation
+                from unit_cooler.actuator.webapi.metrics import record_valve_operation
 
                 record_valve_operation("state_change", valve_state.name)
             except ImportError:

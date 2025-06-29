@@ -86,7 +86,7 @@ def create_app(config, arg):
     import my_lib.webapp.proxy
     import my_lib.webapp.util
 
-    import unit_cooler.webui.api.cooler_stat
+    import unit_cooler.webui.webapi.cooler_stat
     import unit_cooler.webui.worker
 
     message_queue = multiprocessing.Manager().Queue(10)
@@ -146,11 +146,11 @@ def create_app(config, arg):
     app.register_blueprint(my_lib.webapp.base.blueprint)
     app.register_blueprint(my_lib.webapp.proxy.blueprint)
     app.register_blueprint(my_lib.webapp.util.blueprint)
-    app.register_blueprint(unit_cooler.webui.api.cooler_stat.blueprint)
+    app.register_blueprint(unit_cooler.webui.webapi.cooler_stat.blueprint)
 
     my_lib.webapp.config.show_handler_list(app)
 
-    unit_cooler.webui.api.cooler_stat.init(api_base_url)
+    unit_cooler.webui.webapi.cooler_stat.init(api_base_url)
 
     # app.debug = True
 
