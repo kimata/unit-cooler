@@ -711,259 +711,381 @@ def get_valve_timing_metrics() -> dict[str, Any]:
         }
 
 
-# メトリクス分析機能
+# メトリクス分析機能ヘルパー関数
+def _calculate_basic_statistics(data: list[dict[str, Any]]) -> dict[str, Any]:
+    """基本統計の計算"""
+    timestamps = [row["timestamp"] for row in data]
+    valve_operations = [row["valve_operations"] for row in data]
+    sensor_reads = [row["sensor_reads"] for row in data]
+    errors = [row["errors"] for row in data]
+    duty_cycles = [row["valve_duty_cycle_percentage"] for row in data]
+
+    return {
+        "timestamp_range": {
+            "start": min(timestamps),
+            "end": max(timestamps),
+            "duration_hours": (max(timestamps) - min(timestamps)) / 3600,
+        },
+        "valve_operations": {
+            "total": max(valve_operations) if valve_operations else 0,
+            "rate_per_hour": (max(valve_operations) if valve_operations else 0)
+            / ((max(timestamps) - min(timestamps)) / 3600)
+            if len(timestamps) > 1
+            else 0,
+        },
+        "sensor_reads": {
+            "total": max(sensor_reads) if sensor_reads else 0,
+            "rate_per_hour": (max(sensor_reads) if sensor_reads else 0)
+            / ((max(timestamps) - min(timestamps)) / 3600)
+            if len(timestamps) > 1
+            else 0,
+        },
+        "error_analysis": {
+            "total_errors": max(errors) if errors else 0,
+            "error_rate": (max(errors) if errors else 0) / (max(sensor_reads) if sensor_reads else 1),
+        },
+        "duty_cycle_analysis": {
+            "mean": float(np.mean(duty_cycles)) if duty_cycles else 0,
+            "std": float(np.std(duty_cycles)) if duty_cycles else 0,
+            "min": float(np.min(duty_cycles)) if duty_cycles else 0,
+            "max": float(np.max(duty_cycles)) if duty_cycles else 0,
+            "median": float(np.median(duty_cycles)) if duty_cycles else 0,
+        },
+    }
+
+
+def _calculate_flow_analysis(flow_values: list) -> dict[str, Any]:
+    """フロー値統計の計算"""
+    if not flow_values:
+        return {}
+
+    return {
+        "flow_analysis": {
+            "mean": float(np.mean(flow_values)),
+            "std": float(np.std(flow_values)),
+            "min": float(np.min(flow_values)),
+            "max": float(np.max(flow_values)),
+            "median": float(np.median(flow_values)),
+            "percentile_95": float(np.percentile(flow_values, 95)),
+            "normal_test": {
+                "statistic": float(stats.normaltest(flow_values)[0]),
+                "p_value": float(stats.normaltest(flow_values)[1]),
+                "is_normal": float(stats.normaltest(flow_values)[1]) > 0.05,
+            },
+        }
+    }
+
+
+def _calculate_environmental_analysis(
+    solar_radiation_values: list, temperatures: list, humidity_values: list
+) -> dict[str, Any]:
+    """環境データ統計の計算"""
+    if not solar_radiation_values:
+        return {}
+
+    env_analysis = {
+        "environmental_analysis": {
+            "solar_radiation": {
+                "mean": float(np.mean(solar_radiation_values)),
+                "std": float(np.std(solar_radiation_values)),
+                "min": float(np.min(solar_radiation_values)),
+                "max": float(np.max(solar_radiation_values)),
+                "median": float(np.median(solar_radiation_values)),
+            },
+        }
+    }
+
+    if temperatures:
+        env_analysis["environmental_analysis"]["temperature"] = {
+            "mean": float(np.mean(temperatures)),
+            "std": float(np.std(temperatures)),
+            "min": float(np.min(temperatures)),
+            "max": float(np.max(temperatures)),
+        }
+
+    if humidity_values:
+        env_analysis["environmental_analysis"]["humidity"] = {
+            "mean": float(np.mean(humidity_values)),
+            "std": float(np.std(humidity_values)),
+        }
+
+    return env_analysis
+
+
+def _calculate_correlation_analysis(data: list[dict[str, Any]], duty_cycles: list) -> dict[str, Any]:
+    """相関分析の計算"""
+    if len(duty_cycles) <= 10:
+        return {}
+
+    # センサーデータを取得
+    temperatures = [row["temperature"] for row in data if row.get("temperature") is not None]
+    humidity_values = [row["humidity"] for row in data if row.get("humidity") is not None]
+    lux_values = [row["lux"] for row in data if row.get("lux") is not None]
+    solar_radiation_values = [
+        row["solar_radiation"] for row in data if row.get("solar_radiation") is not None
+    ]
+    power_values = [row["power_consumption"] for row in data if row.get("power_consumption") is not None]
+    rain_values = [row["rain_amount"] for row in data if row.get("rain_amount") is not None]
+    flow_values = [row["flow_value"] for row in data if row["flow_value"] is not None]
+
+    correlation_analysis = {"correlation_analysis": {}}
+    correlation_results = []
+
+    # センサーデータのリスト（名前、データ、単位）
+    sensor_datasets = [
+        ("solar_radiation", solar_radiation_values, "W/m²"),
+        ("temperature", temperatures, "°C"),
+        ("humidity", humidity_values, "%"),
+        ("lux", lux_values, "lux"),
+        ("power_consumption", power_values, "W"),
+        ("rain_amount", rain_values, "mm/h"),
+    ]
+
+    for sensor_name, sensor_values, unit in sensor_datasets:
+        if len(sensor_values) > 10:
+            # リスト内包表記を使用
+            sensor_duty_pairs = [
+                (row[sensor_name], row["valve_duty_cycle_percentage"])
+                for row in data
+                if row.get(sensor_name) is not None and row["valve_duty_cycle_percentage"] is not None
+            ]
+
+            if len(sensor_duty_pairs) > 10:
+                sensor_vals, duty_vals = zip(*sensor_duty_pairs, strict=True)
+                correlation_coef, correlation_p_value = stats.pearsonr(sensor_vals, duty_vals)
+
+                correlation_info = {
+                    "correlation_coefficient": float(correlation_coef),
+                    "p_value": float(correlation_p_value),
+                    "significance": "significant" if correlation_p_value < 0.05 else "not_significant",
+                    "strength": (
+                        "strong"
+                        if abs(correlation_coef) > 0.7
+                        else "moderate"
+                        if abs(correlation_coef) > 0.3
+                        else "weak"
+                    ),
+                    "direction": "positive" if correlation_coef > 0 else "negative",
+                    "data_points": len(sensor_duty_pairs),
+                    "unit": unit,
+                    "abs_correlation": abs(correlation_coef),
+                }
+
+                correlation_analysis["correlation_analysis"][f"{sensor_name}_vs_duty_cycle"] = (
+                    correlation_info
+                )
+                correlation_results.append((sensor_name, correlation_info))
+
+    # フロー値との相関
+    if flow_values and len(flow_values) > 10:
+        flow_duty_pairs = [
+            (row["flow_value"], row["valve_duty_cycle_percentage"])
+            for row in data
+            if row.get("flow_value") is not None and row["valve_duty_cycle_percentage"] is not None
+        ]
+
+        if len(flow_duty_pairs) > 10:
+            flow_vals, duty_vals_flow = zip(*flow_duty_pairs, strict=True)
+            flow_correlation_coef, flow_correlation_p_value = stats.pearsonr(flow_vals, duty_vals_flow)
+
+            correlation_analysis["correlation_analysis"]["flow_value_vs_duty_cycle"] = {
+                "correlation_coefficient": float(flow_correlation_coef),
+                "p_value": float(flow_correlation_p_value),
+                "significance": "significant" if flow_correlation_p_value < 0.05 else "not_significant",
+                "strength": (
+                    "strong"
+                    if abs(flow_correlation_coef) > 0.7
+                    else "moderate"
+                    if abs(flow_correlation_coef) > 0.3
+                    else "weak"
+                ),
+                "direction": "positive" if flow_correlation_coef > 0 else "negative",
+                "data_points": len(flow_duty_pairs),
+                "unit": "L/min",
+            }
+
+    # ランキング生成
+    if correlation_results:
+        significant_correlations = [
+            (name, info) for name, info in correlation_results if info["significance"] == "significant"
+        ]
+        significant_correlations.sort(key=lambda x: x[1]["abs_correlation"], reverse=True)
+
+        correlation_analysis["correlation_analysis"]["ranking"] = {
+            "most_influential_sensors": [
+                {
+                    "sensor": name,
+                    "correlation_coefficient": info["correlation_coefficient"],
+                    "strength": info["strength"],
+                    "direction": info["direction"],
+                    "p_value": info["p_value"],
+                    "unit": info["unit"],
+                }
+                for name, info in significant_correlations[:5]  # トップ5
+            ],
+            "summary": {
+                "strongest_correlation": {
+                    "sensor": significant_correlations[0][0] if significant_correlations else None,
+                    "coefficient": significant_correlations[0][1]["correlation_coefficient"]
+                    if significant_correlations
+                    else 0,
+                    "strength": significant_correlations[0][1]["strength"]
+                    if significant_correlations
+                    else "none",
+                }
+                if significant_correlations
+                else None,
+                "total_significant_correlations": len(significant_correlations),
+                "sensors_analyzed": len(correlation_results),
+            },
+        }
+
+    return correlation_analysis
+
+
+def _calculate_trend_analysis(duty_cycles: list) -> dict[str, Any]:
+    """トレンド分析の計算"""
+    if len(duty_cycles) <= 10:
+        return {}
+
+    # 線形回帰によるトレンド
+    x = np.arange(len(duty_cycles))
+    slope, intercept, r_value, p_value, std_err = stats.linregress(x, duty_cycles)
+
+    return {
+        "trend_analysis": {
+            "duty_cycle_trend": {
+                "slope": float(slope),
+                "r_squared": float(r_value**2),
+                "p_value": float(p_value),
+                "trend_direction": "increasing" if slope > 0 else "decreasing" if slope < 0 else "stable",
+                "trend_strength": (
+                    "strong" if abs(r_value) > 0.7 else "moderate" if abs(r_value) > 0.3 else "weak"
+                ),
+            },
+        }
+    }
+
+
 def perform_statistical_analysis(data: list[dict[str, Any]]) -> dict[str, Any]:
     """統計分析を実行"""
     if not _ANALYSIS_AVAILABLE or not data:
         return {"error": "Analysis not available or no data"}
 
     try:
-        # データフレーム形式に変換
-        timestamps = [row["timestamp"] for row in data]
-        valve_operations = [row["valve_operations"] for row in data]
-        sensor_reads = [row["sensor_reads"] for row in data]
-        errors = [row["errors"] for row in data]
+        # 基本データの抽出
         duty_cycles = [row["valve_duty_cycle_percentage"] for row in data]
         flow_values = [row["flow_value"] for row in data if row["flow_value"] is not None]
-
-        # センサーデータ
         temperatures = [row["temperature"] for row in data if row.get("temperature") is not None]
         humidity_values = [row["humidity"] for row in data if row.get("humidity") is not None]
-        lux_values = [row["lux"] for row in data if row.get("lux") is not None]
         solar_radiation_values = [
             row["solar_radiation"] for row in data if row.get("solar_radiation") is not None
         ]
-        power_values = [row["power_consumption"] for row in data if row.get("power_consumption") is not None]
-        rain_values = [row["rain_amount"] for row in data if row.get("rain_amount") is not None]
 
-        # 基本統計
-        stats_result = {
-            "timestamp_range": {
-                "start": min(timestamps),
-                "end": max(timestamps),
-                "duration_hours": (max(timestamps) - min(timestamps)) / 3600,
-            },
-            "valve_operations": {
-                "total": max(valve_operations) if valve_operations else 0,
-                "rate_per_hour": (max(valve_operations) if valve_operations else 0)
-                / ((max(timestamps) - min(timestamps)) / 3600)
-                if len(timestamps) > 1
-                else 0,
-            },
-            "sensor_reads": {
-                "total": max(sensor_reads) if sensor_reads else 0,
-                "rate_per_hour": (max(sensor_reads) if sensor_reads else 0)
-                / ((max(timestamps) - min(timestamps)) / 3600)
-                if len(timestamps) > 1
-                else 0,
-            },
-            "error_analysis": {
-                "total_errors": max(errors) if errors else 0,
-                "error_rate": (max(errors) if errors else 0) / (max(sensor_reads) if sensor_reads else 1),
-            },
-            "duty_cycle_analysis": {
-                "mean": float(np.mean(duty_cycles)) if duty_cycles else 0,
-                "std": float(np.std(duty_cycles)) if duty_cycles else 0,
-                "min": float(np.min(duty_cycles)) if duty_cycles else 0,
-                "max": float(np.max(duty_cycles)) if duty_cycles else 0,
-                "median": float(np.median(duty_cycles)) if duty_cycles else 0,
-            },
-        }
+        # 各分析を実行
+        stats_result = _calculate_basic_statistics(data)
 
-        # フロー値の統計（利用可能な場合）
-        if flow_values:
-            stats_result["flow_analysis"] = {
-                "mean": float(np.mean(flow_values)),
-                "std": float(np.std(flow_values)),
-                "min": float(np.min(flow_values)),
-                "max": float(np.max(flow_values)),
-                "median": float(np.median(flow_values)),
-                "percentile_95": float(np.percentile(flow_values, 95)),
-                "normal_test": {
-                    "statistic": float(stats.normaltest(flow_values)[0]),
-                    "p_value": float(stats.normaltest(flow_values)[1]),
-                    "is_normal": float(stats.normaltest(flow_values)[1]) > 0.05,
-                },
-            }
+        # フロー分析を追加
+        flow_analysis = _calculate_flow_analysis(flow_values)
+        stats_result.update(flow_analysis)
 
-        # センサーデータの統計分析
-        if solar_radiation_values:
-            stats_result["environmental_analysis"] = {
-                "solar_radiation": {
-                    "mean": float(np.mean(solar_radiation_values)),
-                    "std": float(np.std(solar_radiation_values)),
-                    "min": float(np.min(solar_radiation_values)),
-                    "max": float(np.max(solar_radiation_values)),
-                    "median": float(np.median(solar_radiation_values)),
-                },
-            }
+        # 環境分析を追加
+        env_analysis = _calculate_environmental_analysis(
+            solar_radiation_values, temperatures, humidity_values
+        )
+        stats_result.update(env_analysis)
 
-            if temperatures:
-                stats_result["environmental_analysis"]["temperature"] = {
-                    "mean": float(np.mean(temperatures)),
-                    "std": float(np.std(temperatures)),
-                    "min": float(np.min(temperatures)),
-                    "max": float(np.max(temperatures)),
-                }
+        # 相関分析を追加
+        correlation_analysis = _calculate_correlation_analysis(data, duty_cycles)
+        stats_result.update(correlation_analysis)
 
-            if humidity_values:
-                stats_result["environmental_analysis"]["humidity"] = {
-                    "mean": float(np.mean(humidity_values)),
-                    "std": float(np.std(humidity_values)),
-                }
-
-        # 相関分析（全センサーデータとデューティサイクル）
-        if len(duty_cycles) > 10:
-            stats_result["correlation_analysis"] = {}
-            correlation_results = []
-
-            # センサーデータのリスト（名前、データ、単位）
-            sensor_datasets = [
-                ("solar_radiation", solar_radiation_values, "W/m²"),
-                ("temperature", temperatures, "°C"),
-                ("humidity", humidity_values, "%"),
-                ("lux", lux_values, "lux"),
-                ("power_consumption", power_values, "W"),
-                ("rain_amount", rain_values, "mm/h"),
-            ]
-
-            for sensor_name, sensor_values, unit in sensor_datasets:
-                if len(sensor_values) > 10:
-                    # 対応するデータポイントを取得
-                    sensor_duty_pairs = []
-                    for row in data:
-                        if (
-                            row.get(sensor_name) is not None
-                            and row["valve_duty_cycle_percentage"] is not None
-                        ):
-                            sensor_duty_pairs.append((row[sensor_name], row["valve_duty_cycle_percentage"]))
-
-                    if len(sensor_duty_pairs) > 10:
-                        sensor_vals, duty_vals = zip(*sensor_duty_pairs, strict=True)
-                        correlation_coef, correlation_p_value = stats.pearsonr(sensor_vals, duty_vals)
-
-                        correlation_info = {
-                            "correlation_coefficient": float(correlation_coef),
-                            "p_value": float(correlation_p_value),
-                            "significance": "significant"
-                            if correlation_p_value < 0.05
-                            else "not_significant",
-                            "strength": (
-                                "strong"
-                                if abs(correlation_coef) > 0.7
-                                else "moderate"
-                                if abs(correlation_coef) > 0.3
-                                else "weak"
-                            ),
-                            "direction": "positive" if correlation_coef > 0 else "negative",
-                            "data_points": len(sensor_duty_pairs),
-                            "unit": unit,
-                            "abs_correlation": abs(correlation_coef),
-                        }
-
-                        stats_result["correlation_analysis"][f"{sensor_name}_vs_duty_cycle"] = (
-                            correlation_info
-                        )
-                        correlation_results.append((sensor_name, correlation_info))
-
-            # 相関の強さでソートして、最も影響の大きいセンサーを特定
-            if correlation_results:
-                # 有意な相関のみを対象とし、絶対値で降順ソート
-                significant_correlations = [
-                    (name, info)
-                    for name, info in correlation_results
-                    if info["significance"] == "significant"
-                ]
-                significant_correlations.sort(key=lambda x: x[1]["abs_correlation"], reverse=True)
-
-                # 相関ランキング
-                stats_result["correlation_analysis"]["ranking"] = {
-                    "most_influential_sensors": [
-                        {
-                            "sensor": name,
-                            "correlation_coefficient": info["correlation_coefficient"],
-                            "strength": info["strength"],
-                            "direction": info["direction"],
-                            "p_value": info["p_value"],
-                            "unit": info["unit"],
-                        }
-                        for name, info in significant_correlations[:5]  # トップ5
-                    ],
-                    "summary": {
-                        "strongest_correlation": {
-                            "sensor": significant_correlations[0][0] if significant_correlations else None,
-                            "coefficient": significant_correlations[0][1]["correlation_coefficient"]
-                            if significant_correlations
-                            else 0,
-                            "strength": significant_correlations[0][1]["strength"]
-                            if significant_correlations
-                            else "none",
-                        }
-                        if significant_correlations
-                        else None,
-                        "total_significant_correlations": len(significant_correlations),
-                        "sensors_analyzed": len(correlation_results),
-                    },
-                }
-
-                # フロー値との相関も追加（別途分析）
-                if flow_values and len(flow_values) > 10:
-                    flow_duty_pairs = []
-                    for row in data:
-                        if (
-                            row.get("flow_value") is not None
-                            and row["valve_duty_cycle_percentage"] is not None
-                        ):
-                            flow_duty_pairs.append((row["flow_value"], row["valve_duty_cycle_percentage"]))
-
-                    if len(flow_duty_pairs) > 10:
-                        flow_vals, duty_vals_flow = zip(*flow_duty_pairs, strict=True)
-                        flow_correlation_coef, flow_correlation_p_value = stats.pearsonr(
-                            flow_vals, duty_vals_flow
-                        )
-
-                        stats_result["correlation_analysis"]["flow_value_vs_duty_cycle"] = {
-                            "correlation_coefficient": float(flow_correlation_coef),
-                            "p_value": float(flow_correlation_p_value),
-                            "significance": "significant"
-                            if flow_correlation_p_value < 0.05
-                            else "not_significant",
-                            "strength": (
-                                "strong"
-                                if abs(flow_correlation_coef) > 0.7
-                                else "moderate"
-                                if abs(flow_correlation_coef) > 0.3
-                                else "weak"
-                            ),
-                            "direction": "positive" if flow_correlation_coef > 0 else "negative",
-                            "data_points": len(flow_duty_pairs),
-                            "unit": "L/min",
-                        }
-
-        # トレンド分析
-        if len(duty_cycles) > 10:
-            # 線形回帰によるトレンド
-            x = np.arange(len(duty_cycles))
-            slope, intercept, r_value, p_value, std_err = stats.linregress(x, duty_cycles)
-            stats_result["trend_analysis"] = {
-                "duty_cycle_trend": {
-                    "slope": float(slope),
-                    "r_squared": float(r_value**2),
-                    "p_value": float(p_value),
-                    "trend_direction": "increasing" if slope > 0 else "decreasing" if slope < 0 else "stable",
-                    "trend_strength": "strong"
-                    if abs(r_value) > 0.7
-                    else "moderate"
-                    if abs(r_value) > 0.3
-                    else "weak",
-                },
-            }
+        # トレンド分析を追加
+        trend_analysis = _calculate_trend_analysis(duty_cycles)
+        stats_result.update(trend_analysis)
 
         return stats_result
 
     except Exception as e:
         logger.exception("Error in statistical analysis")
         return {"error": f"Statistical analysis failed: {e!s}"}
+
+
+def _prepare_features(data: list[dict[str, Any]]) -> tuple[list, list]:
+    """異常検知用の特徴量を準備"""
+    features = []
+    timestamps = []
+
+    for row in data:
+        if row["flow_value"] is not None:
+            feature_row = [
+                row["valve_duty_cycle_percentage"],
+                row["flow_value"],
+                row["valve_operations"],
+                row["sensor_reads"],
+                row["errors"],
+            ]
+
+            # センサーデータを追加
+            feature_row.append(row.get("solar_radiation", 0))
+            feature_row.append(row.get("temperature", 25))
+
+            features.append(feature_row)
+            timestamps.append(row["timestamp"])
+
+    return features, timestamps
+
+
+def _detect_anomalies(features_scaled: np.ndarray, timestamps: list, features: list) -> tuple[list, dict]:
+    """異常検知の実行"""
+    # Isolation Forest による異常検知
+    iso_forest = IsolationForest(contamination=0.1, random_state=42)
+    anomaly_scores = iso_forest.fit_predict(features_scaled)
+    anomaly_scores_continuous = iso_forest.decision_function(features_scaled)
+
+    # DBSCAN によるクラスタリング
+    dbscan = DBSCAN(eps=0.5, min_samples=3)
+    cluster_labels = dbscan.fit_predict(features_scaled)
+
+    # 異常点の特定
+    anomalies = []
+    for i, (score, continuous_score) in enumerate(
+        zip(anomaly_scores, anomaly_scores_continuous, strict=True)
+    ):
+        if score == -1:  # 異常点
+            anomalies.append(
+                {
+                    "timestamp": timestamps[i],
+                    "index": i,
+                    "anomaly_score": float(continuous_score),
+                    "features": {
+                        "duty_cycle": float(features[i][0]),
+                        "flow_value": float(features[i][1]),
+                        "valve_operations": int(features[i][2]),
+                        "sensor_reads": int(features[i][3]),
+                        "errors": int(features[i][4]),
+                        "solar_radiation": float(features[i][5]) if len(features[i]) > 5 else None,
+                        "temperature": float(features[i][6]) if len(features[i]) > 6 else None,
+                    },
+                    "cluster": int(cluster_labels[i]) if cluster_labels[i] != -1 else None,
+                }
+            )
+
+    return anomalies, {"cluster_labels": cluster_labels, "features_array": np.array(features)}
+
+
+def _calculate_cluster_stats(cluster_labels: np.ndarray, features_array: np.ndarray) -> dict:
+    """クラスター統計の計算"""
+    unique_clusters = set(cluster_labels[cluster_labels != -1])
+    cluster_stats = {}
+    for cluster_id in unique_clusters:
+        cluster_mask = cluster_labels == cluster_id
+        cluster_features = features_array[cluster_mask]
+        cluster_stats[f"cluster_{cluster_id}"] = {
+            "size": int(np.sum(cluster_mask)),
+            "duty_cycle_mean": float(np.mean(cluster_features[:, 0])),
+            "flow_value_mean": float(np.mean(cluster_features[:, 1])),
+        }
+    return cluster_stats
 
 
 def perform_anomaly_detection(data: list[dict[str, Any]]) -> dict[str, Any]:
@@ -973,33 +1095,7 @@ def perform_anomaly_detection(data: list[dict[str, Any]]) -> dict[str, Any]:
 
     try:
         # 特徴量の準備
-        features = []
-        timestamps = []
-
-        for row in data:
-            if row["flow_value"] is not None:
-                # 基本特徴量
-                feature_row = [
-                    row["valve_duty_cycle_percentage"],
-                    row["flow_value"],
-                    row["valve_operations"],
-                    row["sensor_reads"],
-                    row["errors"],
-                ]
-
-                # センサーデータの特徴量を追加（利用可能な場合）
-                if row.get("solar_radiation") is not None:
-                    feature_row.append(row["solar_radiation"])
-                else:
-                    feature_row.append(0)  # デフォルト値
-
-                if row.get("temperature") is not None:
-                    feature_row.append(row["temperature"])
-                else:
-                    feature_row.append(25)  # デフォルト値（室温想定）
-
-                features.append(feature_row)
-                timestamps.append(row["timestamp"])
+        features, timestamps = _prepare_features(data)
 
         if len(features) < 10:
             return {"error": "Insufficient data with flow values for anomaly detection"}
@@ -1010,58 +1106,21 @@ def perform_anomaly_detection(data: list[dict[str, Any]]) -> dict[str, Any]:
         scaler = StandardScaler()
         features_scaled = scaler.fit_transform(features_array)
 
-        # Isolation Forest による異常検知
-        iso_forest = IsolationForest(contamination=0.1, random_state=42)
-        anomaly_scores = iso_forest.fit_predict(features_scaled)
-        anomaly_scores_continuous = iso_forest.decision_function(features_scaled)
-
-        # DBSCAN によるクラスタリング
-        dbscan = DBSCAN(eps=0.5, min_samples=3)
-        cluster_labels = dbscan.fit_predict(features_scaled)
-
-        # 異常点の特定
-        anomalies = []
-        for i, (score, continuous_score) in enumerate(
-            zip(anomaly_scores, anomaly_scores_continuous, strict=True)
-        ):
-            if score == -1:  # 異常点
-                anomalies.append(
-                    {
-                        "timestamp": timestamps[i],
-                        "index": i,
-                        "anomaly_score": float(continuous_score),
-                        "features": {
-                            "duty_cycle": float(features[i][0]),
-                            "flow_value": float(features[i][1]),
-                            "valve_operations": int(features[i][2]),
-                            "sensor_reads": int(features[i][3]),
-                            "errors": int(features[i][4]),
-                            "solar_radiation": float(features[i][5]) if len(features[i]) > 5 else None,
-                            "temperature": float(features[i][6]) if len(features[i]) > 6 else None,
-                        },
-                        "cluster": int(cluster_labels[i]) if cluster_labels[i] != -1 else None,
-                    }
-                )
-
-        # クラスター統計
-        unique_clusters = set(cluster_labels[cluster_labels != -1])
-        cluster_stats = {}
-        for cluster_id in unique_clusters:
-            cluster_mask = cluster_labels == cluster_id
-            cluster_features = features_array[cluster_mask]
-            cluster_stats[f"cluster_{cluster_id}"] = {
-                "size": int(np.sum(cluster_mask)),
-                "duty_cycle_mean": float(np.mean(cluster_features[:, 0])),
-                "flow_value_mean": float(np.mean(cluster_features[:, 1])),
-            }
+        # 異常検知実行
+        anomalies, cluster_data = _detect_anomalies(features_scaled, timestamps, features)
+        cluster_stats = _calculate_cluster_stats(
+            cluster_data["cluster_labels"], cluster_data["features_array"]
+        )
 
         return {
             "summary": {
                 "total_points": len(features),
                 "anomalies_detected": len(anomalies),
                 "anomaly_rate": len(anomalies) / len(features),
-                "clusters_found": len(unique_clusters),
-                "noise_points": int(np.sum(cluster_labels == -1)),
+                "clusters_found": len(
+                    set(cluster_data["cluster_labels"][cluster_data["cluster_labels"] != -1])
+                ),
+                "noise_points": int(np.sum(cluster_data["cluster_labels"] == -1)),
             },
             "anomalies": anomalies[-20:],  # 最新20件の異常
             "cluster_statistics": cluster_stats,
@@ -1419,6 +1478,123 @@ def _calculate_sensor_correlation(
     }
 
 
+def _validate_correlation_request(
+    historical_data: list, *, analysis_available: bool
+) -> tuple[dict | None, int]:
+    """相関分析リクエストの検証"""
+    if not historical_data:
+        return {
+            "error": "No historical data available",
+            "timestamp": time.time(),
+            "analysis_available": analysis_available,
+        }, 404
+
+    if not analysis_available:
+        return {
+            "error": "Statistical analysis libraries not available",
+            "timestamp": time.time(),
+            "analysis_available": False,
+        }, 503
+
+    duty_cycles = [row["valve_duty_cycle_percentage"] for row in historical_data]
+    if len(duty_cycles) < 10:
+        return {
+            "error": "Insufficient data for correlation analysis (need at least 10 points)",
+            "timestamp": time.time(),
+            "data_points": len(duty_cycles),
+        }, 400
+
+    return None, 200
+
+
+def _calculate_sensor_correlation_info(
+    sensor_name: str, sensor_jp: str, unit: str, historical_data: list
+) -> dict | None:
+    """個別センサーの相関情報を計算"""
+    sensor_duty_pairs = [
+        (row.get(sensor_name), row.get("valve_duty_cycle_percentage"))
+        for row in historical_data
+        if row.get(sensor_name) is not None and row.get("valve_duty_cycle_percentage") is not None
+    ]
+
+    if len(sensor_duty_pairs) < 10:
+        return None
+
+    sensor_vals, duty_vals = zip(*sensor_duty_pairs, strict=True)
+    correlation_coef, correlation_p_value = stats.pearsonr(sensor_vals, duty_vals)
+
+    return {
+        "sensor_name": sensor_name,
+        "sensor_name_jp": sensor_jp,
+        "unit": unit,
+        "correlation_coefficient": float(correlation_coef),
+        "p_value": float(correlation_p_value),
+        "significance": "significant" if correlation_p_value < 0.05 else "not_significant",
+        "strength": (
+            "strong" if abs(correlation_coef) > 0.7 else "moderate" if abs(correlation_coef) > 0.3 else "weak"
+        ),
+        "direction": "positive" if correlation_coef > 0 else "negative",
+        "data_points": len(sensor_duty_pairs),
+        "abs_correlation": abs(correlation_coef),
+        "sensor_stats": {
+            "mean": float(np.mean(sensor_vals)),
+            "std": float(np.std(sensor_vals)),
+            "min": float(np.min(sensor_vals)),
+            "max": float(np.max(sensor_vals)),
+        },
+        "duty_cycle_stats": {
+            "mean": float(np.mean(duty_vals)),
+            "std": float(np.std(duty_vals)),
+            "min": float(np.min(duty_vals)),
+            "max": float(np.max(duty_vals)),
+        },
+    }
+
+
+def _create_correlation_ranking(correlation_results: list) -> dict:
+    """相関分析のランキングを作成"""
+    significant_correlations = [
+        (name, info) for name, info in correlation_results if info["significance"] == "significant"
+    ]
+    significant_correlations.sort(key=lambda x: x[1]["abs_correlation"], reverse=True)
+
+    return {
+        "by_correlation_strength": [
+            {
+                "rank": i + 1,
+                "sensor": name,
+                "sensor_name_jp": info["sensor_name_jp"],
+                "correlation_coefficient": info["correlation_coefficient"],
+                "abs_correlation": info["abs_correlation"],
+                "strength": info["strength"],
+                "direction": info["direction"],
+                "p_value": info["p_value"],
+                "unit": info["unit"],
+            }
+            for i, (name, info) in enumerate(significant_correlations)
+        ],
+        "summary": {
+            "strongest_correlation": {
+                "sensor": significant_correlations[0][0] if significant_correlations else None,
+                "sensor_name_jp": significant_correlations[0][1]["sensor_name_jp"]
+                if significant_correlations
+                else None,
+                "coefficient": significant_correlations[0][1]["correlation_coefficient"]
+                if significant_correlations
+                else 0,
+                "strength": significant_correlations[0][1]["strength"]
+                if significant_correlations
+                else "none",
+            }
+            if significant_correlations
+            else None,
+            "total_sensors_analyzed": len(correlation_results),
+            "significant_correlations": len(significant_correlations),
+            "insignificant_correlations": len(correlation_results) - len(significant_correlations),
+        },
+    }
+
+
 @blueprint.route("/api/metrics/correlation", methods=["GET"])
 @my_lib.flask_util.support_jsonp
 def get_correlation_analysis():
@@ -1426,40 +1602,17 @@ def get_correlation_analysis():
     try:
         # クエリパラメータ
         hours = int(flask.request.args.get("hours", 48))
-        sensor_type = flask.request.args.get("sensor")  # 特定のセンサーのみ分析する場合
+        sensor_type = flask.request.args.get("sensor")
 
         # データベースからデータを取得
         historical_data = get_metrics_from_db(hours)
 
-        if not historical_data:
-            return flask.jsonify(
-                {
-                    "error": "No historical data available",
-                    "timestamp": time.time(),
-                    "analysis_available": _ANALYSIS_AVAILABLE,
-                }
-            ), 404
-
-        if not _ANALYSIS_AVAILABLE:
-            return flask.jsonify(
-                {
-                    "error": "Statistical analysis libraries not available",
-                    "timestamp": time.time(),
-                    "analysis_available": False,
-                }
-            ), 503
-
-        # データの準備
-        duty_cycles = [row["valve_duty_cycle_percentage"] for row in historical_data]
-
-        if len(duty_cycles) < 10:
-            return flask.jsonify(
-                {
-                    "error": "Insufficient data for correlation analysis (need at least 10 points)",
-                    "timestamp": time.time(),
-                    "data_points": len(duty_cycles),
-                }
-            ), 400
+        # 基本検証
+        error_response, status_code = _validate_correlation_request(
+            historical_data, analysis_available=_ANALYSIS_AVAILABLE
+        )
+        if error_response:
+            return flask.jsonify(error_response), status_code
 
         result = {
             "timestamp": time.time(),
@@ -1480,102 +1633,22 @@ def get_correlation_analysis():
             ("flow_value", "流量", "L/min"),
         ]
 
-        correlation_results = []
-
         # 特定のセンサーが指定された場合はそれのみ分析
         if sensor_type:
             sensor_datasets = [(s, jp, u) for s, jp, u in sensor_datasets if s == sensor_type]
 
+        correlation_results = []
         for sensor_name, sensor_jp, unit in sensor_datasets:
-            # データペアを取得
-            sensor_duty_pairs = []
-            for row in historical_data:
-                sensor_value = row.get(sensor_name)
-                duty_value = row.get("valve_duty_cycle_percentage")
-                if sensor_value is not None and duty_value is not None:
-                    sensor_duty_pairs.append((sensor_value, duty_value))
-
-            if len(sensor_duty_pairs) >= 10:
-                sensor_vals, duty_vals = zip(*sensor_duty_pairs, strict=True)
-                correlation_coef, correlation_p_value = stats.pearsonr(sensor_vals, duty_vals)
-
-                correlation_info = {
-                    "sensor_name": sensor_name,
-                    "sensor_name_jp": sensor_jp,
-                    "unit": unit,
-                    "correlation_coefficient": float(correlation_coef),
-                    "p_value": float(correlation_p_value),
-                    "significance": "significant" if correlation_p_value < 0.05 else "not_significant",
-                    "strength": (
-                        "strong"
-                        if abs(correlation_coef) > 0.7
-                        else "moderate"
-                        if abs(correlation_coef) > 0.3
-                        else "weak"
-                    ),
-                    "direction": "positive" if correlation_coef > 0 else "negative",
-                    "data_points": len(sensor_duty_pairs),
-                    "abs_correlation": abs(correlation_coef),
-                    "sensor_stats": {
-                        "mean": float(np.mean(sensor_vals)),
-                        "std": float(np.std(sensor_vals)),
-                        "min": float(np.min(sensor_vals)),
-                        "max": float(np.max(sensor_vals)),
-                    },
-                    "duty_cycle_stats": {
-                        "mean": float(np.mean(duty_vals)),
-                        "std": float(np.std(duty_vals)),
-                        "min": float(np.min(duty_vals)),
-                        "max": float(np.max(duty_vals)),
-                    },
-                }
-
+            correlation_info = _calculate_sensor_correlation_info(
+                sensor_name, sensor_jp, unit, historical_data
+            )
+            if correlation_info:
                 result["correlations"][sensor_name] = correlation_info
                 correlation_results.append((sensor_name, correlation_info))
 
         # ランキング作成
         if correlation_results:
-            # 有意な相関のみを対象として絶対値で降順ソート
-            significant_correlations = [
-                (name, info) for name, info in correlation_results if info["significance"] == "significant"
-            ]
-            significant_correlations.sort(key=lambda x: x[1]["abs_correlation"], reverse=True)
-
-            result["ranking"] = {
-                "by_correlation_strength": [
-                    {
-                        "rank": i + 1,
-                        "sensor": name,
-                        "sensor_name_jp": info["sensor_name_jp"],
-                        "correlation_coefficient": info["correlation_coefficient"],
-                        "abs_correlation": info["abs_correlation"],
-                        "strength": info["strength"],
-                        "direction": info["direction"],
-                        "p_value": info["p_value"],
-                        "unit": info["unit"],
-                    }
-                    for i, (name, info) in enumerate(significant_correlations)
-                ],
-                "summary": {
-                    "strongest_correlation": {
-                        "sensor": significant_correlations[0][0] if significant_correlations else None,
-                        "sensor_name_jp": significant_correlations[0][1]["sensor_name_jp"]
-                        if significant_correlations
-                        else None,
-                        "coefficient": significant_correlations[0][1]["correlation_coefficient"]
-                        if significant_correlations
-                        else 0,
-                        "strength": significant_correlations[0][1]["strength"]
-                        if significant_correlations
-                        else "none",
-                    }
-                    if significant_correlations
-                    else None,
-                    "total_sensors_analyzed": len(correlation_results),
-                    "significant_correlations": len(significant_correlations),
-                    "insignificant_correlations": len(correlation_results) - len(significant_correlations),
-                },
-            }
+            result["ranking"] = _create_correlation_ranking(correlation_results)
 
         return flask.jsonify(result)
 
