@@ -66,7 +66,7 @@ get_last_message.last_message = None
 
 
 def get_stats(config, message_queue):
-    # NOTE: データを受け渡しのは面倒なので、直接計算してしまう
+    # NOTE: データを受け渡すのは面倒なので、直接計算してしまう
     sense_data = unit_cooler.controller.sensor.get_sense_data(config)
     mode = unit_cooler.controller.engine.judge_cooling_mode(config, sense_data)
 
