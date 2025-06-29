@@ -1,3 +1,0 @@
-influxdb-client[ciso]
-slack_bolt
-sseclient
