@@ -420,13 +420,10 @@
                                     "properties": {
                                         "log_file_path": {
                                             "type": "string"
-                                        },
-                                        "metrics_db_path": {
-                                            "type": "string"
                                         }
                                     },
                                     "required": [
-                                        "log_file_path", "metrics_db_path"
+                                        "log_file_path"
                                     ]
                                 }
                             },
@@ -439,11 +436,23 @@
                     "required": [
                         "webapp"
                     ]
+                },
+                "metrics": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "data"
+                    ]
                 }
             },
             "required": [
                 "control",
                 "log_server",
+                "metrics",
                 "monitor",
                 "subscribe"
             ]

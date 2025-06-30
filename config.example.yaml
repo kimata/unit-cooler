@@ -107,7 +107,9 @@ actuator:
             port: 5001
             data:
                 log_file_path: data/hems.unit_cooler.log
-                metrics_db_path: data/metrics.data
+
+    metrics:
+        data: data/metrics.db
 
 webui:
     webapp:

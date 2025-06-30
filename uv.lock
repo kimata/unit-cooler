@@ -1182,7 +1182,7 @@ wheels = [
 [[package]]
 name = "my-lib"
 version = "0.1.0"
-source = { git = "https://github.com/kimata/my-py-lib?rev=8537d966bb742933d7d3decacbc319da74d05a8a#8537d966bb742933d7d3decacbc319da74d05a8a" }
+source = { git = "https://github.com/kimata/my-py-lib?rev=e5b77bc024c922ead28bc32ee8b6124297a52b28#e5b77bc024c922ead28bc32ee8b6124297a52b28" }
 dependencies = [
     { name = "coloredlogs" },
     { name = "docopt-ng" },
@@ -1200,7 +1200,6 @@ dependencies = [
     { name = "rich" },
     { name = "slack-sdk" },
     { name = "smbus2" },
-    { name = "spidev" },
     { name = "sseclient" },
     { name = "uptime" },
 ]
@@ -1384,7 +1383,7 @@ requires-dist = [
     { name = "flask-cors", specifier = ">=5.0.1" },
     { name = "fluent-logger", specifier = ">=0.11.1" },
     { name = "influxdb-client", extras = ["ciso"], specifier = ">=1.49.0" },
-    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=8537d966bb742933d7d3decacbc319da74d05a8a" },
+    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=e5b77bc024c922ead28bc32ee8b6124297a52b28" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pyzmq", specifier = ">=27.0.0" },
     { name = "rpi-lgpio", specifier = ">=0.6" },

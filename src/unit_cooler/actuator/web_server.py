@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-電磁弁の作動ログを WebUI で提供します。
+室外機冷却システムの WebUI サーバーを提供します。
 
 Usage:
-  log_server.py [-c CONFIG] [-p PORT] [-D]
+  web_server.py [-c CONFIG] [-p PORT] [-D]
 
 Options:
   -c CONFIG         : CONFIG を設定ファイルとして読み込んで実行します。[default: config.yaml]
@@ -33,15 +33,17 @@ def create_app(config, event_queue):
     import unit_cooler.actuator.webapi.flow_status
     import unit_cooler.actuator.webapi.metrics
     import unit_cooler.actuator.webapi.valve_status
+    import unit_cooler.metrics.webapi.page
 
     # NOTE: アクセスログは無効にする
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
-    app = flask.Flask("unit-cooler-log")
+    app = flask.Flask("unit-cooler-web")
 
     flask_cors.CORS(app)
 
     app.config["CONFIG"] = config
+    app.config["CONFIG_FILE_NORMAL"] = "config.yaml"  # メトリクス用設定
 
     app.json.compat = True
 
@@ -51,6 +53,7 @@ def create_app(config, event_queue):
     app.register_blueprint(unit_cooler.actuator.webapi.valve_status.blueprint)
     app.register_blueprint(unit_cooler.actuator.webapi.flow_status.blueprint)
     app.register_blueprint(unit_cooler.actuator.webapi.metrics.blueprint)
+    app.register_blueprint(unit_cooler.metrics.webapi.page.blueprint)
 
     my_lib.webapp.config.show_handler_list(app)
 
@@ -78,7 +81,7 @@ def start(config, event_queue, port):
     )
     thread = threading.Thread(target=server.serve_forever)
 
-    logging.info("Start log server")
+    logging.info("Start web server")
 
     thread.start()
 
@@ -91,7 +94,7 @@ def start(config, event_queue, port):
 def term(handle):
     import my_lib.webapp.event
 
-    logging.warning("Stop log server")
+    logging.warning("Stop web server")
 
     my_lib.webapp.event.term()
 
