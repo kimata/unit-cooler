@@ -16,6 +16,7 @@ Options:
 
 import concurrent.futures
 import logging
+import os
 import pathlib
 import threading
 import time
@@ -29,23 +30,25 @@ import unit_cooler.const
 import unit_cooler.pubsub.subscribe
 import unit_cooler.util
 
-# スレッドローカル変数として定義
-thread_local = threading.local()
+# グローバル辞書（pytestワーカー毎に独立）
+control_messages = {}
 
 # メッセージの初期値
 MESSAGE_INIT = {"mode_index": 0, "state": unit_cooler.const.COOLING_STATE.IDLE}
 
 
 def get_last_control_message():
-    """スレッドローカルなlast_control_messageを取得"""
-    if not hasattr(thread_local, "last_control_message"):
-        thread_local.last_control_message = MESSAGE_INIT.copy()
-    return thread_local.last_control_message
+    """グローバル辞書からlast_control_messageを取得"""
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    if worker_id not in control_messages:
+        control_messages[worker_id] = MESSAGE_INIT.copy()
+    return control_messages[worker_id]
 
 
 def set_last_control_message(message):
-    """スレッドローカルなlast_control_messageを設定"""
-    thread_local.last_control_message = message
+    """グローバル辞書にlast_control_messageを設定"""
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    control_messages[worker_id] = message
 
 
 should_terminate = threading.Event()
@@ -239,7 +242,8 @@ def start(executor, worker_def):
     should_terminate.clear()
     thread_list = []
 
-    thread_local.last_control_message = MESSAGE_INIT.copy()
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    control_messages[worker_id] = MESSAGE_INIT.copy()
 
     for worker_info in worker_def:
         future = executor.submit(*worker_info["param"])
