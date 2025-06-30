@@ -203,7 +203,7 @@ test-webui-docker:
         - build-image
         - test-prepare
     script:
-        - uv run playwright install
+        - uv run playwright install --with-deps chromium
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-1
             --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG} ./src/controller.py -d
