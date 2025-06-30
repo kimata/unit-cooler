@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import io
 import json
 import logging
@@ -15,7 +13,7 @@ import unit_cooler.metrics.collector
 
 from . import page_js
 
-blueprint = flask.Blueprint("metrics", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
+blueprint = flask.Blueprint("metrics_dashboard", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
 
 
 @blueprint.route("/api/metrics", methods=["GET"])
@@ -122,7 +120,7 @@ def generate_metrics_icon():
         )
 
     # 水滴（ミスト）
-    for i, (x_offset, y_offset) in enumerate([(6, -8), (-6, -8), (0, -12)]):
+    for _i, (x_offset, y_offset) in enumerate([(6, -8), (-6, -8), (0, -12)]):
         drop_x = fan_center_x + x_offset * scale
         drop_y = fan_center_y + y_offset * scale
         drop_size = 2 * scale
@@ -170,8 +168,7 @@ def generate_metrics_html(basic_stats, hourly_patterns, anomalies, correlation_a
     # URL_PREFIXを取得してfaviconパスを構築
     favicon_path = f"{my_lib.webapp.config.URL_PREFIX}/favicon.ico"
 
-    html = (
-        f"""
+    return f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -248,30 +245,19 @@ def generate_metrics_html(basic_stats, hourly_patterns, anomalies, correlation_a
     </div>
 
     <script>
-        const hourlyData = """
-        + hourly_data_json
-        + """;
-        const anomaliesData = """
-        + anomalies_data_json
-        + """;
-        const correlationData = """
-        + correlation_data_json
-        + """;
+        const hourlyData = {hourly_data_json};
+        const anomaliesData = {anomalies_data_json};
+        const correlationData = {correlation_data_json};
 
         // チャート生成
         generateHourlyCharts();
         generateBoxplotCharts();
         generateCorrelationCharts();
 
-        """
-        + page_js.generate_chart_javascript()
-        + """
+        {page_js.generate_chart_javascript()}
     </script>
 </html>
     """
-    )
-
-    return html
 
 
 def generate_alerts_section(alerts):
@@ -424,7 +410,7 @@ def generate_basic_stats_section(basic_stats):
     """
 
 
-def generate_hourly_patterns_section(hourly_patterns):
+def generate_hourly_patterns_section(hourly_patterns):  # noqa: ARG001
     """時間別パターンセクションのHTML生成。"""
     return """
     <div class="section">
@@ -559,7 +545,9 @@ def generate_correlation_analysis_section(correlation_analysis):
                                 </div>
                                 <div class="level-right">
                                     <div class="level-item">
-                                        <span class="tag is-small">{direction_icon} {factor["correlation_coefficient"]:.3f}</span>
+                                        <span class="tag is-small">
+                                            {direction_icon} {factor["correlation_coefficient"]:.3f}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -603,7 +591,7 @@ def generate_correlation_analysis_section(correlation_analysis):
 
     if correlations:
         correlation_html += '<div class="content"><h6>全要因の詳細:</h6>'
-        for factor_key, factor_data in correlations.items():
+        for factor_data in correlations.values():
             significance_color = (
                 "has-text-success" if factor_data["significance"] == "significant" else "has-text-grey"
             )
@@ -628,7 +616,7 @@ def generate_correlation_analysis_section(correlation_analysis):
     return correlation_html
 
 
-def generate_anomalies_section(anomalies):
+def generate_anomalies_section(anomalies):  # noqa: C901, PLR0912, PLR0915
     """異常検知セクションのHTML生成。"""
     if "error" in anomalies:
         return f"""
@@ -657,7 +645,10 @@ def generate_anomalies_section(anomalies):
 
         <div class="notification is-info is-light">
             <p><strong>異常検知について：</strong></p>
-            <p>機械学習の<strong>Isolation Forest</strong>アルゴリズムを使用して、以下の要素から異常なパターンを検知しています：</p>
+            <p>
+                機械学習の<strong>Isolation Forest</strong>アルゴリズムを使用して、
+                以下の要素から異常なパターンを検知しています：
+            </p>
             <ul>
                 <li><strong>デューティサイクル</strong>：通常と異なる稼働パターン</li>
                 <li><strong>環境要因</strong>：温度、日射量、流量の異常値</li>
