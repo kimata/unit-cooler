@@ -71,9 +71,9 @@ def start(config, arg):
     event_queue = manager.Queue()
 
     # NOTE: Blueprint のパス指定を YAML で行いたいので、my_lib.webapp の import 順を制御
-    import unit_cooler.actuator.log_server
+    import unit_cooler.actuator.web_server
 
-    log_server_handle = unit_cooler.actuator.log_server.start(config, event_queue, setting["log_port"])
+    log_server_handle = unit_cooler.actuator.web_server.start(config, event_queue, setting["log_port"])
 
     if not setting["dummy_mode"] and (os.environ.get("TEST", "false") != "true"):
         # NOTE: 動作開始前に待つ。これを行わないと、複数の Pod が電磁弁を制御することに
@@ -103,7 +103,7 @@ def start(config, arg):
 def wait_and_term(executor, thread_list, log_server_handle, terminate=True):
     global should_terminate  # noqa: PLW0603
 
-    import unit_cooler.actuator.log_server
+    import unit_cooler.actuator.web_server
     import unit_cooler.actuator.work_log
 
     should_terminate = terminate
@@ -119,7 +119,7 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True):
     logging.info("Shutdown executor")
     executor.shutdown(wait=True)
 
-    unit_cooler.actuator.log_server.term(log_server_handle)
+    unit_cooler.actuator.web_server.term(log_server_handle)
     unit_cooler.actuator.work_log.term()
 
     logging.warning("Terminate unit_cooler")

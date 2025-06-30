@@ -23,7 +23,7 @@ def create_app(config, event_queue):
     import my_lib.webapp.config
 
     my_lib.webapp.config.URL_PREFIX = "/unit_cooler"
-    my_lib.webapp.config.init(config["actuator"]["log_server"])
+    my_lib.webapp.config.init(config["actuator"]["web_server"])
 
     import my_lib.webapp.base
     import my_lib.webapp.event

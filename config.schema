@@ -406,7 +406,7 @@
                         "sense"
                     ]
                 },
-                "log_server": {
+                "web_server": {
                     "type": "object",
                     "properties": {
                         "webapp": {
@@ -451,7 +451,7 @@
             },
             "required": [
                 "control",
-                "log_server",
+                "web_server",
                 "metrics",
                 "monitor",
                 "subscribe"

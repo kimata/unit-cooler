@@ -102,7 +102,7 @@ actuator:
         interval_sec: 1
         liveness:
             file: /dev/shm/healthz.actuator.monitor
-    log_server:
+    web_server:
         webapp:
             port: 5001
             data:

@@ -69,13 +69,7 @@ def init_metrics_db():
     try:
         # Flaskアプリのconfigからパスを取得
         config = flask.current_app.config.get("CONFIG", {})
-        _db_path = (
-            config.get("actuator", {})
-            .get("log_server", {})
-            .get("webapp", {})
-            .get("data", {})
-            .get("metrics_db_path")
-        )
+        _db_path = config.get("actuator", {}).get("metrics", {}).get("data")
 
         if not _db_path:
             logger.warning("metrics_db_path not configured, using default")
