@@ -312,9 +312,47 @@ def generate_alerts_section(alerts):
 
 def generate_basic_stats_section(basic_stats):
     """基本統計セクションのHTML生成。"""
+    if basic_stats is None:
+        basic_stats = {}
+
     system_metrics = basic_stats.get("system_metrics", {})
     if system_metrics is None:
         system_metrics = {}
+
+    # デバッグログ
+    import logging
+
+    logging.info("basic_stats: %s", basic_stats)
+    logging.info("system_metrics: %s", system_metrics)
+
+    # 値の取得とNoneチェック
+    total_valve_operations = system_metrics.get("total_valve_operations")
+    if total_valve_operations is None:
+        total_valve_operations = 0
+
+    total_sensor_reads = system_metrics.get("total_sensor_reads")
+    if total_sensor_reads is None:
+        total_sensor_reads = 0
+
+    avg_duty_cycle = system_metrics.get("avg_duty_cycle")
+    if avg_duty_cycle is None:
+        avg_duty_cycle = 0
+
+    total_errors = system_metrics.get("total_errors")
+    if total_errors is None:
+        total_errors = 0
+
+    avg_temperature = system_metrics.get("avg_temperature")
+    if avg_temperature is None:
+        avg_temperature = 0
+
+    avg_solar_radiation = system_metrics.get("avg_solar_radiation")
+    if avg_solar_radiation is None:
+        avg_solar_radiation = 0
+
+    avg_flow_value = system_metrics.get("avg_flow_value")
+    if avg_flow_value is None:
+        avg_flow_value = 0
 
     return f"""
     <div class="section">
@@ -332,7 +370,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">総操作回数</p>
                         <p class="stat-number has-text-primary">
-                            {system_metrics.get("total_valve_operations", 0):,}
+                            {total_valve_operations:,}
                         </p>
                     </div>
                 </div>
@@ -346,7 +384,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">総読み取り回数</p>
                         <p class="stat-number has-text-info">
-                            {system_metrics.get("total_sensor_reads", 0):,}
+                            {total_sensor_reads:,}
                         </p>
                     </div>
                 </div>
@@ -360,7 +398,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">稼働率</p>
                         <p class="stat-number has-text-success">
-                            {(system_metrics.get("avg_duty_cycle") or 0):.1f}%
+                            {avg_duty_cycle:.1f}%
                         </p>
                     </div>
                 </div>
@@ -374,7 +412,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">総エラー数</p>
                         <p class="stat-number has-text-danger">
-                            {system_metrics.get("total_errors", 0):,}
+                            {total_errors:,}
                         </p>
                     </div>
                 </div>
@@ -390,7 +428,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">環境温度</p>
                         <p class="stat-number has-text-warning">
-                            {(system_metrics.get("avg_temperature") or 0):.1f}°C
+                            {avg_temperature:.1f}°C
                         </p>
                     </div>
                 </div>
@@ -404,7 +442,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">太陽放射</p>
                         <p class="stat-number has-text-link">
-                            {(system_metrics.get("avg_solar_radiation") or 0):.0f} W/m²
+                            {avg_solar_radiation:.0f} W/m²
                         </p>
                     </div>
                 </div>
@@ -418,7 +456,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">ミスト流量</p>
                         <p class="stat-number has-text-cyan">
-                            {(system_metrics.get("avg_flow_value") or 0):.2f} L/min
+                            {avg_flow_value:.2f} L/min
                         </p>
                     </div>
                 </div>
