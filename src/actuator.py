@@ -70,6 +70,22 @@ def start(config, arg):
     message_queue = manager.Queue()
     event_queue = manager.Queue()
 
+    if not setting["dummy_mode"] and (os.environ.get("TEST", "false") != "true"):
+        # NOTE: 動作開始前に待つ。これを行わないと、複数の Pod が電磁弁を制御することに
+        # なり、電磁弁の故障を誤判定する可能性がある。
+        wait_before_start(config)
+
+    import unit_cooler.actuator.monitor
+    import unit_cooler.actuator.valve
+    import unit_cooler.actuator.work_log
+    import unit_cooler.actuator.worker
+
+    unit_cooler.actuator.work_log.init(config, event_queue)
+
+    logging.info("Initialize valve")
+    unit_cooler.actuator.valve.init(config["actuator"]["control"]["valve"]["pin_no"])
+    unit_cooler.actuator.monitor.init(config["actuator"]["control"]["valve"]["pin_no"])
+
     # NOTE: Blueprint のパス指定を YAML で行いたいので、my_lib.webapp の import 順を制御
     import unit_cooler.actuator.web_server
 
@@ -80,20 +96,6 @@ def start(config, arg):
     except Exception:
         logging.exception("Failed to start web server")
         raise
-
-    if not setting["dummy_mode"] and (os.environ.get("TEST", "false") != "true"):
-        # NOTE: 動作開始前に待つ。これを行わないと、複数の Pod が電磁弁を制御することに
-        # なり、電磁弁の故障を誤判定する可能性がある。
-        wait_before_start(config)
-
-    import unit_cooler.actuator.work_log
-    import unit_cooler.actuator.worker
-
-    unit_cooler.actuator.work_log.init(config, event_queue)
-
-    logging.info("Initialize valve")
-    unit_cooler.actuator.valve.init(config["actuator"]["control"]["valve"]["pin_no"])
-    unit_cooler.actuator.monitor.init(config["actuator"]["control"]["valve"]["pin_no"])
 
     executor = concurrent.futures.ThreadPoolExecutor()
 

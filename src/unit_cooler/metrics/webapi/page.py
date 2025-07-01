@@ -1,7 +1,6 @@
 import io
 import json
 import logging
-import pathlib
 
 import flask
 import my_lib.config
@@ -23,16 +22,33 @@ def metrics_view():
     # 無効化する。
     flask.g.disable_cache = True
 
+    def _get_config():
+        """Get config from Flask app."""
+        config = flask.current_app.config.get("CONFIG")
+        if not config:
+            msg = "Application config not found"
+            raise RuntimeError(msg)
+        return config
+
     try:
-        # 設定ファイルからデータベースパスを取得
-        config_file = flask.current_app.config.get("CONFIG_FILE_NORMAL", "config.yaml")
-        config = my_lib.config.load(config_file, pathlib.Path("config.schema"))
+        # フラスクアプリから設定を取得
+        config = _get_config()
 
         # 設定からデータベースパスを取得
-        db_path = config.get("metrics", {}).get("data", "data/metrics.db")
+        db_path = config.get("actuator", {}).get("metrics", {}).get("data", "data/metrics.db")
 
         # メトリクス分析器を初期化
-        analyzer = unit_cooler.metrics.collector.MetricsAnalyzer(db_path)
+        try:
+            analyzer = unit_cooler.metrics.collector.MetricsAnalyzer(db_path)
+        except FileNotFoundError:
+            # データベースファイルが存在しない場合の処理
+            return flask.Response(
+                f"<html><body><h1>メトリクスデータベースが見つかりません</h1>"
+                f"<p>データベースファイル: {db_path}</p>"
+                f"<p>システムが十分に動作してからメトリクスが生成されます。</p></body></html>",
+                mimetype="text/html",
+                status=503,
+            )
 
         # すべてのメトリクスデータを収集
         basic_stats = analyzer.get_basic_statistics(days=30)
