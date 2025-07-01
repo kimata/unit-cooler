@@ -67,10 +67,17 @@ def create_app(config, event_queue):
 
 def start(config, event_queue, port):
     # NOTE: Flask は別のプロセスで実行
+    try:
+        app = create_app(config, event_queue)
+        logging.info("Web app created successfully")
+    except Exception:
+        logging.exception("Failed to create web app")
+        raise
+
     server = werkzeug.serving.make_server(
         "0.0.0.0",  # noqa: S104
         port,
-        create_app(config, event_queue),
+        app,
         threaded=True,
     )
     thread = threading.Thread(target=server.serve_forever)
