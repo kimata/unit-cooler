@@ -313,6 +313,8 @@ def generate_alerts_section(alerts):
 def generate_basic_stats_section(basic_stats):
     """基本統計セクションのHTML生成。"""
     system_metrics = basic_stats.get("system_metrics", {})
+    if system_metrics is None:
+        system_metrics = {}
 
     return f"""
     <div class="section">
@@ -358,7 +360,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">稼働率</p>
                         <p class="stat-number has-text-success">
-                            {system_metrics.get("avg_duty_cycle", 0):.1f}%
+                            {(system_metrics.get("avg_duty_cycle") or 0):.1f}%
                         </p>
                     </div>
                 </div>
@@ -388,7 +390,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">環境温度</p>
                         <p class="stat-number has-text-warning">
-                            {system_metrics.get("avg_temperature", 0):.1f}°C
+                            {(system_metrics.get("avg_temperature") or 0):.1f}°C
                         </p>
                     </div>
                 </div>
@@ -402,7 +404,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">太陽放射</p>
                         <p class="stat-number has-text-link">
-                            {system_metrics.get("avg_solar_radiation", 0):.0f} W/m²
+                            {(system_metrics.get("avg_solar_radiation") or 0):.0f} W/m²
                         </p>
                     </div>
                 </div>
@@ -416,7 +418,7 @@ def generate_basic_stats_section(basic_stats):
                     <div class="card-content has-text-centered">
                         <p class="heading">ミスト流量</p>
                         <p class="stat-number has-text-cyan">
-                            {system_metrics.get("avg_flow_value", 0):.2f} L/min
+                            {(system_metrics.get("avg_flow_value") or 0):.2f} L/min
                         </p>
                     </div>
                 </div>
