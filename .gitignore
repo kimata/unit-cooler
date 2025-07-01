@@ -45,3 +45,4 @@ config.yaml
 # System files
 .DS_Store
 Thumbs.db
+tmp-my-lib/
