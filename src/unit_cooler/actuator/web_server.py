@@ -53,7 +53,7 @@ def create_app(config, event_queue):
     app.register_blueprint(unit_cooler.actuator.webapi.flow_status.blueprint)
     app.register_blueprint(unit_cooler.metrics.webapi.page.blueprint)
 
-    my_lib.webapp.config.show_handler_list(app)
+    my_lib.webapp.config.show_handler_list(app, True)
 
     my_lib.webapp.log.init(config)
     my_lib.webapp.event.start(event_queue)
