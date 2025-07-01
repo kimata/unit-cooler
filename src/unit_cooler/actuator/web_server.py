@@ -25,14 +25,20 @@ def create_app(config, event_queue):
     my_lib.webapp.config.URL_PREFIX = "/unit_cooler"
     my_lib.webapp.config.init(config["actuator"]["web_server"])
 
+    logging.info("Importing webapp modules...")
     import my_lib.webapp.base
     import my_lib.webapp.event
     import my_lib.webapp.log
     import my_lib.webapp.util
 
+    logging.info("Importing actuator webapi modules...")
     import unit_cooler.actuator.webapi.flow_status
     import unit_cooler.actuator.webapi.valve_status
+
+    logging.info("Importing metrics webapi page...")
     import unit_cooler.metrics.webapi.page
+
+    logging.info("All modules imported successfully")
 
     # NOTE: アクセスログは無効にする
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
