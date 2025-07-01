@@ -73,7 +73,13 @@ def start(config, arg):
     # NOTE: Blueprint のパス指定を YAML で行いたいので、my_lib.webapp の import 順を制御
     import unit_cooler.actuator.web_server
 
-    log_server_handle = unit_cooler.actuator.web_server.start(config, event_queue, setting["log_port"])
+    try:
+        logging.info("Starting web server on port %d", setting["log_port"])
+        log_server_handle = unit_cooler.actuator.web_server.start(config, event_queue, setting["log_port"])
+        logging.info("Web server started successfully")
+    except Exception:
+        logging.exception("Failed to start web server")
+        raise
 
     if not setting["dummy_mode"] and (os.environ.get("TEST", "false") != "true"):
         # NOTE: 動作開始前に待つ。これを行わないと、複数の Pod が電磁弁を制御することに
