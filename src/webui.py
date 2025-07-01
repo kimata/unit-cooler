@@ -182,7 +182,7 @@ if __name__ == "__main__":
             "control_host": control_host,
             "pub_port": pub_port,
             "actuator_host": actuator_host,
-            "log_port": config["actuator"]["log_server"]["webapp"]["port"],
+            "log_port": config["actuator"]["web_server"]["webapp"]["port"],
             "dummy_mode": dummy_mode,
             "msg_count": msg_count,
         },
