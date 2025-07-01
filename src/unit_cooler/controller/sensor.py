@@ -214,6 +214,14 @@ def get_outdoor_status(sense_data):
     logging.info(
         "気温: %s ℃, 湿度: %s %%, 日射量: %s W/m^2, 照度: %s LUX", temp_str, humi_str, solar_rad_str, lux_str
     )
+
+    is_senser_valid = all(
+        sense_data[key][0]["value"] is not None for key in ["temp", "humi", "solar_rad", "lux"]
+    )
+
+    if not is_senser_valid:
+        return {"status": -10, "message": "センサーデータが欠落していますので、冷却を停止します。"}
+
     for condition in OUTDOOR_CONDITION_LIST:
         if condition["judge"](sense_data):
             return {
