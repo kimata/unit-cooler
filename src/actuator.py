@@ -87,6 +87,7 @@ def start(config, arg):
     unit_cooler.actuator.monitor.init(config["actuator"]["control"]["valve"]["pin_no"])
 
     # NOTE: Blueprint のパス指定を YAML で行いたいので、my_lib.webapp の import 順を制御
+    logging.info("Importing web server module")
     import unit_cooler.actuator.web_server
 
     try:
@@ -97,11 +98,13 @@ def start(config, arg):
         logging.exception("Failed to start web server")
         raise
 
+    logging.info("Creating thread pool executor")
     executor = concurrent.futures.ThreadPoolExecutor()
 
-    thread_list = unit_cooler.actuator.worker.start(
-        executor, unit_cooler.actuator.worker.get_worker_def(config, message_queue, setting)
-    )
+    logging.info("Getting worker definitions")
+    worker_def = unit_cooler.actuator.worker.get_worker_def(config, message_queue, setting)
+    logging.info("Starting worker threads")
+    thread_list = unit_cooler.actuator.worker.start(executor, worker_def)
 
     signal.signal(signal.SIGTERM, sig_handler)
 
@@ -156,8 +159,18 @@ if __name__ == "__main__":
 
     my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
+    logging.info(
+        "Actuator starting with args: control_host=%s, pub_port=%d, msg_count=%d, dummy_mode=%s",
+        control_host,
+        pub_port,
+        msg_count,
+        dummy_mode,
+    )
 
+    config = my_lib.config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
+    logging.info("Configuration loaded successfully")
+
+    logging.info("Starting actuator main process")
     sys.exit(
         wait_and_term(
             *start(
