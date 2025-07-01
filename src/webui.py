@@ -27,6 +27,13 @@ import time
 import flask
 import flask_cors
 import my_lib.proc_util
+import my_lib.webapp.base
+import my_lib.webapp.config
+import my_lib.webapp.proxy
+import my_lib.webapp.util
+
+import unit_cooler.webui.webapi.cooler_stat
+import unit_cooler.webui.worker
 
 SCHEMA_CONFIG = "config.schema"
 
@@ -76,18 +83,8 @@ def create_app(config, arg):
 
     logging.info("Using ZMQ server of %s:%d", setting["control_host"], setting["pub_port"])
 
-    # NOTE: テストのため、環境変数 DUMMY_MODE をセットしてからロードしたいのでこの位置
-    import my_lib.webapp.config
-
     my_lib.webapp.config.URL_PREFIX = "/unit_cooler"
     my_lib.webapp.config.init(config["webui"])
-
-    import my_lib.webapp.base
-    import my_lib.webapp.proxy
-    import my_lib.webapp.util
-
-    import unit_cooler.webui.webapi.cooler_stat
-    import unit_cooler.webui.worker
 
     message_queue = multiprocessing.Manager().Queue(10)
     global worker_thread  # noqa: PLW0603
@@ -143,10 +140,12 @@ def create_app(config, arg):
     my_lib.webapp.proxy.init(api_base_url, error_response)
 
     app.register_blueprint(my_lib.webapp.base.blueprint_default)
-    app.register_blueprint(my_lib.webapp.base.blueprint)
-    app.register_blueprint(my_lib.webapp.proxy.blueprint)
-    app.register_blueprint(my_lib.webapp.util.blueprint)
-    app.register_blueprint(unit_cooler.webui.webapi.cooler_stat.blueprint)
+    app.register_blueprint(my_lib.webapp.base.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
+    app.register_blueprint(my_lib.webapp.proxy.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
+    app.register_blueprint(my_lib.webapp.util.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
+    app.register_blueprint(
+        unit_cooler.webui.webapi.cooler_stat.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX
+    )
 
     my_lib.webapp.config.show_handler_list(app)
 

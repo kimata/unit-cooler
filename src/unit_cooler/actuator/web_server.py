@@ -16,23 +16,21 @@ import threading
 
 import flask
 import flask_cors
+import my_lib.webapp.base
+import my_lib.webapp.config
+import my_lib.webapp.event
+import my_lib.webapp.log
+import my_lib.webapp.util
 import werkzeug.serving
+
+import unit_cooler.actuator.webapi.flow_status
+import unit_cooler.actuator.webapi.valve_status
+import unit_cooler.metrics.webapi.page
 
 
 def create_app(config, event_queue):
-    import my_lib.webapp.config
-
     my_lib.webapp.config.URL_PREFIX = "/unit_cooler"
     my_lib.webapp.config.init(config["actuator"]["web_server"])
-
-    import my_lib.webapp.base
-    import my_lib.webapp.event
-    import my_lib.webapp.log
-    import my_lib.webapp.util
-
-    import unit_cooler.actuator.webapi.flow_status
-    import unit_cooler.actuator.webapi.valve_status
-    import unit_cooler.metrics.webapi.page
 
     # NOTE: アクセスログは無効にする
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -46,12 +44,18 @@ def create_app(config, event_queue):
 
     app.json.compat = True
 
-    app.register_blueprint(my_lib.webapp.log.blueprint)
-    app.register_blueprint(my_lib.webapp.event.blueprint)
-    app.register_blueprint(my_lib.webapp.util.blueprint)
-    app.register_blueprint(unit_cooler.actuator.webapi.valve_status.blueprint)
-    app.register_blueprint(unit_cooler.actuator.webapi.flow_status.blueprint)
-    app.register_blueprint(unit_cooler.metrics.webapi.page.blueprint)
+    app.register_blueprint(my_lib.webapp.log.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
+    app.register_blueprint(my_lib.webapp.event.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
+    app.register_blueprint(my_lib.webapp.util.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
+    app.register_blueprint(
+        unit_cooler.actuator.webapi.valve_status.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX
+    )
+    app.register_blueprint(
+        unit_cooler.actuator.webapi.flow_status.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX
+    )
+    app.register_blueprint(
+        unit_cooler.metrics.webapi.page.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX
+    )
 
     my_lib.webapp.config.show_handler_list(app, True)
 

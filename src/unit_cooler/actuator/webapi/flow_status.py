@@ -7,7 +7,7 @@ import my_lib.webapp.config
 
 import unit_cooler.actuator.monitor
 
-blueprint = flask.Blueprint("flow-status", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
+blueprint = flask.Blueprint("flow-status", __name__)
 
 
 @blueprint.route("/api/get_flow", methods=["GET"])

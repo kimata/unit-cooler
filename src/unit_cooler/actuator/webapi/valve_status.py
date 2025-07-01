@@ -8,7 +8,7 @@ import my_lib.webapp.config
 import unit_cooler.actuator.valve
 import unit_cooler.const
 
-blueprint = flask.Blueprint("valve-status", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
+blueprint = flask.Blueprint("valve-status", __name__)
 
 
 @blueprint.route("/api/valve_status", methods=["GET"])

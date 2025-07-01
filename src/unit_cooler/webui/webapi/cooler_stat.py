@@ -21,7 +21,7 @@ import my_lib.webapp.config
 import unit_cooler.controller.engine
 import unit_cooler.controller.sensor
 
-blueprint = flask.Blueprint("cooler-stat", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
+blueprint = flask.Blueprint("cooler-stat", __name__)
 
 api_base_url = None
 
@@ -82,10 +82,14 @@ def get_stats(config, message_queue):
 @blueprint.route("/api/stat", methods=["GET"])
 @my_lib.flask_util.support_jsonp
 def api_get_stats():
-    config = flask.current_app.config["CONFIG"]
-    message_queue = flask.current_app.config["MESSAGE_QUEUE"]
+    try:
+        config = flask.current_app.config["CONFIG"]
+        message_queue = flask.current_app.config["MESSAGE_QUEUE"]
 
-    return flask.jsonify(get_stats(config, message_queue))
+        return flask.jsonify(get_stats(config, message_queue))
+    except Exception as e:
+        logging.exception("Error in api_get_stats")
+        return flask.jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
