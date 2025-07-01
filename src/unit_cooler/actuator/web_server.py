@@ -26,6 +26,7 @@ import werkzeug.serving
 import unit_cooler.actuator.webapi.flow_status
 import unit_cooler.actuator.webapi.valve_status
 import unit_cooler.metrics.webapi.page
+from unit_cooler.metrics import get_metrics_collector
 
 
 def create_app(config, event_queue):
@@ -62,7 +63,15 @@ def create_app(config, event_queue):
     my_lib.webapp.log.init(config)
     my_lib.webapp.event.start(event_queue)
 
-    # メトリクスデータベースの初期化は削除済み
+    # メトリクスデータベースの初期化
+    if "metrics" in config["actuator"] and "data" in config["actuator"]["metrics"]:
+        metrics_db_path = config["actuator"]["metrics"]["data"]
+        try:
+            metrics_collector = get_metrics_collector(metrics_db_path)
+            logging.info("Metrics database initialized at: %s", metrics_db_path)
+            app.config["METRICS_COLLECTOR"] = metrics_collector
+        except Exception:
+            logging.exception("Failed to initialize metrics database")
 
     # app.debug = True
 

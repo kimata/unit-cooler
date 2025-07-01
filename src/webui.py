@@ -22,7 +22,6 @@ import os
 import pathlib
 import signal
 import threading
-import time
 
 import flask
 import flask_cors
@@ -135,9 +134,7 @@ def create_app(config, arg):
 
     # Initialize proxy before registering blueprint
     api_base_url = f"http://{setting['actuator_host']}:{setting['log_port']}/unit_cooler"
-    # Set error_response to match old log_proxy.py behavior (return 200 with empty data)
-    error_response = {"data": [], "last_time": time.time()}
-    my_lib.webapp.proxy.init(api_base_url, error_response)
+    my_lib.webapp.proxy.init(api_base_url)
 
     app.register_blueprint(my_lib.webapp.base.blueprint_default)
     app.register_blueprint(my_lib.webapp.base.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)

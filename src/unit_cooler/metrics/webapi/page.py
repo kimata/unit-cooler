@@ -47,7 +47,7 @@ def metrics_view():
                 f"<p>データベースファイル: {db_path}</p>"
                 f"<p>システムが十分に動作してからメトリクスが生成されます。</p></body></html>",
                 mimetype="text/html",
-                status=503,
+                status=200,  # NOTE: proxy 経由で表示するのでステータスコードは 200 OK とする。
             )
 
         # すべてのメトリクスデータを収集
