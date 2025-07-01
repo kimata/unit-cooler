@@ -31,7 +31,6 @@ def create_app(config, event_queue):
     import my_lib.webapp.util
 
     import unit_cooler.actuator.webapi.flow_status
-    import unit_cooler.actuator.webapi.metrics
     import unit_cooler.actuator.webapi.valve_status
     import unit_cooler.metrics.webapi.page
 
@@ -52,7 +51,6 @@ def create_app(config, event_queue):
     app.register_blueprint(my_lib.webapp.util.blueprint)
     app.register_blueprint(unit_cooler.actuator.webapi.valve_status.blueprint)
     app.register_blueprint(unit_cooler.actuator.webapi.flow_status.blueprint)
-    app.register_blueprint(unit_cooler.actuator.webapi.metrics.blueprint)
     app.register_blueprint(unit_cooler.metrics.webapi.page.blueprint)
 
     my_lib.webapp.config.show_handler_list(app)
@@ -60,11 +58,7 @@ def create_app(config, event_queue):
     my_lib.webapp.log.init(config)
     my_lib.webapp.event.start(event_queue)
 
-    # メトリクスデータベースの初期化
-    with app.app_context():
-        import unit_cooler.actuator.webapi.metrics
-
-        unit_cooler.actuator.webapi.metrics.init_metrics_db()
+    # メトリクスデータベースの初期化は削除済み
 
     # app.debug = True
 

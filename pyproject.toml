@@ -15,7 +15,7 @@ dependencies = [
     "flask-cors>=5.0.1",
     "docopt-ng>=0.9.0",
     "influxdb-client[ciso]>=1.49.0",
-    "my-lib @ git+https://github.com/kimata/my-py-lib@e5b77bc024c922ead28bc32ee8b6124297a52b28",
+    "my-lib @ git+https://github.com/kimata/my-py-lib@3bad8d09c509d25443f54b76d236a616afb6bbeb",
     "spidev>=3.7",
     "fluent-logger>=0.11.1",
     "pyzmq>=27.0.0",
@@ -69,6 +69,10 @@ testpaths = [
 filterwarnings = [
     "ignore:datetime\\.datetime\\.utcfromtimestamp\\(\\) is deprecated:DeprecationWarning",
     "ignore::DeprecationWarning:multiprocessing\\.popen_fork"
+]
+
+markers = [
+    "order: marks tests with execution order for pytest-ordering"
 ]
 
 
