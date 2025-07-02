@@ -56,7 +56,8 @@ def test_valve_gpio_error(mocker, config):
     import unit_cooler.const
 
     # Initialize valve
-    unit_cooler.actuator.valve.init(17)
+    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
+    unit_cooler.actuator.valve.init(17, dummy_config)
 
     # Mock GPIO to raise exception
     mocker.patch("my_lib.rpi.gpio.output", side_effect=Exception("GPIO Error"))
@@ -117,7 +118,8 @@ def test_memory_ctrl_hist_growth(config):
     import unit_cooler.const
 
     # Initialize valve
-    unit_cooler.actuator.valve.init(17)
+    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
+    unit_cooler.actuator.valve.init(17, dummy_config)
 
     # Record initial history length
     initial_length = len(unit_cooler.actuator.valve.ctrl_hist)
@@ -187,7 +189,8 @@ def test_concurrent_valve_operations(config):
     import unit_cooler.const
 
     # Initialize valve
-    unit_cooler.actuator.valve.init(17)
+    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
+    unit_cooler.actuator.valve.init(17, dummy_config)
 
     results = []
 
@@ -379,11 +382,13 @@ def test_hardware_boundary_conditions(config):
     import unit_cooler.const
 
     # Test valve initialization with invalid pin - now properly validates in dummy mode
+    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
     with pytest.raises(ValueError, match="Pin -1 is not a valid GPIO pin number"):
-        unit_cooler.actuator.valve.init(-1)  # Invalid GPIO pin now raises ValueError
+        unit_cooler.actuator.valve.init(-1, dummy_config)  # Invalid GPIO pin now raises ValueError
 
     # Test valve initialization with valid pin
-    unit_cooler.actuator.valve.init(17)  # Valid pin
+    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
+    unit_cooler.actuator.valve.init(17, dummy_config)  # Valid pin
     assert unit_cooler.actuator.valve.pin_no == 17
 
     # Test that valve operations work in dummy mode
@@ -460,7 +465,8 @@ def test_long_running_memory_usage(config):
     import unit_cooler.const
 
     # Initialize valve
-    unit_cooler.actuator.valve.init(17)
+    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
+    unit_cooler.actuator.valve.init(17, dummy_config)
 
     # Record initial memory state
     gc.collect()

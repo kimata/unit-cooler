@@ -54,6 +54,45 @@ def set_last_control_message(message):
 should_terminate = threading.Event()
 
 
+def collect_environmental_metrics(config, current_message):
+    """環境データのメトリクス収集"""
+    from unit_cooler.metrics import get_metrics_collector
+
+    try:
+        metrics_db_path = config["actuator"]["metrics"]["data"]
+        metrics_collector = get_metrics_collector(metrics_db_path)
+
+        # current_messageのsense_dataからセンサーデータを取得
+        sense_data = current_message.get("sense_data", {})
+
+        if sense_data:
+            # 各センサーデータの最新値を取得
+            temperature = None
+            humidity = None
+            lux = None
+            solar_radiation = None
+            rain_amount = None
+
+            if sense_data.get("temp") and len(sense_data["temp"]) > 0:
+                temperature = sense_data["temp"][0].get("value")
+            if sense_data.get("humi") and len(sense_data["humi"]) > 0:
+                humidity = sense_data["humi"][0].get("value")
+            if sense_data.get("lux") and len(sense_data["lux"]) > 0:
+                lux = sense_data["lux"][0].get("value")
+            if sense_data.get("solar_rad") and len(sense_data["solar_rad"]) > 0:
+                solar_radiation = sense_data["solar_rad"][0].get("value")
+            if sense_data.get("rain") and len(sense_data["rain"]) > 0:
+                rain_amount = sense_data["rain"][0].get("value")
+
+            # 環境データをメトリクスに記録
+            metrics_collector.update_environmental_data(
+                temperature, humidity, lux, solar_radiation, rain_amount
+            )
+
+    except Exception:
+        logging.debug("Failed to collect environmental metrics")
+
+
 def queue_put(message_queue, message, liveness_file):
     message["state"] = unit_cooler.const.COOLING_STATE(message["state"])
 
@@ -169,6 +208,12 @@ def control_worker(config, message_queue, liveness_file, dummy_mode=False, speed
             set_last_control_message(current_message)
 
             unit_cooler.actuator.control.execute(config, current_message)
+
+            # 環境データのメトリクス収集（定期的に実行）
+            try:
+                collect_environmental_metrics(config, current_message)
+            except Exception:
+                logging.debug("Failed to collect environmental metrics")
 
             my_lib.footprint.update(liveness_file)
 
@@ -293,7 +338,7 @@ if __name__ == "__main__":
     my_lib.webapp.log.init(config)
     unit_cooler.actuator.work_log.init(config, event_queue)
 
-    unit_cooler.actuator.valve.init(config["actuator"]["control"]["valve"]["pin_no"])
+    unit_cooler.actuator.valve.init(config["actuator"]["control"]["valve"]["pin_no"], config)
     unit_cooler.actuator.monitor.init(config["actuator"]["control"]["valve"]["pin_no"])
 
     # NOTE: テストしやすいように、threading.Thread ではなく multiprocessing.pool.ThreadPool を使う

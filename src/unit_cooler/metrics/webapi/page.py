@@ -1,66 +1,71 @@
+"""
+室外機冷却システムメトリクス表示ページ
+
+冷却モード、Duty比、環境要因の統計情報とグラフを表示するWebページを提供します。
+"""
+
+from __future__ import annotations
+
+import datetime
 import io
 import json
 import logging
+import zoneinfo
 
 import flask
-import my_lib.config
-import my_lib.flask_util
 import my_lib.webapp.config
 from PIL import Image, ImageDraw
 
-import unit_cooler.metrics.collector
+from unit_cooler.metrics.collector import get_metrics_collector
 
-from . import page_js
-
-blueprint = flask.Blueprint("metrics_dashboard", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
+blueprint = flask.Blueprint("metrics", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
 
 
 @blueprint.route("/api/metrics", methods=["GET"])
-@my_lib.flask_util.gzipped
 def metrics_view():
-    # NOTE: @gzipped をつけた場合、キャッシュ用のヘッダを付与しているので、
-    # 無効化する。
-    flask.g.disable_cache = True
-
-    def _get_config():
-        """Get config from Flask app."""
-        config = flask.current_app.config.get("CONFIG")
-        if not config:
-            msg = "Application config not found"
-            raise RuntimeError(msg)
-        return config
-
+    """メトリクスダッシュボードページを表示"""
     try:
-        # フラスクアプリから設定を取得
-        config = _get_config()
+        # 設定からメトリクスデータパスを取得
+        config = flask.current_app.config["CONFIG"]
+        metrics_data_path = config.get("actuator", {}).get("metrics", {}).get("data")
 
-        # 設定からデータベースパスを取得
-        db_path = config.get("actuator", {}).get("metrics", {}).get("data", "data/metrics.db")
+        # データベースファイルの存在確認
+        if not metrics_data_path:
+            return flask.Response(
+                "<html><body><h1>メトリクス設定が見つかりません</h1>"
+                "<p>config.yamlでactuator.metricsセクションが設定されていません。</p></body></html>",
+                mimetype="text/html",
+                status=503,
+            )
 
-        # メトリクス分析器を初期化
-        try:
-            analyzer = unit_cooler.metrics.collector.MetricsAnalyzer(db_path)
-        except FileNotFoundError:
-            # データベースファイルが存在しない場合の処理
+        from pathlib import Path
+
+        db_path = Path(metrics_data_path)
+        if not db_path.exists():
             return flask.Response(
                 f"<html><body><h1>メトリクスデータベースが見つかりません</h1>"
                 f"<p>データベースファイル: {db_path}</p>"
                 f"<p>システムが十分に動作してからメトリクスが生成されます。</p></body></html>",
                 mimetype="text/html",
-                status=200,  # NOTE: proxy 経由で表示するのでステータスコードは 200 OK とする。
+                status=503,
             )
 
-        # すべてのメトリクスデータを収集
-        basic_stats = analyzer.get_basic_statistics(days=30)
-        hourly_patterns = analyzer.get_hourly_patterns(days=30)
-        anomalies = analyzer.detect_anomalies(days=30)
-        correlation_analysis = analyzer.get_correlation_analysis(days=30)
-        alerts = analyzer.check_performance_alerts()
+        # メトリクス収集器を取得
+        collector = get_metrics_collector(metrics_data_path)
+
+        # 最近100日間のデータを取得
+        end_time = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Tokyo"))
+        start_time = end_time - datetime.timedelta(days=100)
+
+        minute_data = collector.get_minute_data(start_time, end_time, limit=144000)  # 100日分
+        hourly_data = collector.get_hourly_data(start_time, end_time, limit=2400)  # 100日分
+        error_data = collector.get_error_data(start_time, end_time, limit=1000)
+
+        # 統計データを生成
+        stats = generate_statistics(minute_data, hourly_data, error_data)
 
         # HTMLを生成
-        html_content = generate_metrics_html(
-            basic_stats, hourly_patterns, anomalies, correlation_analysis, alerts
-        )
+        html_content = generate_metrics_html(stats, minute_data, hourly_data)
 
         return flask.Response(html_content, mimetype="text/html")
 
@@ -69,92 +74,12 @@ def metrics_view():
         return flask.Response(f"エラー: {e!s}", mimetype="text/plain", status=500)
 
 
-def generate_metrics_icon():
-    """室外機冷却システム用のアイコンを動的生成（アンチエイリアス対応）"""
-    # アンチエイリアスのため4倍サイズで描画してから縮小
-    scale = 4
-    size = 32
-    large_size = size * scale
-
-    # 大きなサイズで描画
-    img = Image.new("RGBA", (large_size, large_size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # 背景円（冷却システムらしい青色）
-    margin = 2 * scale
-    draw.ellipse(
-        [margin, margin, large_size - margin, large_size - margin],
-        fill=(52, 152, 219, 255),
-        outline=(41, 128, 185, 255),
-        width=2 * scale,
-    )
-
-    # 室外機っぽい四角形
-    unit_margin = 8 * scale
-    draw.rectangle(
-        [
-            unit_margin,
-            unit_margin + 4 * scale,
-            large_size - unit_margin,
-            large_size - unit_margin - 2 * scale,
-        ],
-        fill=(255, 255, 255, 255),
-        outline=(41, 128, 185, 255),
-        width=1 * scale,
-    )
-
-    # 冷却ファンの円
-    fan_center_x = large_size // 2
-    fan_center_y = large_size // 2 + 2 * scale
-    fan_radius = 6 * scale
-    draw.ellipse(
-        [
-            fan_center_x - fan_radius,
-            fan_center_y - fan_radius,
-            fan_center_x + fan_radius,
-            fan_center_y + fan_radius,
-        ],
-        outline=(41, 128, 185, 255),
-        width=2 * scale,
-    )
-
-    # ファンの羽根
-    for i in range(4):
-        angle_start = i * 90
-        angle_end = angle_start + 30
-        draw.arc(
-            [
-                fan_center_x - fan_radius // 2,
-                fan_center_y - fan_radius // 2,
-                fan_center_x + fan_radius // 2,
-                fan_center_y + fan_radius // 2,
-            ],
-            start=angle_start,
-            end=angle_end,
-            fill=(41, 128, 185, 255),
-            width=1 * scale,
-        )
-
-    # 水滴（ミスト）
-    for _i, (x_offset, y_offset) in enumerate([(6, -8), (-6, -8), (0, -12)]):
-        drop_x = fan_center_x + x_offset * scale
-        drop_y = fan_center_y + y_offset * scale
-        drop_size = 2 * scale
-        draw.ellipse(
-            [drop_x - drop_size, drop_y - drop_size, drop_x + drop_size, drop_y + drop_size],
-            fill=(100, 200, 255, 200),
-        )
-
-    # 32x32に縮小してアンチエイリアス効果を得る
-    return img.resize((size, size), Image.LANCZOS)
-
-
 @blueprint.route("/favicon.ico", methods=["GET"])
 def favicon():
-    """動的生成された室外機冷却システム用favicon.icoを返す"""
+    """動的生成された室外機冷却システムメトリクス用favicon.icoを返す"""
     try:
-        # メトリクスアイコンを生成
-        img = generate_metrics_icon()
+        # 室外機冷却システムメトリクスアイコンを生成
+        img = generate_cooler_metrics_icon()
 
         # ICO形式で出力
         output = io.BytesIO()
@@ -174,12 +99,321 @@ def favicon():
         return flask.Response("", status=500)
 
 
-def generate_metrics_html(basic_stats, hourly_patterns, anomalies, correlation_analysis, alerts):
-    """Bulma CSSを使用した包括的な室外機冷却システムメトリクスHTMLを生成。"""
-    # JavaScript チャート用にデータをJSONに変換
-    hourly_data_json = json.dumps(hourly_patterns)
-    anomalies_data_json = json.dumps(anomalies)
-    correlation_data_json = json.dumps(correlation_analysis)
+def generate_cooler_metrics_icon():
+    """室外機冷却システムメトリクス用のアイコンを動的生成（アンチエイリアス対応）"""
+    # アンチエイリアスのため4倍サイズで描画してから縮小
+    scale = 4
+    size = 32
+    large_size = size * scale
+
+    # 大きなサイズで描画
+    img = Image.new("RGBA", (large_size, large_size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # 背景円（冷却システムらしい青色）
+    margin = 2 * scale
+    draw.ellipse(
+        [margin, margin, large_size - margin, large_size - margin],
+        fill=(52, 152, 219, 255),
+        outline=(41, 128, 185, 255),
+        width=2 * scale,
+    )
+
+    # 冷却アイコン（雪の結晶風）
+    center_x, center_y = large_size // 2, large_size // 2
+
+    # 雪の結晶の線
+    for angle in [0, 60, 120]:
+        import math
+
+        rad = math.radians(angle)
+        x1 = center_x + 8 * scale * math.cos(rad)
+        y1 = center_y + 8 * scale * math.sin(rad)
+        x2 = center_x - 8 * scale * math.cos(rad)
+        y2 = center_y - 8 * scale * math.sin(rad)
+        draw.line([(x1, y1), (x2, y2)], fill=(255, 255, 255, 255), width=2 * scale)
+
+        # 枝
+        for branch_pos in [0.6, -0.6]:
+            bx = center_x + branch_pos * 8 * scale * math.cos(rad)
+            by = center_y + branch_pos * 8 * scale * math.sin(rad)
+            for branch_angle in [30, -30]:
+                branch_rad = math.radians(angle + branch_angle)
+                bx2 = bx + 3 * scale * math.cos(branch_rad)
+                by2 = by + 3 * scale * math.sin(branch_rad)
+                draw.line([(bx, by), (bx2, by2)], fill=(255, 255, 255, 255), width=1 * scale)
+
+    # 中心の点
+    draw.ellipse(
+        [center_x - 2 * scale, center_y - 2 * scale, center_x + 2 * scale, center_y + 2 * scale],
+        fill=(255, 255, 255, 255),
+    )
+
+    # 32x32に縮小してアンチエイリアス効果を得る
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def generate_statistics(minute_data: list[dict], hourly_data: list[dict], error_data: list[dict]) -> dict:
+    """メトリクスデータから統計情報を生成"""
+    if not minute_data and not hourly_data:
+        return {
+            "total_days": 0,
+            "cooling_mode_avg": None,
+            "duty_ratio_avg": None,
+            "valve_operations_total": 0,
+            "temperature_avg": None,
+            "humidity_avg": None,
+            "error_total": len(error_data),
+            "data_points": 0,
+        }
+
+    # 有効なデータのみでフィルタリング
+    cooling_modes = [d["cooling_mode"] for d in minute_data if d.get("cooling_mode") is not None]
+    duty_ratios = [d["duty_ratio"] for d in minute_data if d.get("duty_ratio") is not None]
+    temperatures = [d["temperature"] for d in minute_data if d.get("temperature") is not None]
+    humidities = [d["humidity"] for d in minute_data if d.get("humidity") is not None]
+
+    valve_operations_total = sum(d.get("valve_operations", 0) for d in hourly_data)
+
+    # 日数を計算（タイムスタンプから一意の日付を抽出）
+    unique_dates = set()
+    for d in minute_data + hourly_data:
+        if d.get("timestamp"):
+            try:
+                date_part = (
+                    d["timestamp"].split("T")[0]
+                    if "T" in str(d["timestamp"])
+                    else str(d["timestamp"]).split()[0]
+                )
+                unique_dates.add(date_part)
+            except Exception:
+                logging.debug("Failed to parse timestamp for date calculation")
+
+    return {
+        "total_days": len(unique_dates),
+        "cooling_mode_avg": sum(cooling_modes) / len(cooling_modes) if cooling_modes else None,
+        "duty_ratio_avg": sum(duty_ratios) / len(duty_ratios) if duty_ratios else None,
+        "valve_operations_total": valve_operations_total,
+        "temperature_avg": sum(temperatures) / len(temperatures) if temperatures else None,
+        "humidity_avg": sum(humidities) / len(humidities) if humidities else None,
+        "error_total": len(error_data),
+        "data_points": len(minute_data),
+    }
+
+
+def calculate_correlation(x_values: list, y_values: list) -> float:
+    """ピアソンの相関係数を計算"""
+    if not x_values or not y_values or len(x_values) != len(y_values):
+        return 0.0
+
+    # None値を除外
+    valid_pairs = [
+        (x, y) for x, y in zip(x_values, y_values, strict=False) if x is not None and y is not None
+    ]
+    if len(valid_pairs) < 2:
+        return 0.0
+
+    x_vals, y_vals = zip(*valid_pairs, strict=False)
+    n = len(x_vals)
+
+    # 平均を計算
+    x_mean = sum(x_vals) / n
+    y_mean = sum(y_vals) / n
+
+    # 分子と分母を計算
+    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_vals, y_vals, strict=False))
+    x_variance = sum((x - x_mean) ** 2 for x in x_vals)
+    y_variance = sum((y - y_mean) ** 2 for y in y_vals)
+
+    denominator = (x_variance * y_variance) ** 0.5
+
+    if denominator == 0:
+        return 0.0
+
+    return numerator / denominator
+
+
+def calculate_boxplot_stats(values: list) -> dict:
+    """箱ヒゲ図用の統計データを計算"""
+    if not values:
+        return {"min": 0, "q1": 0, "median": 0, "q3": 0, "max": 0, "outliers": []}
+
+    values_sorted = sorted(values)
+    n = len(values_sorted)
+
+    # 四分位数を計算
+    q1_idx = n // 4
+    median_idx = n // 2
+    q3_idx = 3 * n // 4
+
+    q1 = values_sorted[q1_idx]
+    median = values_sorted[median_idx]
+    q3 = values_sorted[q3_idx]
+
+    # IQRと外れ値を計算
+    iqr = q3 - q1
+    lower_bound = q1 - 1.5 * iqr
+    upper_bound = q3 + 1.5 * iqr
+
+    # 外れ値を特定
+    outliers = [v for v in values_sorted if v < lower_bound or v > upper_bound]
+
+    # 外れ値を除いた最小値・最大値
+    non_outliers = [v for v in values_sorted if lower_bound <= v <= upper_bound]
+    min_val = min(non_outliers) if non_outliers else values_sorted[0]
+    max_val = max(non_outliers) if non_outliers else values_sorted[-1]
+
+    return {"min": min_val, "q1": q1, "median": median, "q3": q3, "max": max_val, "outliers": outliers}
+
+
+def _extract_hour_from_timestamp(timestamp) -> int | None:
+    """タイムスタンプから時間を抽出"""
+    try:
+        if isinstance(timestamp, str):
+            if "T" in timestamp:
+                time_part = timestamp.split("T")[1].split(":")[0]
+            else:
+                time_part = timestamp.split()[1].split(":")[0]
+            return int(time_part)
+        else:
+            return timestamp.hour
+    except Exception:
+        logging.debug("Failed to extract hour from timestamp")
+        return None
+
+
+def _prepare_hourly_data(minute_data: list[dict], hourly_data: list[dict]) -> tuple:
+    """時間別データを準備"""
+    hourly_cooling_mode = [[] for _ in range(24)]
+    hourly_duty_ratio = [[] for _ in range(24)]
+    hourly_valve_ops = [[] for _ in range(24)]
+
+    # 分データから時間別に集計
+    for data in minute_data:
+        if data.get("timestamp"):
+            hour = _extract_hour_from_timestamp(data["timestamp"])
+            if hour is not None and 0 <= hour < 24:
+                if data.get("cooling_mode") is not None:
+                    hourly_cooling_mode[hour].append(data["cooling_mode"])
+                if data.get("duty_ratio") is not None:
+                    hourly_duty_ratio[hour].append(data["duty_ratio"])
+
+    # 時間データから時間別バルブ操作数を集計
+    for data in hourly_data:
+        if data.get("timestamp") and data.get("valve_operations") is not None:
+            hour = _extract_hour_from_timestamp(data["timestamp"])
+            if hour is not None and 0 <= hour < 24:
+                hourly_valve_ops[hour].append(data["valve_operations"])
+
+    return hourly_cooling_mode, hourly_duty_ratio, hourly_valve_ops
+
+
+def _prepare_timeseries_data(minute_data: list[dict]) -> list[dict]:
+    """時系列データを準備"""
+    timeseries_data = []
+    for data in minute_data[-168:]:  # 最新1週間分
+        if data.get("timestamp"):
+            # タイムスタンプを簡潔な形式に変換（月/日 時:分）
+            timestamp = data["timestamp"]
+            if isinstance(timestamp, str):
+                # ISO形式の場合は datetime に変換
+                try:
+                    if "T" in timestamp:
+                        timestamp = datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    else:
+                        timestamp = datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").replace(
+                            tzinfo=zoneinfo.ZoneInfo("Asia/Tokyo")
+                        )
+                except Exception:
+                    logging.debug("Failed to parse timestamp for time series formatting")
+
+            # 簡潔な形式にフォーマット
+            if hasattr(timestamp, "strftime"):
+                formatted_timestamp = timestamp.strftime("%m/%d %H:%M")
+            else:
+                formatted_timestamp = str(timestamp)
+
+            timeseries_data.append(
+                {
+                    "timestamp": formatted_timestamp,
+                    "cooling_mode": data.get("cooling_mode"),
+                    "duty_ratio": data.get("duty_ratio"),
+                    "temperature": data.get("temperature"),
+                    "humidity": data.get("humidity"),
+                    "lux": data.get("lux"),
+                    "solar_radiation": data.get("solar_radiation"),
+                    "rain_amount": data.get("rain_amount"),
+                }
+            )
+    return timeseries_data
+
+
+def _prepare_correlation_data(minute_data: list[dict]) -> dict:
+    """環境要因との相関用データを準備"""
+    return {
+        "cooling_mode": [d.get("cooling_mode") for d in minute_data if d.get("cooling_mode") is not None],
+        "duty_ratio": [d.get("duty_ratio") for d in minute_data if d.get("duty_ratio") is not None],
+        "temperature": [d.get("temperature") for d in minute_data if d.get("temperature") is not None],
+        "humidity": [d.get("humidity") for d in minute_data if d.get("humidity") is not None],
+        "lux": [d.get("lux") for d in minute_data if d.get("lux") is not None],
+        "solar_radiation": [
+            d.get("solar_radiation") for d in minute_data if d.get("solar_radiation") is not None
+        ],
+        "rain_amount": [d.get("rain_amount") for d in minute_data if d.get("rain_amount") is not None],
+    }
+
+
+def _prepare_boxplot_data(
+    hourly_cooling_mode: list, hourly_duty_ratio: list, hourly_valve_ops: list
+) -> tuple:
+    """箱ヒゲ図用データを生成"""
+    boxplot_cooling_mode = []
+    boxplot_duty_ratio = []
+    boxplot_valve_ops = []
+
+    for hour in range(24):
+        boxplot_cooling_mode.append(
+            {"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(hourly_cooling_mode[hour])}
+        )
+
+        # Duty比をパーセンテージに変換
+        duty_ratio_percent = [d * 100 for d in hourly_duty_ratio[hour] if d is not None]
+        boxplot_duty_ratio.append({"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(duty_ratio_percent)})
+
+        boxplot_valve_ops.append(
+            {"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(hourly_valve_ops[hour])}
+        )
+
+    return boxplot_cooling_mode, boxplot_duty_ratio, boxplot_valve_ops
+
+
+def prepare_chart_data(minute_data: list[dict], hourly_data: list[dict]) -> dict:
+    """チャート用データを準備"""
+    # 各データ準備を個別の関数で処理
+    hourly_cooling_mode, hourly_duty_ratio, hourly_valve_ops = _prepare_hourly_data(minute_data, hourly_data)
+    timeseries_data = _prepare_timeseries_data(minute_data)
+    correlation_data = _prepare_correlation_data(minute_data)
+    boxplot_cooling_mode, boxplot_duty_ratio, boxplot_valve_ops = _prepare_boxplot_data(
+        hourly_cooling_mode, hourly_duty_ratio, hourly_valve_ops
+    )
+
+    return {
+        "hourly_cooling_mode": hourly_cooling_mode,
+        "hourly_duty_ratio": hourly_duty_ratio,
+        "hourly_valve_ops": hourly_valve_ops,
+        "boxplot_cooling_mode": boxplot_cooling_mode,
+        "boxplot_duty_ratio": boxplot_duty_ratio,
+        "boxplot_valve_ops": boxplot_valve_ops,
+        "timeseries": timeseries_data,
+        "correlation": correlation_data,
+    }
+
+
+def generate_metrics_html(stats: dict, minute_data: list[dict], hourly_data: list[dict]) -> str:
+    """Bulma CSSを使用したメトリクスHTMLを生成"""
+    # JavaScript用データを準備
+    chart_data = prepare_chart_data(minute_data, hourly_data)
+    chart_data_json = json.dumps(chart_data)
 
     # URL_PREFIXを取得してfaviconパスを構築
     favicon_path = f"{my_lib.webapp.config.URL_PREFIX}/favicon.ico"
@@ -197,267 +431,149 @@ def generate_metrics_html(basic_stats, hourly_patterns, anomalies, correlation_a
     <script src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .metrics-card {{ margin-bottom: 1.5rem; }}
+        .metrics-card {{ margin-bottom: 1rem; }}
+        @media (max-width: 768px) {{
+            .metrics-card {{ margin-bottom: 0.75rem; }}
+        }}
         .stat-number {{ font-size: 2rem; font-weight: bold; }}
-        .chart-container {{ position: relative; height: 450px; margin: 1rem 0; }}
-        .chart-legend {{ margin-bottom: 1rem; }}
-        .legend-item {{ display: inline-block; margin-right: 1rem; margin-bottom: 0.5rem; }}
-        .legend-color {{
-            display: inline-block; width: 20px; height: 3px;
-            margin-right: 0.5rem; vertical-align: middle;
+        .chart-container {{ position: relative; height: 350px; margin: 0.5rem 0; }}
+        @media (max-width: 768px) {{
+            .chart-container {{ height: 300px; margin: 0.25rem 0; }}
+            .container.is-fluid {{ padding: 0.25rem !important; }}
+            .section {{ padding: 0.5rem 0.25rem !important; }}
+            .card {{ margin-bottom: 1rem !important; }}
+            .columns {{ margin: 0 !important; }}
+            .column {{ padding: 0.25rem !important; }}
         }}
-        .legend-dashed {{ border-top: 3px dashed; height: 0; }}
-        .legend-dotted {{ border-top: 3px dotted; height: 0; }}
-        .anomaly-item {{
-            margin-bottom: 1rem;
-            padding: 0.75rem;
-            background-color: #fafafa;
-            border-radius: 6px;
-            border-left: 4px solid #ffdd57;
-        }}
-        .alert-item {{ margin-bottom: 1rem; }}
-        .correlation-item {{
-            padding: 0.75rem;
-            background-color: #f8f9fa;
-            border-radius: 6px;
-            margin-bottom: 0.5rem;
-            border-left: 4px solid;
-        }}
-        .correlation-strong {{ border-left-color: #e74c3c; }}
-        .correlation-moderate {{ border-left-color: #f39c12; }}
-        .correlation-weak {{ border-left-color: #95a5a6; }}
         .japanese-font {{
             font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN",
                          "Noto Sans CJK JP", "Yu Gothic", sans-serif;
         }}
+        .permalink-header {{
+            position: relative;
+            display: inline-block;
+        }}
+        .permalink-icon {{
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            cursor: pointer;
+            color: #4a90e2;
+            margin-left: 0.5rem;
+            font-size: 0.8em;
+        }}
+        .permalink-header:hover .permalink-icon {{
+            opacity: 1;
+        }}
+        .permalink-icon:hover {{
+            color: #357abd;
+        }}
     </style>
 </head>
 <body class="japanese-font">
-    <div class="container is-fluid">
-        <section class="section">
-            <div class="container">
+    <div class="container is-fluid" style="padding: 0.5rem;">
+        <section class="section" style="padding: 1rem 0.5rem;">
+            <div class="container" style="max-width: 100%; padding: 0;">
                 <h1 class="title is-2 has-text-centered">
-                    <span class="icon is-large"><i class="fas fa-wind"></i></span>
+                    <span class="icon is-large"><i class="fas fa-snowflake"></i></span>
                     室外機冷却システム メトリクス ダッシュボード
                 </h1>
-                <p class="subtitle has-text-centered">過去30日間のシステムパフォーマンス監視と分析</p>
-
-                <!-- アラート -->
-                {generate_alerts_section(alerts)}
+                <p class="subtitle has-text-centered">過去30日間の冷却システム統計</p>
 
                 <!-- 基本統計 -->
-                {generate_basic_stats_section(basic_stats)}
+                {generate_basic_stats_section(stats)}
 
-                <!-- 時間別パターン -->
-                {generate_hourly_patterns_section(hourly_patterns)}
+                <!-- 時間別分布分析 -->
+                {generate_hourly_analysis_section()}
 
-                <!-- 相関分析 -->
-                {generate_correlation_analysis_section(correlation_analysis)}
+                <!-- 時系列データ分析 -->
+                {generate_timeseries_section()}
 
-                <!-- 異常検知 -->
-                {generate_anomalies_section(anomalies)}
+                <!-- 環境要因相関分析 -->
+                {generate_correlation_section()}
             </div>
         </section>
     </div>
 
     <script>
-        const hourlyData = {hourly_data_json};
-        const anomaliesData = {anomalies_data_json};
-        const correlationData = {correlation_data_json};
+        const chartData = {chart_data_json};
 
         // チャート生成
         generateHourlyCharts();
-        generateBoxplotCharts();
+        generateTimeseriesCharts();
         generateCorrelationCharts();
 
-        {page_js.generate_chart_javascript()}
+        // パーマリンク機能を初期化
+        initializePermalinks();
+
+        {generate_chart_javascript()}
     </script>
 </html>
     """
 
 
-def generate_alerts_section(alerts):
-    """アラートセクションのHTML生成。"""
-    if not alerts:
-        return """
-        <div class="notification is-success">
-            <span class="icon"><i class="fas fa-check-circle"></i></span>
-            システムアラートは検出されていません。
-        </div>
-        """
-
-    alerts_html = (
-        '<div class="section"><h2 class="title is-4">'
-        '<span class="icon"><i class="fas fa-exclamation-triangle"></i></span> '
-        "システムアラート</h2>"
-    )
-
-    for alert in alerts:
-        severity_class = {"critical": "is-danger", "warning": "is-warning", "info": "is-info"}.get(
-            alert.get("severity", "info"), "is-info"
-        )
-
-        alert_type = alert.get("type", "アラート").replace("_", " ")
-        alert_message = alert.get("message", "メッセージなし")
-
-        alerts_html += f"""
-        <div class="notification {severity_class} alert-item">
-            <strong>{alert_type}:</strong> {alert_message}
-        </div>
-        """
-
-    alerts_html += "</div>"
-    return alerts_html
-
-
-def generate_basic_stats_section(basic_stats):
-    """基本統計セクションのHTML生成。"""
-    if basic_stats is None:
-        basic_stats = {}
-
-    system_metrics = basic_stats.get("system_metrics", {})
-    if system_metrics is None:
-        system_metrics = {}
-
-    # デバッグログ
-    import logging
-
-    logging.info("basic_stats: %s", basic_stats)
-    logging.info("system_metrics: %s", system_metrics)
-
-    # 値の取得とNoneチェック
-    total_valve_operations = system_metrics.get("total_valve_operations")
-    if total_valve_operations is None:
-        total_valve_operations = 0
-
-    total_sensor_reads = system_metrics.get("total_sensor_reads")
-    if total_sensor_reads is None:
-        total_sensor_reads = 0
-
-    avg_duty_cycle = system_metrics.get("avg_duty_cycle")
-    if avg_duty_cycle is None:
-        avg_duty_cycle = 0
-
-    total_errors = system_metrics.get("total_errors")
-    if total_errors is None:
-        total_errors = 0
-
-    avg_temperature = system_metrics.get("avg_temperature")
-    if avg_temperature is None:
-        avg_temperature = 0
-
-    avg_solar_radiation = system_metrics.get("avg_solar_radiation")
-    if avg_solar_radiation is None:
-        avg_solar_radiation = 0
-
-    avg_flow_value = system_metrics.get("avg_flow_value")
-    if avg_flow_value is None:
-        avg_flow_value = 0
-
+def generate_basic_stats_section(stats: dict) -> str:
+    """基本統計セクションのHTML生成"""
     return f"""
     <div class="section">
-        <h2 class="title is-4">
+        <h2 class="title is-4 permalink-header" id="basic-stats">
             <span class="icon"><i class="fas fa-chart-bar"></i></span>
-            基本統計（過去30日間）
+            基本統計（過去100日間）
+            <span class="permalink-icon" onclick="copyPermalink('basic-stats')">
+                <i class="fas fa-link"></i>
+            </span>
         </h2>
 
-        <div class="columns is-multiline">
-            <div class="column is-one-quarter">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">バルブ操作</p>
-                    </div>
-                    <div class="card-content has-text-centered">
-                        <p class="heading">総操作回数</p>
-                        <p class="stat-number has-text-primary">
-                            {total_valve_operations:,}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="column is-one-quarter">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">センサー読み取り</p>
-                    </div>
-                    <div class="card-content has-text-centered">
-                        <p class="heading">総読み取り回数</p>
-                        <p class="stat-number has-text-info">
-                            {total_sensor_reads:,}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="column is-one-quarter">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">平均デューティサイクル</p>
-                    </div>
-                    <div class="card-content has-text-centered">
-                        <p class="heading">稼働率</p>
-                        <p class="stat-number has-text-success">
-                            {avg_duty_cycle:.1f}%
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="column is-one-quarter">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">エラー</p>
-                    </div>
-                    <div class="card-content has-text-centered">
-                        <p class="heading">総エラー数</p>
-                        <p class="stat-number has-text-danger">
-                            {total_errors:,}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="columns">
-            <div class="column is-one-third">
+            <div class="column">
                 <div class="card metrics-card">
                     <div class="card-header">
-                        <p class="card-header-title">平均温度</p>
+                        <p class="card-header-title">システム稼働状況</p>
                     </div>
-                    <div class="card-content has-text-centered">
-                        <p class="heading">環境温度</p>
-                        <p class="stat-number has-text-warning">
-                            {avg_temperature:.1f}°C
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="column is-one-third">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">平均日射量</p>
-                    </div>
-                    <div class="card-content has-text-centered">
-                        <p class="heading">太陽放射</p>
-                        <p class="stat-number has-text-link">
-                            {avg_solar_radiation:.0f} W/m²
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="column is-one-third">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">平均流量</p>
-                    </div>
-                    <div class="card-content has-text-centered">
-                        <p class="heading">ミスト流量</p>
-                        <p class="stat-number has-text-cyan">
-                            {avg_flow_value:.2f} L/min
-                        </p>
+                    <div class="card-content">
+                        <div class="columns is-multiline">
+                            <div class="column is-one-third">
+                                <div class="has-text-centered">
+                                    <p class="heading">❄️ 冷却モード平均</p>
+                                    <p class="stat-number has-text-info">{
+        "N/A" if stats["cooling_mode_avg"] is None else f"{stats['cooling_mode_avg']:.2f}"
+    }</p>
+                                </div>
+                            </div>
+                            <div class="column is-one-third">
+                                <div class="has-text-centered">
+                                    <p class="heading">⚡ Duty比平均</p>
+                                    <p class="stat-number has-text-success">{
+        "N/A" if stats["duty_ratio_avg"] is None else f"{stats['duty_ratio_avg'] * 100:.1f}"
+    }%</p>
+                                </div>
+                            </div>
+                            <div class="column is-one-third">
+                                <div class="has-text-centered">
+                                    <p class="heading">🔧 バルブ操作回数</p>
+                                    <p class="stat-number has-text-warning">{
+        stats["valve_operations_total"]:,
+                                    }</p>
+                                </div>
+                            </div>
+                            <div class="column is-one-third">
+                                <div class="has-text-centered">
+                                    <p class="heading">❌ エラー数</p>
+                                    <p class="stat-number has-text-danger">{stats["error_total"]:,}</p>
+                                </div>
+                            </div>
+                            <div class="column is-one-third">
+                                <div class="has-text-centered">
+                                    <p class="heading">📊 データポイント数</p>
+                                    <p class="stat-number has-text-primary">{stats["data_points"]:,}</p>
+                                </div>
+                            </div>
+                            <div class="column is-one-third">
+                                <div class="has-text-centered">
+                                    <p class="heading">📅 データ収集日数</p>
+                                    <p class="stat-number has-text-primary">{stats["total_days"]:,}</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -466,345 +582,72 @@ def generate_basic_stats_section(basic_stats):
     """
 
 
-def generate_hourly_patterns_section(hourly_patterns):  # noqa: ARG001
-    """時間別パターンセクションのHTML生成。"""
+def generate_hourly_analysis_section() -> str:
+    """時間別分析セクションのHTML生成"""
     return """
     <div class="section">
-        <h2 class="title is-4">
-            <span class="icon"><i class="fas fa-clock"></i></span>
-            時間別システムパフォーマンス
+        <h2 class="title is-4 permalink-header" id="hourly-analysis">
+            <span class="icon"><i class="fas fa-clock"></i></span> 時間別分布分析
+            <span class="permalink-icon" onclick="copyPermalink('hourly-analysis')">
+                <i class="fas fa-link"></i>
+            </span>
         </h2>
 
         <div class="columns">
-            <div class="column is-half">
+            <div class="column">
                 <div class="card metrics-card">
                     <div class="card-header">
-                        <p class="card-header-title">デューティサイクル - 時間別パフォーマンス</p>
-                    </div>
-                    <div class="card-content">
-                        <div class="chart-container">
-                            <canvas id="dutyCycleHourlyChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="column is-half">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">環境要因 - 時間別パフォーマンス</p>
-                    </div>
-                    <div class="card-content">
-                        <div class="chart-container">
-                            <canvas id="environmentalHourlyChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="columns">
-            <div class="column is-half">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">デューティサイクル - 時間別分布（箱ひげ図）</p>
-                    </div>
-                    <div class="card-content">
-                        <div class="chart-container">
-                            <canvas id="dutyCycleBoxplotChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="column is-half">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">温度 - 時間別分布（箱ひげ図）</p>
-                    </div>
-                    <div class="card-content">
-                        <div class="chart-container">
-                            <canvas id="temperatureBoxplotChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    """
-
-
-def generate_correlation_analysis_section(correlation_analysis):
-    """相関分析セクションのHTML生成。"""
-    if "error" in correlation_analysis:
-        return f"""
-        <div class="section">
-            <h2 class="title is-4">
-                <span class="icon"><i class="fas fa-project-diagram"></i></span>
-                相関分析
-            </h2>
-            <div class="notification is-warning">
-                <span class="icon"><i class="fas fa-exclamation-triangle"></i></span>
-                相関分析が利用できません: {correlation_analysis["error"]}
-            </div>
-        </div>
-        """
-
-    correlations = correlation_analysis.get("correlations", {})
-    ranking = correlation_analysis.get("ranking", {})
-
-    correlation_html = """
-    <div class="section">
-        <h2 class="title is-4">
-            <span class="icon"><i class="fas fa-project-diagram"></i></span>
-            環境要因とシステム稼働率の相関分析
-        </h2>
-
-        <div class="notification is-info is-light">
-            <p><strong>相関分析について：</strong></p>
-            <p>環境要因（温度、湿度、日射量、電力消費、雨量、流量）とバルブのデューティサイクル（稼働率）との相関を分析しています。</p>
-            <ul>
-                <li><strong>強い相関 (|r| > 0.7)</strong>：要因が稼働率に大きく影響</li>
-                <li><strong>中程度の相関 (0.3 < |r| ≤ 0.7)</strong>：要因が稼働率にある程度影響</li>
-                <li><strong>弱い相関 (|r| ≤ 0.3)</strong>：要因が稼働率にわずかに影響</li>
-            </ul>
-        </div>
-
-        <div class="columns">
-    """
-
-    # 有意な相関がある場合のランキング
-    if ranking.get("most_influential_factors"):
-        correlation_html += """
-            <div class="column is-half">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">影響度ランキング</p>
-                    </div>
-                    <div class="card-content">
-        """
-
-        for i, factor in enumerate(ranking["most_influential_factors"], 1):
-            strength_class = {
-                "strong": "correlation-strong",
-                "moderate": "correlation-moderate",
-                "weak": "correlation-weak",
-            }.get(factor["strength"], "correlation-weak")
-
-            direction_icon = "⬆️" if factor["direction"] == "positive" else "⬇️"
-
-            correlation_html += f"""
-                        <div class="correlation-item {strength_class}">
-                            <div class="level is-mobile">
-                                <div class="level-left">
-                                    <div class="level-item">
-                                        <strong>#{i} {factor["name"]}</strong>
-                                    </div>
-                                </div>
-                                <div class="level-right">
-                                    <div class="level-item">
-                                        <span class="tag is-small">
-                                            {direction_icon} {factor["correlation_coefficient"]:.3f}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="is-size-7">
-                                {factor["strength"].title()} correlation ({factor["direction"]})
-                            </p>
-                        </div>
-            """
-
-        correlation_html += """
-                    </div>
-                </div>
-            </div>
-        """
-
-    # 詳細な相関情報
-    correlation_html += """
-            <div class="column is-half">
-                <div class="card metrics-card">
-                    <div class="card-header">
-                        <p class="card-header-title">詳細分析</p>
-                    </div>
-                    <div class="card-content">
-    """
-
-    total_analyzed = ranking.get("total_analyzed", 0)
-    total_significant = ranking.get("total_significant", 0)
-
-    correlation_html += f"""
-                        <div class="columns is-mobile">
-                            <div class="column has-text-centered">
-                                <p class="heading">分析要因数</p>
-                                <p class="title is-4">{total_analyzed}</p>
-                            </div>
-                            <div class="column has-text-centered">
-                                <p class="heading">有意な相関</p>
-                                <p class="title is-4 has-text-success">{total_significant}</p>
-                            </div>
-                        </div>
-    """
-
-    if correlations:
-        correlation_html += '<div class="content"><h6>全要因の詳細:</h6>'
-        for factor_data in correlations.values():
-            significance_color = (
-                "has-text-success" if factor_data["significance"] == "significant" else "has-text-grey"
-            )
-            correlation_html += f"""
-                        <p class="{significance_color}">
-                            <strong>{factor_data["name"]}</strong>:
-                            r = {factor_data["correlation_coefficient"]:.3f}
-                            ({factor_data["strength"]}, {factor_data["direction"]})
-                            - {factor_data["data_points"]}件
+                        <p class="card-header-title permalink-header" id="cooling-mode-hourly">
+                            ❄️ 冷却モードの時間別分布
+                            <span class="permalink-icon" onclick="copyPermalink('cooling-mode-hourly')">
+                                <i class="fas fa-link"></i>
+                            </span>
                         </p>
-            """
-        correlation_html += "</div>"
-
-    correlation_html += """
+                    </div>
+                    <div class="card-content">
+                        <div class="chart-container">
+                            <canvas id="coolingModeHourlyChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-    """
-
-    return correlation_html
-
-
-def generate_anomalies_section(anomalies):  # noqa: C901, PLR0912, PLR0915
-    """異常検知セクションのHTML生成。"""
-    if "error" in anomalies:
-        return f"""
-        <div class="section">
-            <h2 class="title is-4">
-                <span class="icon"><i class="fas fa-search"></i></span>
-                異常検知
-            </h2>
-            <div class="notification is-warning">
-                <span class="icon"><i class="fas fa-exclamation-triangle"></i></span>
-                異常検知が利用できません: {anomalies["error"]}
-            </div>
-        </div>
-        """
-
-    anomaly_count = anomalies.get("anomalies_detected", 0)
-    total_samples = anomalies.get("total_samples", 0)
-    anomaly_rate = anomalies.get("anomaly_rate", 0) * 100
-
-    anomalies_html = f"""
-    <div class="section">
-        <h2 class="title is-4">
-            <span class="icon"><i class="fas fa-search"></i></span>
-            異常検知
-        </h2>
-
-        <div class="notification is-info is-light">
-            <p><strong>異常検知について：</strong></p>
-            <p>
-                機械学習の<strong>Isolation Forest</strong>アルゴリズムを使用して、
-                以下の要素から異常なパターンを検知しています：
-            </p>
-            <ul>
-                <li><strong>デューティサイクル</strong>：通常と異なる稼働パターン</li>
-                <li><strong>環境要因</strong>：温度、日射量、流量の異常値</li>
-                <li><strong>時間パターン</strong>：通常の時間パターンと異なる動作</li>
-                <li><strong>エラー発生</strong>：システムエラーの有無</li>
-            </ul>
         </div>
 
         <div class="columns">
             <div class="column">
                 <div class="card metrics-card">
                     <div class="card-header">
-                        <p class="card-header-title">異常検知結果</p>
+                        <p class="card-header-title permalink-header" id="duty-ratio-hourly">
+                            ⚡ Duty比の時間別分布
+                            <span class="permalink-icon" onclick="copyPermalink('duty-ratio-hourly')">
+                                <i class="fas fa-link"></i>
+                            </span>
+                        </p>
                     </div>
                     <div class="card-content">
-                        <div class="columns">
-                            <div class="column has-text-centered">
-                                <p class="heading">総サンプル数</p>
-                                <p class="stat-number has-text-info">{total_samples}</p>
-                            </div>
-                            <div class="column has-text-centered">
-                                <p class="heading">検出された異常数</p>
-                                <p class="stat-number has-text-warning">{anomaly_count}</p>
-                            </div>
-                            <div class="column has-text-centered">
-                                <p class="heading">異常率</p>
-                                <p class="stat-number has-text-warning">{anomaly_rate:.2f}%</p>
-                            </div>
+                        <div class="chart-container">
+                            <canvas id="dutyRatioHourlyChart"></canvas>
                         </div>
-    """
-
-    # 個別の異常がある場合は表示
-    if anomalies.get("anomalies"):
-        anomalies_html += '<div class="content"><h5>最近の異常:</h5>'
-        # 新しいもの順でソート
-        sorted_anomalies = sorted(anomalies["anomalies"], key=lambda x: x.get("timestamp", ""), reverse=True)
-        for anomaly in sorted_anomalies[:10]:  # 最新10件を表示
-            timestamp_str = anomaly.get("timestamp", "不明")
-            duty_cycle = anomaly.get("duty_cycle", 0)
-            temperature = anomaly.get("temperature")
-            solar_radiation = anomaly.get("solar_radiation")
-            flow_value = anomaly.get("flow_value")
-            errors = anomaly.get("errors", 0)
-
-            # 異常の詳細を分析
-            anomaly_details = []
-            anomaly_reasons = []
-
-            if duty_cycle > 80:
-                anomaly_reasons.append('<span class="tag is-small is-warning">高稼働率</span>')
-                anomaly_details.append(f"デューティサイクル: <strong>{duty_cycle:.1f}%</strong>")
-            elif duty_cycle < 5:
-                anomaly_reasons.append('<span class="tag is-small is-info">低稼働率</span>')
-                anomaly_details.append(f"デューティサイクル: <strong>{duty_cycle:.1f}%</strong>")
-
-            if temperature and temperature > 35:
-                anomaly_reasons.append('<span class="tag is-small is-danger">高温</span>')
-                anomaly_details.append(f"温度: <strong>{temperature:.1f}°C</strong>")
-
-            if solar_radiation and solar_radiation > 800:
-                anomaly_reasons.append('<span class="tag is-small is-warning">強日射</span>')
-                anomaly_details.append(f"日射量: <strong>{solar_radiation:.0f} W/m²</strong>")
-
-            if flow_value and flow_value > 5:
-                anomaly_reasons.append('<span class="tag is-small is-success">高流量</span>')
-                anomaly_details.append(f"流量: <strong>{flow_value:.2f} L/min</strong>")
-
-            if errors > 0:
-                anomaly_reasons.append('<span class="tag is-small is-danger">エラー発生</span>')
-                anomaly_details.append(f"エラー数: <strong>{errors}</strong>")
-
-            if not anomaly_reasons:
-                anomaly_reasons.append('<span class="tag is-small is-light">パターン異常</span>')
-
-            # 日時をフォーマット
-            try:
-                import datetime
-
-                if timestamp_str != "不明":
-                    dt = datetime.datetime.fromisoformat(timestamp_str.replace("+09:00", "+09:00"))
-                    formatted_time = dt.strftime("%m月%d日 %H時%M分")
-                else:
-                    formatted_time = "不明"
-            except Exception:
-                formatted_time = timestamp_str
-
-            reason_tags = " ".join(anomaly_reasons)
-            detail_text = " | ".join(anomaly_details)
-            anomalies_html += f"""<div class="anomaly-item">
-                <div class="mb-2">
-                    <span class="tag is-warning">{formatted_time}</span>
-                    {reason_tags}
+                    </div>
                 </div>
-                <div class="pl-3 has-text-grey-dark" style="font-size: 0.9rem;">
-                    {detail_text}
-                </div>
-            </div>"""
-        anomalies_html += "</div>"
+            </div>
+        </div>
 
-    anomalies_html += """
+        <div class="columns">
+            <div class="column">
+                <div class="card metrics-card">
+                    <div class="card-header">
+                        <p class="card-header-title permalink-header" id="valve-ops-hourly">
+                            🔧 バルブ操作回数の時間別分布
+                            <span class="permalink-icon" onclick="copyPermalink('valve-ops-hourly')">
+                                <i class="fas fa-link"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="card-content">
+                        <div class="chart-container">
+                            <canvas id="valveOpsHourlyChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -812,4 +655,959 @@ def generate_anomalies_section(anomalies):  # noqa: C901, PLR0912, PLR0915
     </div>
     """
 
-    return anomalies_html
+
+def generate_timeseries_section() -> str:
+    """時系列データ分析セクションのHTML生成"""
+    return """
+    <div class="section">
+        <h2 class="title is-4 permalink-header" id="timeseries">
+            <span class="icon"><i class="fas fa-chart-line"></i></span> 時系列推移分析
+            <span class="permalink-icon" onclick="copyPermalink('timeseries')">
+                <i class="fas fa-link"></i>
+            </span>
+        </h2>
+
+        <div class="columns">
+            <div class="column">
+                <div class="card metrics-card">
+                    <div class="card-header">
+                        <p class="card-header-title permalink-header" id="cooling-duty-timeseries">
+                            📈 冷却モードとDuty比の時系列推移
+                            <span class="permalink-icon" onclick="copyPermalink('cooling-duty-timeseries')">
+                                <i class="fas fa-link"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="card-content">
+                        <div class="chart-container">
+                            <canvas id="coolingDutyTimeseriesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="columns">
+            <div class="column">
+                <div class="card metrics-card">
+                    <div class="card-header">
+                        <p class="card-header-title permalink-header" id="environment-timeseries">
+                            🌡️ 環境データの時系列推移
+                            <span class="permalink-icon" onclick="copyPermalink('environment-timeseries')">
+                                <i class="fas fa-link"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="card-content">
+                        <div class="chart-container">
+                            <canvas id="environmentTimeseriesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+
+
+def generate_correlation_section() -> str:
+    """環境要因相関分析セクションのHTML生成"""
+    return """
+    <div class="section">
+        <h2 class="title is-4 permalink-header" id="correlation">
+            <span class="icon"><i class="fas fa-project-diagram"></i></span> 環境要因相関分析
+            <span class="permalink-icon" onclick="copyPermalink('correlation')">
+                <i class="fas fa-link"></i>
+            </span>
+        </h2>
+
+        <div class="columns">
+            <div class="column is-half">
+                <div class="card metrics-card">
+                    <div class="card-header">
+                        <p class="card-header-title permalink-header" id="temp-cooling-correlation">
+                            🌡️❄️ 気温 vs 冷却モード
+                            <span class="permalink-icon" onclick="copyPermalink('temp-cooling-correlation')">
+                                <i class="fas fa-link"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="card-content">
+                        <div class="chart-container">
+                            <canvas id="tempCoolingCorrelationChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column is-half">
+                <div class="card metrics-card">
+                    <div class="card-header">
+                        <p class="card-header-title permalink-header" id="humidity-duty-correlation">
+                            💧⚡ 湿度 vs Duty比
+                            <span class="permalink-icon" onclick="copyPermalink('humidity-duty-correlation')">
+                                <i class="fas fa-link"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="card-content">
+                        <div class="chart-container">
+                            <canvas id="humidityDutyCorrelationChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="columns">
+            <div class="column is-half">
+                <div class="card metrics-card">
+                    <div class="card-header">
+                        <p class="card-header-title permalink-header" id="solar-cooling-correlation">
+                            ☀️❄️ 日射量 vs 冷却モード
+                            <span class="permalink-icon" onclick="copyPermalink('solar-cooling-correlation')">
+                                <i class="fas fa-link"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="card-content">
+                        <div class="chart-container">
+                            <canvas id="solarCoolingCorrelationChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column is-half">
+                <div class="card metrics-card">
+                    <div class="card-header">
+                        <p class="card-header-title permalink-header" id="lux-duty-correlation">
+                            💡⚡ 照度 vs Duty比
+                            <span class="permalink-icon" onclick="copyPermalink('lux-duty-correlation')">
+                                <i class="fas fa-link"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="card-content">
+                        <div class="chart-container">
+                            <canvas id="luxDutyCorrelationChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    """
+
+
+def generate_chart_javascript() -> str:
+    """チャート生成用JavaScriptを生成"""
+    return """
+        function initializePermalinks() {
+            // ページ読み込み時にハッシュがある場合はスクロール
+            if (window.location.hash) {
+                const element = document.querySelector(window.location.hash);
+                if (element) {
+                    setTimeout(() => {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 500);
+                }
+            }
+        }
+
+        function copyPermalink(sectionId) {
+            const url = window.location.origin + window.location.pathname + '#' + sectionId;
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showCopyNotification();
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                    fallbackCopyToClipboard(url);
+                });
+            } else {
+                fallbackCopyToClipboard(url);
+            }
+
+            window.history.replaceState(null, null, '#' + sectionId);
+        }
+
+        function fallbackCopyToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                document.execCommand('copy');
+                showCopyNotification();
+            } catch (err) {
+                console.error('Fallback: Failed to copy', err);
+                prompt('URLをコピーしてください:', text);
+            }
+
+            document.body.removeChild(textArea);
+        }
+
+        function showCopyNotification() {
+            const notification = document.createElement('div');
+            notification.textContent = 'パーマリンクをコピーしました！';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #23d160;
+                color: white;
+                padding: 12px 20px;
+                border-radius: 4px;
+                z-index: 1000;
+                font-size: 14px;
+                font-weight: 500;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                transition: opacity 0.3s ease-in-out;
+            `;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        document.body.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+        function generateHourlyCharts() {
+            // 冷却モードの時間別分布（箱ヒゲ図）
+            const coolingModeCtx = document.getElementById('coolingModeHourlyChart');
+            if (coolingModeCtx && chartData.boxplot_cooling_mode) {
+                new Chart(coolingModeCtx, {
+                    type: 'boxplot',
+                    data: {
+                        labels: chartData.boxplot_cooling_mode.map(d => parseInt(d.x) + '時'),
+                        datasets: [{
+                            label: '冷却モード分布',
+                            data: chartData.boxplot_cooling_mode.map(d => d.y),
+                            backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                            borderColor: 'rgb(52, 152, 219)',
+                            borderWidth: 2,
+                            outlierColor: 'rgb(239, 68, 68)',
+                            medianColor: 'rgb(255, 193, 7)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: '冷却モード'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '時刻'
+                                },
+                                ticks: {
+                                    maxTicksLimit: 12,
+                                    maxRotation: 45
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const stats = context.parsed;
+                                        return [
+                                            '最小値: ' + stats.min.toFixed(1),
+                                            '第1四分位: ' + stats.q1.toFixed(1),
+                                            '中央値: ' + stats.median.toFixed(1),
+                                            '第3四分位: ' + stats.q3.toFixed(1),
+                                            '最大値: ' + stats.max.toFixed(1),
+                                            '外れ値数: ' + stats.outliers.length
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Duty比の時間別分布（箱ヒゲ図）
+            const dutyRatioCtx = document.getElementById('dutyRatioHourlyChart');
+            if (dutyRatioCtx && chartData.boxplot_duty_ratio) {
+                new Chart(dutyRatioCtx, {
+                    type: 'boxplot',
+                    data: {
+                        labels: chartData.boxplot_duty_ratio.map(d => parseInt(d.x) + '時'),
+                        datasets: [{
+                            label: 'Duty比分布（%）',
+                            data: chartData.boxplot_duty_ratio.map(d => d.y),
+                            backgroundColor: 'rgba(46, 204, 113, 0.6)',
+                            borderColor: 'rgb(46, 204, 113)',
+                            borderWidth: 2,
+                            outlierColor: 'rgb(239, 68, 68)',
+                            medianColor: 'rgb(255, 193, 7)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Duty比（%）'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '時刻'
+                                },
+                                ticks: {
+                                    maxTicksLimit: 12,
+                                    maxRotation: 45
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const stats = context.parsed;
+                                        return [
+                                            '最小値: ' + stats.min.toFixed(1) + '%',
+                                            '第1四分位: ' + stats.q1.toFixed(1) + '%',
+                                            '中央値: ' + stats.median.toFixed(1) + '%',
+                                            '第3四分位: ' + stats.q3.toFixed(1) + '%',
+                                            '最大値: ' + stats.max.toFixed(1) + '%',
+                                            '外れ値数: ' + stats.outliers.length
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // バルブ操作回数の時間別分布（箱ヒゲ図）
+            const valveOpsCtx = document.getElementById('valveOpsHourlyChart');
+            if (valveOpsCtx && chartData.boxplot_valve_ops) {
+                new Chart(valveOpsCtx, {
+                    type: 'boxplot',
+                    data: {
+                        labels: chartData.boxplot_valve_ops.map(d => parseInt(d.x) + '時'),
+                        datasets: [{
+                            label: 'バルブ操作回数分布',
+                            data: chartData.boxplot_valve_ops.map(d => d.y),
+                            backgroundColor: 'rgba(241, 196, 15, 0.6)',
+                            borderColor: 'rgb(241, 196, 15)',
+                            borderWidth: 2,
+                            outlierColor: 'rgb(239, 68, 68)',
+                            medianColor: 'rgb(255, 193, 7)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'バルブ操作回数'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '時刻'
+                                },
+                                ticks: {
+                                    maxTicksLimit: 12,
+                                    maxRotation: 45
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const stats = context.parsed;
+                                        return [
+                                            '最小値: ' + stats.min.toFixed(0) + '回',
+                                            '第1四分位: ' + stats.q1.toFixed(0) + '回',
+                                            '中央値: ' + stats.median.toFixed(0) + '回',
+                                            '第3四分位: ' + stats.q3.toFixed(0) + '回',
+                                            '最大値: ' + stats.max.toFixed(0) + '回',
+                                            '外れ値数: ' + stats.outliers.length
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function generateTimeseriesCharts() {
+            // 冷却モードとDuty比の時系列
+            const coolingDutyCtx = document.getElementById('coolingDutyTimeseriesChart');
+            if (coolingDutyCtx && chartData.timeseries) {
+                const timestamps = chartData.timeseries.map(d => d.timestamp);
+                const coolingModes = chartData.timeseries.map(d => d.cooling_mode);
+                const dutyRatios = chartData.timeseries.map(d => d.duty_ratio ? d.duty_ratio * 100 : null);
+
+                new Chart(coolingDutyCtx, {
+                    type: 'line',
+                    data: {
+                        labels: timestamps,
+                        datasets: [
+                            {
+                                label: '冷却モード',
+                                data: coolingModes,
+                                borderColor: 'rgba(52, 152, 219, 1)',
+                                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                tension: 0.1,
+                                spanGaps: true,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Duty比（%）',
+                                data: dutyRatios,
+                                borderColor: 'rgba(46, 204, 113, 1)',
+                                backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                                tension: 0.1,
+                                spanGaps: true,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: '冷却モード'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Duty比（%）'
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                },
+                                max: 100,
+                                min: 0
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '時刻'
+                                },
+                                ticks: {
+                                    maxTicksLimit: Math.max(6,
+                                        Math.min(20, Math.floor(timestamps.length / 10))),
+                                    maxRotation: 45,
+                                    minRotation: 0,
+                                    autoSkip: true,
+                                    autoSkipPadding: 20,
+                                    callback: function(value, index, values) {
+                                        const timestamp = timestamps[index];
+                                        if (typeof timestamp === 'string' && timestamp.includes('/')) {
+                                            return timestamp;  // 既にフォーマット済み
+                                        }
+                                        // ISO形式の場合は変換
+                                        try {
+                                            const date = new Date(timestamp);
+                                            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                                            const day = date.getDate().toString().padStart(2, '0');
+                                            const hours = date.getHours().toString().padStart(2, '0');
+                                            const minutes = date.getMinutes().toString().padStart(2, '0');
+                                            return `${month}/${day} ${hours}:${minutes}`;
+                                        } catch {
+                                            return String(timestamp).substring(0, 16);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 環境データの時系列
+            const environmentCtx = document.getElementById('environmentTimeseriesChart');
+            if (environmentCtx && chartData.timeseries) {
+                const timestamps = chartData.timeseries.map(d => d.timestamp);
+                const temperatures = chartData.timeseries.map(d => d.temperature);
+                const humidities = chartData.timeseries.map(d => d.humidity);
+
+                new Chart(environmentCtx, {
+                    type: 'line',
+                    data: {
+                        labels: timestamps,
+                        datasets: [
+                            {
+                                label: '気温（°C）',
+                                data: temperatures,
+                                borderColor: 'rgba(231, 76, 60, 1)',
+                                backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                                tension: 0.1,
+                                spanGaps: true,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: '湿度（%）',
+                                data: humidities,
+                                borderColor: 'rgba(155, 89, 182, 1)',
+                                backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                                tension: 0.1,
+                                spanGaps: true,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: '気温（°C）'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: '湿度（%）'
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                },
+                                max: 100,
+                                min: 0
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '時刻'
+                                },
+                                ticks: {
+                                    maxTicksLimit: Math.max(6,
+                                        Math.min(20, Math.floor(timestamps.length / 10))),
+                                    maxRotation: 45,
+                                    minRotation: 0,
+                                    autoSkip: true,
+                                    autoSkipPadding: 20,
+                                    callback: function(value, index, values) {
+                                        const timestamp = timestamps[index];
+                                        if (typeof timestamp === 'string' && timestamp.includes('/')) {
+                                            return timestamp;  // 既にフォーマット済み
+                                        }
+                                        // ISO形式の場合は変換
+                                        try {
+                                            const date = new Date(timestamp);
+                                            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                                            const day = date.getDate().toString().padStart(2, '0');
+                                            const hours = date.getHours().toString().padStart(2, '0');
+                                            const minutes = date.getMinutes().toString().padStart(2, '0');
+                                            return `${month}/${day} ${hours}:${minutes}`;
+                                        } catch {
+                                            return String(timestamp).substring(0, 16);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function generateCorrelationCharts() {
+            // 相関係数計算用のヘルパー関数
+            function calculateCorrelation(xVals, yVals) {
+                const validPairs = [];
+                for (let i = 0; i < Math.min(xVals.length, yVals.length); i++) {
+                    if (xVals[i] !== null && yVals[i] !== null) {
+                        validPairs.push([xVals[i], yVals[i]]);
+                    }
+                }
+
+                if (validPairs.length < 2) return 0;
+
+                const xMean = validPairs.reduce((sum, pair) => sum + pair[0], 0) / validPairs.length;
+                const yMean = validPairs.reduce((sum, pair) => sum + pair[1], 0) / validPairs.length;
+
+                let numerator = 0;
+                let xVariance = 0;
+                let yVariance = 0;
+
+                for (const [x, y] of validPairs) {
+                    numerator += (x - xMean) * (y - yMean);
+                    xVariance += Math.pow(x - xMean, 2);
+                    yVariance += Math.pow(y - yMean, 2);
+                }
+
+                const denominator = Math.sqrt(xVariance * yVariance);
+                return denominator === 0 ? 0 : numerator / denominator;
+            }
+
+            // 気温 vs 冷却モード
+            const tempCoolingCtx = document.getElementById('tempCoolingCorrelationChart');
+            if (tempCoolingCtx && chartData.correlation) {
+                const data = [];
+                const minLength = Math.min(
+                    chartData.correlation.temperature.length,
+                    chartData.correlation.cooling_mode.length
+                );
+                for (let i = 0; i < minLength; i++) {
+                    if (chartData.correlation.temperature[i] !== null &&
+                        chartData.correlation.cooling_mode[i] !== null) {
+                        data.push({
+                            x: chartData.correlation.temperature[i],
+                            y: chartData.correlation.cooling_mode[i]
+                        });
+                    }
+                }
+
+                const correlation = calculateCorrelation(
+                    chartData.correlation.temperature,
+                    chartData.correlation.cooling_mode
+                );
+
+                new Chart(tempCoolingCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: `気温 vs 冷却モード (r=${correlation.toFixed(3)})`,
+                            data: data,
+                            backgroundColor: 'rgba(231, 76, 60, 0.6)',
+                            borderColor: 'rgba(231, 76, 60, 1)',
+                            pointRadius: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '気温（°C）'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: '冷却モード'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        return `データポイント: ${context.length}個`;
+                                    },
+                                    label: function(context) {
+                                        return [
+                                            `気温: ${context.parsed.x.toFixed(1)}°C`,
+                                            `冷却モード: ${context.parsed.y.toFixed(1)}`,
+                                            `相関係数: ${correlation.toFixed(3)}`
+                                        ];
+                                    },
+                                    afterLabel: function() {
+                                        const strength = Math.abs(correlation);
+                                        if (strength >= 0.8) return '強い相関';
+                                        if (strength >= 0.5) return '中程度の相関';
+                                        if (strength >= 0.3) return '弱い相関';
+                                        return '相関なし';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 湿度 vs Duty比
+            const humidityDutyCtx = document.getElementById('humidityDutyCorrelationChart');
+            if (humidityDutyCtx && chartData.correlation) {
+                const data = [];
+                const minLength = Math.min(
+                    chartData.correlation.humidity.length,
+                    chartData.correlation.duty_ratio.length
+                );
+                for (let i = 0; i < minLength; i++) {
+                    if (
+                        chartData.correlation.humidity[i] !== null &&
+                        chartData.correlation.duty_ratio[i] !== null
+                    ) {
+                        data.push({
+                            x: chartData.correlation.humidity[i],
+                            y: chartData.correlation.duty_ratio[i] * 100
+                        });
+                    }
+                }
+
+                const correlation = calculateCorrelation(
+                    chartData.correlation.humidity,
+                    chartData.correlation.duty_ratio
+                );
+
+                new Chart(humidityDutyCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: `湿度 vs Duty比 (r=${correlation.toFixed(3)})`,
+                            data: data,
+                            backgroundColor: 'rgba(155, 89, 182, 0.6)',
+                            borderColor: 'rgba(155, 89, 182, 1)',
+                            pointRadius: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '湿度（%）'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Duty比（%）'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        return `データポイント: ${context.length}個`;
+                                    },
+                                    label: function(context) {
+                                        return [
+                                            `湿度: ${context.parsed.x.toFixed(1)}%`,
+                                            `Duty比: ${context.parsed.y.toFixed(1)}%`,
+                                            `相関係数: ${correlation.toFixed(3)}`
+                                        ];
+                                    },
+                                    afterLabel: function() {
+                                        const strength = Math.abs(correlation);
+                                        if (strength >= 0.8) return '強い相関';
+                                        if (strength >= 0.5) return '中程度の相関';
+                                        if (strength >= 0.3) return '弱い相関';
+                                        return '相関なし';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 日射量 vs 冷却モード
+            const solarCoolingCtx = document.getElementById('solarCoolingCorrelationChart');
+            if (solarCoolingCtx && chartData.correlation) {
+                const data = [];
+                const minLength = Math.min(
+                    chartData.correlation.solar_radiation.length,
+                    chartData.correlation.cooling_mode.length
+                );
+                for (let i = 0; i < minLength; i++) {
+                    if (
+                        chartData.correlation.solar_radiation[i] !== null &&
+                        chartData.correlation.cooling_mode[i] !== null
+                    ) {
+                        data.push({
+                            x: chartData.correlation.solar_radiation[i],
+                            y: chartData.correlation.cooling_mode[i]
+                        });
+                    }
+                }
+
+                const solarCorrelation = calculateCorrelation(
+                    chartData.correlation.solar_radiation,
+                    chartData.correlation.cooling_mode
+                );
+
+                new Chart(solarCoolingCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: `日射量 vs 冷却モード (r=${solarCorrelation.toFixed(3)})`,
+                            data: data,
+                            backgroundColor: 'rgba(243, 156, 18, 0.6)',
+                            borderColor: 'rgba(243, 156, 18, 1)',
+                            pointRadius: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '日射量（W/m²）'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: '冷却モード'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        return `データポイント: ${context.length}個`;
+                                    },
+                                    label: function(context) {
+                                        return [
+                                            `日射量: ${context.parsed.x.toFixed(1)} W/m²`,
+                                            `冷却モード: ${context.parsed.y.toFixed(1)}`,
+                                            `相関係数: ${solarCorrelation.toFixed(3)}`
+                                        ];
+                                    },
+                                    afterLabel: function() {
+                                        const strength = Math.abs(solarCorrelation);
+                                        if (strength >= 0.8) return '強い相関';
+                                        if (strength >= 0.5) return '中程度の相関';
+                                        if (strength >= 0.3) return '弱い相関';
+                                        return '相関なし';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 照度 vs Duty比
+            const luxDutyCtx = document.getElementById('luxDutyCorrelationChart');
+            if (luxDutyCtx && chartData.correlation) {
+                const data = [];
+                const minLength = Math.min(
+                    chartData.correlation.lux.length,
+                    chartData.correlation.duty_ratio.length
+                );
+                for (let i = 0; i < minLength; i++) {
+                    if (
+                        chartData.correlation.lux[i] !== null &&
+                        chartData.correlation.duty_ratio[i] !== null
+                    ) {
+                        data.push({
+                            x: chartData.correlation.lux[i],
+                            y: chartData.correlation.duty_ratio[i] * 100
+                        });
+                    }
+                }
+
+                const luxCorrelation = calculateCorrelation(
+                    chartData.correlation.lux,
+                    chartData.correlation.duty_ratio
+                );
+
+                new Chart(luxDutyCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: `照度 vs Duty比 (r=${luxCorrelation.toFixed(3)})`,
+                            data: data,
+                            backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                            borderColor: 'rgba(52, 152, 219, 1)',
+                            pointRadius: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '照度（lux）'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Duty比（%）'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        return `データポイント: ${context.length}個`;
+                                    },
+                                    label: function(context) {
+                                        return [
+                                            `照度: ${context.parsed.x.toFixed(1)} lux`,
+                                            `Duty比: ${context.parsed.y.toFixed(1)}%`,
+                                            `相関係数: ${luxCorrelation.toFixed(3)}`
+                                        ];
+                                    },
+                                    afterLabel: function() {
+                                        const strength = Math.abs(luxCorrelation);
+                                        if (strength >= 0.8) return '強い相関';
+                                        if (strength >= 0.5) return '中程度の相関';
+                                        if (strength >= 0.3) return '弱い相関';
+                                        return '相関なし';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    """

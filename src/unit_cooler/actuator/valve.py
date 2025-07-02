@@ -45,14 +45,17 @@ STAT_PATH_VALVE_CLOSE = STAT_DIR_PATH / "unit_cooler" / "valve" / "close"
 pin_no = None
 valve_lock = None
 ctrl_hist = []
+config = None
 
 
-def init(pin):
+def init(pin, valve_config):
     global pin_no  # noqa: PLW0603
     global valve_lock  # noqa: PLW0603
+    global config  # noqa: PLW0603
 
     pin_no = pin
     valve_lock = threading.Lock()
+    config = valve_config
 
     my_lib.footprint.clear(STAT_PATH_VALVE_STATE_WORKING)
     my_lib.footprint.update(STAT_PATH_VALVE_STATE_IDLE)
@@ -102,11 +105,16 @@ def set_state(valve_state):
 
             # メトリクス記録
             try:
-                from unit_cooler.actuator.webapi.metrics import record_valve_operation
+                from unit_cooler.metrics import get_metrics_collector
 
-                record_valve_operation("state_change", valve_state.name)
-            except ImportError:
-                pass
+                global config
+
+                if config and "actuator" in config and "metrics" in config["actuator"]:
+                    metrics_db_path = config["actuator"]["metrics"]["data"]
+                    metrics_collector = get_metrics_collector(metrics_db_path)
+                    metrics_collector.record_valve_operation()
+            except Exception:
+                logging.debug("Failed to record valve operation metrics")
 
         my_lib.rpi.gpio.output(pin_no, valve_state.value)
 

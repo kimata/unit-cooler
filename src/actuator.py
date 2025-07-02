@@ -83,7 +83,7 @@ def start(config, arg):
     unit_cooler.actuator.work_log.init(config, event_queue)
 
     logging.info("Initialize valve")
-    unit_cooler.actuator.valve.init(config["actuator"]["control"]["valve"]["pin_no"])
+    unit_cooler.actuator.valve.init(config["actuator"]["control"]["valve"]["pin_no"], config)
     unit_cooler.actuator.monitor.init(config["actuator"]["control"]["valve"]["pin_no"])
 
     # NOTE: Blueprint のパス指定を YAML で行いたいので、my_lib.webapp の import 順を制御

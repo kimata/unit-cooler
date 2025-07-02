@@ -7,6 +7,7 @@ import my_lib.time
 import unit_cooler.actuator.valve
 import unit_cooler.const
 import unit_cooler.util
+from unit_cooler.metrics import get_metrics_collector
 
 HAZARD_NOTIFY_INTERVAL_MIN = 30
 
@@ -95,5 +96,25 @@ def get_control_message(handle, last_message):
 def execute(config, control_message):
     if hazard_check(config):
         control_message = {"mode_index": 0, "state": unit_cooler.const.COOLING_STATE.IDLE}
+
+    # メトリクス収集
+    try:
+        metrics_db_path = config["actuator"]["metrics"]["data"]
+        metrics_collector = get_metrics_collector(metrics_db_path)
+
+        # 冷却モードの記録
+        cooling_mode = control_message.get("mode_index", 0)
+        metrics_collector.update_cooling_mode(cooling_mode)
+
+        # Duty比の記録（control_messageに含まれている場合）
+        if "duty" in control_message:
+            duty_info = control_message["duty"]
+            if duty_info.get("enable", False):
+                on_time = duty_info.get("on_sec", 0)
+                total_time = on_time + duty_info.get("off_sec", 0)
+                if total_time > 0:
+                    metrics_collector.update_duty_ratio(on_time, total_time)
+    except Exception:
+        logging.exception("Failed to collect metrics data")
 
     unit_cooler.actuator.valve.set_cooling_state(control_message)
