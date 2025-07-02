@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import "./App.css";
 
 import "bootstrap/dist/css/bootstrap.min.css";
-import { Github } from "react-bootstrap-icons";
+import { Github, GraphUp } from "react-bootstrap-icons";
 
 import "dayjs/locale/ja";
 import dayjs from "dayjs";
@@ -213,6 +213,12 @@ function App() {
                             </small>
                         </p>
                         <p className="display-6">
+                            <a
+                                href={`${API_ENDPOINT}/proxy/html/api/metrics`}
+                                className="text-secondary me-3"
+                            >
+                                <GraphUp />
+                            </a>
                             <a
                                 href="https://github.com/kimata/outdoor_unit_cooler"
                                 className="text-secondary"
