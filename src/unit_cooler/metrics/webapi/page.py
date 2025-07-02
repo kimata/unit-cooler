@@ -511,6 +511,21 @@ def generate_metrics_html(stats: dict, minute_data: list[dict], hourly_data: lis
     """
 
 
+def _format_cooling_mode_avg(stats: dict) -> str:
+    """冷却モード平均値をフォーマット"""
+    return "N/A" if stats["cooling_mode_avg"] is None else f"{stats['cooling_mode_avg']:.2f}"
+
+
+def _format_duty_ratio_avg(stats: dict) -> str:
+    """Duty比平均値をフォーマット"""
+    return "N/A" if stats["duty_ratio_avg"] is None else f"{stats['duty_ratio_avg'] * 100:.1f}"
+
+
+def _format_valve_operations(stats: dict) -> str:
+    """バルブ操作回数をフォーマット"""
+    return f"{stats['valve_operations_total']:,}"
+
+
 def generate_basic_stats_section(stats: dict) -> str:
     """基本統計セクションのHTML生成"""
     return f"""
@@ -534,25 +549,23 @@ def generate_basic_stats_section(stats: dict) -> str:
                             <div class="column is-one-third">
                                 <div class="has-text-centered">
                                     <p class="heading">❄️ 冷却モード平均</p>
-                                    <p class="stat-number has-text-info">{
-        "N/A" if stats["cooling_mode_avg"] is None else f"{stats['cooling_mode_avg']:.2f}"
-    }</p>
+                                    <p class="stat-number has-text-info">{_format_cooling_mode_avg(stats)}</p>
                                 </div>
                             </div>
                             <div class="column is-one-third">
                                 <div class="has-text-centered">
                                     <p class="heading">⚡ Duty比平均</p>
-                                    <p class="stat-number has-text-success">{
-        "N/A" if stats["duty_ratio_avg"] is None else f"{stats['duty_ratio_avg'] * 100:.1f}"
-    }%</p>
+                                    <p class="stat-number has-text-success">
+                                        {_format_duty_ratio_avg(stats)}%
+                                    </p>
                                 </div>
                             </div>
                             <div class="column is-one-third">
                                 <div class="has-text-centered">
                                     <p class="heading">🔧 バルブ操作回数</p>
-                                    <p class="stat-number has-text-warning">{
-        stats["valve_operations_total"]:,
-                                    }</p>
+                                    <p class="stat-number has-text-warning">
+                                        {_format_valve_operations(stats)}
+                                    </p>
                                 </div>
                             </div>
                             <div class="column is-one-third">
