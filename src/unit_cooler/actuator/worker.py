@@ -90,7 +90,7 @@ def collect_environmental_metrics(config, current_message):
             )
 
     except Exception:
-        logging.debug("Failed to collect environmental metrics")
+        logging.exception("Failed to collect environmental metrics")
 
 
 def queue_put(message_queue, message, liveness_file):

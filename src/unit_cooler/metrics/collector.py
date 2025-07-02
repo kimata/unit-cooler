@@ -201,9 +201,23 @@ class MetricsCollector:
     def _save_minute_data(self, timestamp: datetime.datetime):
         """Save accumulated minute data to database."""
         if not self._current_minute_data:
+            logger.debug("No current minute data to save for %s", timestamp)
             return
 
         try:
+            data = (
+                timestamp,
+                self._current_minute_data.get("cooling_mode"),
+                self._current_minute_data.get("duty_ratio"),
+                self._current_minute_data.get("temperature"),
+                self._current_minute_data.get("humidity"),
+                self._current_minute_data.get("lux"),
+                self._current_minute_data.get("solar_radiation"),
+                self._current_minute_data.get("rain_amount"),
+                self._current_minute_data.get("flow_value"),
+            )
+            logger.info("Saving minute metrics for %s: %s", timestamp, self._current_minute_data)
+
             with self._get_db_connection() as conn:
                 conn.execute(
                     """
@@ -212,19 +226,9 @@ class MetricsCollector:
                      lux, solar_radiation, rain_amount, flow_value)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                    (
-                        timestamp,
-                        self._current_minute_data.get("cooling_mode"),
-                        self._current_minute_data.get("duty_ratio"),
-                        self._current_minute_data.get("temperature"),
-                        self._current_minute_data.get("humidity"),
-                        self._current_minute_data.get("lux"),
-                        self._current_minute_data.get("solar_radiation"),
-                        self._current_minute_data.get("rain_amount"),
-                        self._current_minute_data.get("flow_value"),
-                    ),
+                    data,
                 )
-                logger.debug("Saved minute metrics for %s", timestamp)
+                logger.info("Successfully saved minute metrics for %s", timestamp)
         except Exception:
             logger.exception("Failed to save minute data")
 
