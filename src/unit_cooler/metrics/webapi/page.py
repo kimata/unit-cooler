@@ -1181,7 +1181,7 @@ def generate_chart_javascript() -> str:
             if (environmentCtx && chartData.timeseries) {
                 const timestamps = chartData.timeseries.map(d => d.timestamp);
                 const temperatures = chartData.timeseries.map(d => d.temperature);
-                const humidities = chartData.timeseries.map(d => d.humidity);
+                const solarRadiation = chartData.timeseries.map(d => d.solar_radiation);
 
                 new Chart(environmentCtx, {
                     type: 'line',
@@ -1198,10 +1198,10 @@ def generate_chart_javascript() -> str:
                                 yAxisID: 'y'
                             },
                             {
-                                label: '湿度（%）',
-                                data: humidities,
-                                borderColor: 'rgba(155, 89, 182, 1)',
-                                backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                                label: '日射量（W/m²）',
+                                data: solarRadiation,
+                                borderColor: 'rgba(255, 193, 7, 1)',
+                                backgroundColor: 'rgba(255, 193, 7, 0.1)',
                                 tension: 0.1,
                                 spanGaps: true,
                                 yAxisID: 'y1'
@@ -1231,12 +1231,11 @@ def generate_chart_javascript() -> str:
                                 position: 'right',
                                 title: {
                                     display: true,
-                                    text: '湿度（%）'
+                                    text: '日射量（W/m²）'
                                 },
                                 grid: {
                                     drawOnChartArea: false,
                                 },
-                                max: 100,
                                 min: 0
                             },
                             x: {
