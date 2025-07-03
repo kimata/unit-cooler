@@ -81,6 +81,12 @@ def collect_environmental_metrics(config, current_message):
                 lux = sense_data["lux"][0].get("value")
             if sense_data.get("solar_rad") and len(sense_data["solar_rad"]) > 0:
                 solar_radiation = sense_data["solar_rad"][0].get("value")
+                logging.debug("Solar radiation data found: %s W/m²", solar_radiation)
+            else:
+                logging.debug(
+                    "No solar radiation data in sense_data: %s",
+                    list(sense_data.keys()) if sense_data else "empty",
+                )
             if sense_data.get("rain") and len(sense_data["rain"]) > 0:
                 rain_amount = sense_data["rain"][0].get("value")
 

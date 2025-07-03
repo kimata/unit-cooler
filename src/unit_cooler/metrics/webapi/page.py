@@ -309,9 +309,58 @@ def _prepare_hourly_data(minute_data: list[dict], hourly_data: list[dict]) -> tu
 
 
 def _prepare_timeseries_data(minute_data: list[dict]) -> list[dict]:
-    """時系列データを準備"""
+    """時系列データを準備（過去100日分）"""
     timeseries_data = []
-    for data in minute_data[-168:]:  # 最新1週間分
+
+    # 過去100日分のデータを取得（144000分）
+    recent_data = minute_data[-144000:] if len(minute_data) > 144000 else minute_data
+
+    # データポイント数が多い場合は平均化して処理
+    target_points = 1000  # 目標ポイント数
+    if len(recent_data) > target_points:
+        # データを等間隔に分割して平均化
+        chunk_size = len(recent_data) // target_points
+        averaged_data = []
+
+        for i in range(0, len(recent_data), chunk_size):
+            chunk = recent_data[i : i + chunk_size]
+            if not chunk:
+                continue
+
+            # チャンクの最初のタイムスタンプを使用
+            base_data = chunk[0]
+
+            # 数値データの平均を計算
+            avg_data = {
+                "timestamp": base_data.get("timestamp"),
+                "cooling_mode": sum(
+                    d.get("cooling_mode") or 0 for d in chunk if d.get("cooling_mode") is not None
+                )
+                / max(1, sum(1 for d in chunk if d.get("cooling_mode") is not None)),
+                "duty_ratio": sum(d.get("duty_ratio") or 0 for d in chunk if d.get("duty_ratio") is not None)
+                / max(1, sum(1 for d in chunk if d.get("duty_ratio") is not None)),
+                "temperature": sum(
+                    d.get("temperature") or 0 for d in chunk if d.get("temperature") is not None
+                )
+                / max(1, sum(1 for d in chunk if d.get("temperature") is not None)),
+                "humidity": sum(d.get("humidity") or 0 for d in chunk if d.get("humidity") is not None)
+                / max(1, sum(1 for d in chunk if d.get("humidity") is not None)),
+                "lux": sum(d.get("lux") or 0 for d in chunk if d.get("lux") is not None)
+                / max(1, sum(1 for d in chunk if d.get("lux") is not None)),
+                "solar_radiation": sum(
+                    d.get("solar_radiation") or 0 for d in chunk if d.get("solar_radiation") is not None
+                )
+                / max(1, sum(1 for d in chunk if d.get("solar_radiation") is not None)),
+                "rain_amount": sum(
+                    d.get("rain_amount") or 0 for d in chunk if d.get("rain_amount") is not None
+                )
+                / max(1, sum(1 for d in chunk if d.get("rain_amount") is not None)),
+            }
+            averaged_data.append(avg_data)
+
+        recent_data = averaged_data
+
+    for data in recent_data:
         if data.get("timestamp"):
             # タイムスタンプを簡潔な形式に変換（月/日 時:分）
             timestamp = data["timestamp"]
