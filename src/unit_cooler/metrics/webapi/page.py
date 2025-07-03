@@ -315,6 +315,9 @@ def _prepare_timeseries_data(minute_data: list[dict]) -> list[dict]:
     # 過去100日分のデータを取得（144000分）
     recent_data = minute_data[-144000:] if len(minute_data) > 144000 else minute_data
 
+    # 時系列表示のため、データを古い順（昇順）に並び替え
+    recent_data = list(reversed(recent_data))
+
     # データポイント数が多い場合は平均化して処理
     target_points = 1000  # 目標ポイント数
     if len(recent_data) > target_points:
