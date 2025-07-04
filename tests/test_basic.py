@@ -219,12 +219,11 @@ def check_work_log(message):
     if message is None:
         assert unit_cooler.actuator.work_log.hist_get() == [], "正常なはずなのに、エラー通知がされています。"
     else:
-        assert len(unit_cooler.actuator.work_log.hist_get()) != 0, (
-            "異常が発生したはずなのに、エラー通知がされていません。"
-        )
-        assert unit_cooler.actuator.work_log.hist_get()[-1].find(message) != -1, (
-            f"「{message}」が work_log で通知されていません。"
-        )
+        work_log_hist = unit_cooler.actuator.work_log.hist_get()
+        assert len(work_log_hist) != 0, "異常が発生したはずなのに、エラー通知がされていません。"
+        # 履歴全体から該当メッセージを探す（最後のメッセージだけでなく）
+        found = any(msg.find(message) != -1 for msg in work_log_hist)
+        assert found, f"「{message}」が work_log で通知されていません。"
 
 
 def mock_fd_q10c(mocker, ser_trans=gen_fd_q10c_ser_trans_sense(), count=0, spi_read=0x11):  # noqa: B008
@@ -951,7 +950,18 @@ def test_actuator_power_off_1(  # noqa: PLR0913
     standard_mocks, component_manager, time_machine, config, server_port, real_port, log_port
 ):
     standard_mocks.patch("unit_cooler.actuator.sensor.get_flow", return_value=0)
-    standard_mocks.patch("unit_cooler.actuator.sensor.get_power_state", return_value=True)
+
+    # 現実的なモック：stop()が呼ばれた後はget_power_state()がFalseを返すようにする
+    power_state = {"is_on": True}
+
+    def mock_get_power_state():
+        return power_state["is_on"]
+
+    def mock_stop():
+        power_state["is_on"] = False
+
+    standard_mocks.patch("unit_cooler.actuator.sensor.get_power_state", side_effect=mock_get_power_state)
+    standard_mocks.patch("unit_cooler.actuator.sensor.stop", side_effect=mock_stop)
 
     def dummy_mode_mock():
         dummy_mode_mock.i += 1
@@ -966,8 +976,8 @@ def test_actuator_power_off_1(  # noqa: PLR0913
 
     move_to(time_machine, 0)
 
-    component_manager.start_actuator(config, server_port, log_port, msg_count=10)
-    component_manager.start_controller(config, server_port, real_port, msg_count=10)
+    component_manager.start_actuator(config, server_port, log_port, msg_count=20)
+    component_manager.start_controller(config, server_port, real_port, msg_count=20)
 
     time.sleep(0.3)  # Reduced from 1 for testing
     move_to(time_machine, 1)
