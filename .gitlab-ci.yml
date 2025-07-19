@@ -198,9 +198,10 @@ test-controller-regular:
         - 'echo "Actuator: ${ACT_IP}"'
         # Wait for actuator to be ready
         - URL="http://${ACT_IP}:5001/unit_cooler/api/log_view"
+        - CURL_OPTS="--silent --fail --head --connect-timeout 5 --max-time 10"
         - >
             for i in {1..30}; do
-                if docker run --rm ${CURL_IMAGE} --silent --fail --head ${URL}; then
+                if docker run --rm ${CURL_IMAGE} ${CURL_OPTS} ${URL}; then
                     echo "Actuator is ready"
                     break
                 fi
