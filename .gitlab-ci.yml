@@ -52,6 +52,9 @@ build-image:
     variables:
         BUILDER: builder
 
+    before_script:
+        - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+
     script:
         - 'echo "Building: ${CI_REGISTRY_IMAGE}:${TAG}"'
 
