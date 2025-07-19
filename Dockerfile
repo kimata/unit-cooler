@@ -41,6 +41,10 @@ ENV TZ=Asia/Tokyo
 
 COPY --from=build /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 
+COPY --from=build /usr/local/lib/liblgpio.so* /usr/local/lib
+RUN ldconfig
+
+
 WORKDIR /opt/unit_cooler
 
 COPY . .
