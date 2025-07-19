@@ -126,6 +126,7 @@ test-walk-through:
 # Base templates
 .docker-cleanup-base:
     before_script:
+        - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
         - >
             docker ps --filter "label=job=${CI_JOB_NAME}" | grep hours | cut -d " " -f1 |
             while read id; do docker stop -t 5 $id; done || true
