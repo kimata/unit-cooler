@@ -12,7 +12,7 @@ type Props = {
 };
 
 const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
-    const API_ENDPOINT = "/unit_cooler/api";
+    const API_ENDPOINT = "/unit-cooler/api";
     const [remainingTime, setRemainingTime] = useState(0);
     const [currentFlow, setCurrentFlow] = useState(0);
 

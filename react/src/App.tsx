@@ -29,7 +29,7 @@ import { Sensor } from "./components/Sensor";
 import { Log } from "./components/Log";
 
 function App() {
-    const API_ENDPOINT = "/unit_cooler/api";
+    const API_ENDPOINT = "/unit-cooler/api";
     const [logUpdateTrigger, setLogUpdateTrigger] = useState(0);
 
     const emptyStat: ApiResponse.Stat = {
@@ -220,7 +220,7 @@ function App() {
                                 <GraphUp />
                             </a>
                             <a
-                                href="https://github.com/kimata/outdoor_unit_cooler"
+                                href="https://github.com/kimata/unit-cooler"
                                 className="text-secondary"
                             >
                                 <Github />

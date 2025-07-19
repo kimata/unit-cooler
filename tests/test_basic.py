@@ -25,7 +25,7 @@ from tests.test_helpers import (
     wait_for_set_cooling_working,
 )
 
-my_lib.webapp.config.URL_PREFIX = "/unit_cooler"
+my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
 
 CONFIG_FILE = "config.example.yaml"
 SCHEMA_CONFIG = "config.schema"

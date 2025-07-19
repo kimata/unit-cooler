@@ -1,8 +1,8 @@
 {
-    "name": "unit_cooler",
+    "name": "unit-cooler",
     "private": true,
     "version": "0.0.0",
-    "homepage": "/unit_cooler",
+    "homepage": "/unit-cooler",
     "type": "module",
     "scripts": {
         "dev": "vite --host",

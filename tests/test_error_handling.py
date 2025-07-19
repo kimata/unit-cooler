@@ -12,7 +12,7 @@ import requests
 
 from tests.test_helpers import _find_unused_port, mock_react_index_html
 
-my_lib.webapp.config.URL_PREFIX = "/unit_cooler"
+my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
 
 CONFIG_FILE = "config.example.yaml"
 SCHEMA_CONFIG = "config.schema"

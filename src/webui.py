@@ -82,7 +82,7 @@ def create_app(config, arg):
 
     logging.info("Using ZMQ server of %s:%d", setting["control_host"], setting["pub_port"])
 
-    my_lib.webapp.config.URL_PREFIX = "/unit_cooler"
+    my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
     my_lib.webapp.config.init(config["webui"])
 
     message_queue = multiprocessing.Manager().Queue(10)
@@ -133,7 +133,7 @@ def create_app(config, arg):
     app.json.compat = True
 
     # Initialize proxy before registering blueprint
-    api_base_url = f"http://{setting['actuator_host']}:{setting['log_port']}/unit_cooler"
+    api_base_url = f"http://{setting['actuator_host']}:{setting['log_port']}/unit-cooler"
     my_lib.webapp.proxy.init(api_base_url)
 
     app.register_blueprint(my_lib.webapp.base.blueprint_default)

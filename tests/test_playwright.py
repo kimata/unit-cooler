@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from playwright.sync_api import expect
 
-APP_URL_TMPL = "http://{host}:{port}/unit_cooler/"
+APP_URL_TMPL = "http://{host}:{port}/unit-cooler/"
 
 
 def app_url(host, port):

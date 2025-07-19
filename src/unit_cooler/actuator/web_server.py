@@ -30,7 +30,7 @@ from unit_cooler.metrics import get_metrics_collector
 
 
 def create_app(config, event_queue):
-    my_lib.webapp.config.URL_PREFIX = "/unit_cooler"
+    my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
     my_lib.webapp.config.init(config["actuator"]["web_server"])
 
     # NOTE: アクセスログは無効にする

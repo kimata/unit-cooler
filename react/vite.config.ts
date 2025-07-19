@@ -4,7 +4,7 @@ import macrosPlugin from "vite-plugin-babel-macros";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    base: "/unit_cooler/",
+    base: "/unit-cooler/",
     plugins: [react(), macrosPlugin()],
     build: {
         // バンドルサイズの最適化
