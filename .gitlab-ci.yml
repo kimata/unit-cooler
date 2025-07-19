@@ -103,16 +103,9 @@ test-prepare:
     cache:
         - key:
               files:
-                  - pyproject.toml
-                  - .gitlab-ci.yml
-              prefix: ${CI_COMMIT_REF_SLUG}-venv
+                  - uv.lock
           paths:
-              - .venv
-          policy: pull
-        - key: ${CI_COMMIT_REF_SLUG}-uv-toolchain
-          paths:
-              - .uv_python
-          policy: pull
+              - ${UV_CACHE_DIR}
 
 test-walk-through:
     extends: .cache-base
@@ -123,36 +116,26 @@ test-walk-through:
         - >
             uv run pytest --numprocesses=auto --junit-xml=tests/evidence/junit-report.xml
             --maxfail=1 --dist=loadgroup tests/test_basic.py tests/test_error_handling.py
-    cache:
-        - key:
-              files:
-                  - pyproject.toml
-                  - .gitlab-ci.yml
-              prefix: ${CI_COMMIT_REF_SLUG}-venv
-          paths:
-              - .venv
-          policy: pull
-        - key: ${CI_COMMIT_REF_SLUG}-cache
-          paths:
-              - /root/.cache
-          policy: pull
     artifacts:
         when: always
         paths:
             - tests/evidence/**
         reports:
             junit: tests/evidence/junit-report.xml
+
 # Base templates
 .docker-cleanup-base:
     before_script:
         - >
             docker ps --filter "label=job=${CI_JOB_NAME}" | grep hours | cut -d " " -f1 |
             while read id; do docker stop -t 5 $id; done || true
+
 .docker-test-base:
     extends: .docker-cleanup-base
     needs:
         - generate-tag
         - build-image
+
 .test-controller-base:
     extends: .docker-test-base
     stage: test
@@ -165,10 +148,12 @@ test-controller-sample:
     extends: .test-controller-base
     variables:
         CONTROLLER_ARGS: "-c config.example.yaml -N -n 1 -t 10"
+
 test-controller-regular:
     extends: .test-controller-base
     variables:
         CONTROLLER_ARGS: "-N -n 1 -t 10"
+
 .test-actuator-base:
     extends: .docker-test-base
     stage: test
@@ -204,21 +189,25 @@ test-controller-regular:
         - docker attach --no-stdin ${CI_JOB_NAME}-${CI_JOB_ID}-2
         - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-1 > controller_log_2.txt
         - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-1
+
     artifacts:
         when: always
         paths:
             - controller_log_1.txt
             - controller_log_2.txt
             - actuator_log.txt
+
 test-actuator-sample:
     extends: .test-actuator-base
     variables:
         CONTROL_HOST: 192.168.0.20
         ACTUATOR_ARGS: "-c config.example.yaml"
+
 test-actuator-regular:
     extends: .test-actuator-base
     variables:
         ACTUATOR_ARGS: ""
+
 test-webui-docker:
     extends: [.docker-test-base, .cache-base]
     stage: test
@@ -290,6 +279,7 @@ test-webui-docker:
             - actuator_log.txt
             - webui_log.txt
             - tests/evidence/**
+
 test-healthz-docker:
     extends: .docker-test-base
     stage: test
@@ -342,6 +332,7 @@ test-healthz-docker:
             - controller_log.txt
             - actuator_log.txt
             - webui_log.txt
+
 tag-latest:
     stage: tag-latest
     needs:
@@ -363,12 +354,13 @@ tag-latest:
         - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
           when: never
         - when: on_success
+
 # Base template for deployment jobs
 deploy:
     stage: deploy
     image:
-        name: bitnami/kubectl:latest
-        entrypoint: [""]
+        name: gitlab.green-rabbit.net:5050/kimata/local-kubectl:250715_c88f3965
+
     needs:
         - generate-tag
         - job: test-controller-regular
@@ -381,35 +373,23 @@ deploy:
           artifacts: false
         - job: test-walk-through
           artifacts: false
+
     script:
         - 'IMAGE="${CI_REGISTRY_IMAGE}:${TAG}"'
         - 'echo "Deploying controller image: $IMAGE"'
         - kubectl config get-contexts
         - kubectl config use-context kimata/outdoor_unit_cooler:pod-rollout
-        - >
-            kubectl --insecure-skip-tls-verify=true -n hems set image
-            deployment/unit-cooler-controller unit-cooler-controller=${IMAGE}
-        - >
-            kubectl --insecure-skip-tls-verify=true -n hems set image
-            deployment/unit-cooler-actuator unit-cooler-actuator=${IMAGE}
-        - >
-            kubectl --insecure-skip-tls-verify=true -n hems set image
-            deployment/unit-cooler-webui unit-cooler-webui=${IMAGE}
-        - >
-            kubectl --insecure-skip-tls-verify=true -n hems set image
-            deployment/unit-cooler-webui-demo unit-cooler-webui-demo=${IMAGE}
-        - >
-            kubectl --insecure-skip-tls-verify=true -n hems rollout status
-            deployment/unit-cooler-controller --timeout=120s
-        - >
-            kubectl --insecure-skip-tls-verify=true -n hems rollout status
-            deployment/unit-cooler-actuator --timeout=120s
-        - >
-            kubectl --insecure-skip-tls-verify=true -n hems rollout status
-            deployment/unit-cooler-webui --timeout=120s
-        - >
-            kubectl --insecure-skip-tls-verify=true -n hems rollout status
-            deployment/unit-cooler-webui-demo --timeout=120s
+
+        - kubectl -n hems set image deployment/unit-cooler-controller unit-cooler-controller=${IMAGE}
+        - kubectl -n hems set image deployment/unit-cooler-actuator unit-cooler-actuator=${IMAGE}
+        - kubectl -n hems set image deployment/unit-cooler-webui unit-cooler-webui=${IMAGE}
+        - kubectl -n hems set image deployment/unit-cooler-webui-demo unit-cooler-webui-demo=${IMAGE}
+
+        - kubectl -n hems rollout status deployment/unit-cooler-controller --timeout=300s
+        - kubectl -n hems rollout status deployment/unit-cooler-actuator --timeout=120s
+        - kubectl -n hems rollout status deployment/unit-cooler-webui --timeout=120s
+        - kubectl -n hems rollout status deployment/unit-cooler-webui-demo --timeout=120s
+
     rules:
         # NOTE: 自動実行ではデプロイしない
         - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -417,11 +397,12 @@ deploy:
         - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
           when: never
         - when: on_success
+
 renovate:
     stage: renovate
     image:
-        name: registry.green-rabbit.net:5000/kimata/local_renovate:38
-        entrypoint: [""]
+        name: gitlab.green-rabbit.net:5050/kimata/local-renovate:250715_3b8866ff
+
     script:
         - renovate --platform gitlab --token ${RENOVATE_TOKEN} --endpoint ${CI_SERVER_URL}/api/v4 ${CI_PROJECT_PATH}
         # # NOTE: ついでにお掃除
