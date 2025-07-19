@@ -41,8 +41,7 @@ export function useApi<T>(
                 setIsFirstLoad(false);
             }
         } catch (err) {
-            const errorMessage =
-                err instanceof Error ? err.message : "通信に失敗しました";
+            const errorMessage = err instanceof Error ? err.message : "通信に失敗しました";
             setError(errorMessage);
             console.error("API fetch error:", err);
         } finally {

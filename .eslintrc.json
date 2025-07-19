@@ -2,9 +2,7 @@
     "ignorePatterns": ["projects/**/*"],
     "overrides": [
         {
-            "extends": [
-                "plugin:@angular-eslint/template/process-inline-templates"
-            ],
+            "extends": ["plugin:@angular-eslint/template/process-inline-templates"],
             "files": ["*.ts"],
             "parserOptions": {
                 "createDefaultProgram": true,

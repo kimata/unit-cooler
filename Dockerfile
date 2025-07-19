@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_VERSION=3.13
 FROM python:${PYTHON_VERSION}-bookworm AS build
 
 RUN --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -16,6 +16,11 @@ ADD https://astral.sh/uv/install.sh /uv-installer.sh
 
 RUN sh /uv-installer.sh && rm /uv-installer.sh
 
+# NOTE: lgpio で必要になるライブラリ
+ADD http://abyz.me.uk/lg/lg.zip lg.zip
+RUN unzip lg.zip
+RUN make -C lg
+RUN make -C lg install
 
 # NOTE: システムにインストール
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \

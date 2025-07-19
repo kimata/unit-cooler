@@ -6,10 +6,7 @@ interface UseEventSourceOptions {
     reconnectInterval?: number;
 }
 
-export function useEventSource(
-    url: string,
-    options: UseEventSourceOptions = {},
-) {
+export function useEventSource(url: string, options: UseEventSourceOptions = {}) {
     const eventSourceRef = useRef<EventSource | null>(null);
     const reconnectTimeoutRef = useRef<number | null>(null);
 
@@ -30,13 +27,8 @@ export function useEventSource(
 
             eventSource.onerror = (event) => {
                 if (eventSource.readyState === EventSource.CLOSED) {
-                    console.warn(
-                        "EventSource が閉じられました．再接続します．",
-                    );
-                    reconnectTimeoutRef.current = setTimeout(
-                        connect,
-                        reconnectInterval,
-                    );
+                    console.warn("EventSource が閉じられました．再接続します．");
+                    reconnectTimeoutRef.current = setTimeout(connect, reconnectInterval);
                 }
 
                 if (onError) {
