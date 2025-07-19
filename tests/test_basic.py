@@ -2186,7 +2186,7 @@ def test_webui(mocker, config, server_port, real_port, log_port):  # noqa: PLR09
     assert "室外機" in gzip.decompress(res.data).decode("utf-8")
 
     # Wait for logs to be committed to database
-    time.sleep(1)
+    time.sleep(5)
 
     # Temporarily override DUMMY_MODE to avoid stop_day=7
     with mock.patch.dict(os.environ, {"DUMMY_MODE": "false"}):
