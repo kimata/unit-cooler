@@ -194,7 +194,7 @@ test-controller-regular:
         - URL="http://${ACT_IP}:5001/unit_cooler/api/log_view"
         - CURL_OPTS="--silent --fail --head --connect-timeout 5 --max-time 10"
         - >
-            for i in {1..12}; do
+            for i in {1..20}; do
                 if docker run --rm ${CURL_IMAGE} ${CURL_OPTS} ${URL} > /dev/null 2>&1; then
                     echo "Actuator is ready"
                     break
