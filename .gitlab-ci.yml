@@ -321,58 +321,90 @@ test-webui-docker:
 test-healthz-docker:
     extends: .docker-test-base
     stage: test
+
+    # 同一ジョブの並行実行を防止してリソース競合を回避
+    resource_group: ${CI_JOB_NAME}
+
     script:
+        # クリーンアップ: 古いコンテナを停止
         - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-1
-            --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG} ./src/controller.py
+            docker ps --filter "label=job=${CI_JOB_NAME}" --format "{{.ID}}" |
+            xargs -r docker stop -t 10 || true
+
+        # クリーンアップ: 古いネットワークを削除
+        - docker network rm ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network 2>/dev/null || true
+
+        # 専用ネットワーク作成（プロジェクト固有）
+        - docker network create ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network
+        - >
+            docker run --rm --detach=true --tty=true
+            --name ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL
+            --label job=${CI_JOB_NAME}
+            --network ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network
+            ${CI_REGISTRY_IMAGE}:${TAG} ./src/controller.py
 
         - >
             CTRL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-1)
+            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL)
         - 'echo "Controller: ${CTRL_IP}"'
         - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-2
-            --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            docker run --rm --detach=true --tty=true
+            --name ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT
+            --label job=${CI_JOB_NAME}
+            --network ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network
+            ${CI_REGISTRY_IMAGE}:${TAG}
             ./src/actuator.py -d
             -s $(docker inspect
             --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-1)
+            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL)
 
         - >
             ACT_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-2)
+            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT)
         - '[ -n "$ACT_IP" ] || (echo "Failed to get Actuator IP" && exit 1)'
         - 'echo "Actuator: ${ACT_IP}"'
 
         - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-3
-            --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            docker run --rm --detach=true --tty=true
+            --name ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB
+            --label job=${CI_JOB_NAME}
+            --network ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network
+            ${CI_REGISTRY_IMAGE}:${TAG}
             ./src/webui.py
             -s $(docker inspect
             --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-1)
+            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL)
             -a $(docker inspect
             --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-2)
+            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT)
 
+        - echo "Containers started, checking status..."
+        - docker ps | grep ${CI_PROJECT_NAME}-${CI_JOB_NAME}
+
+        # アプリケーションの起動を待つ
         - sleep 120
 
         # NOTE: healthz をチェックする前にその時点のログを取得しておく
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-1 > controller_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-2 > actuator_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-3 > webui_log.txt
+        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL > controller_log.txt
+        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT > actuator_log.txt
+        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB > webui_log.txt
 
-        - docker exec ${CI_JOB_NAME}-${CI_JOB_ID}-1 ./src/healthz.py -m CTRL
-        - docker exec ${CI_JOB_NAME}-${CI_JOB_ID}-2 ./src/healthz.py -m ACT
-        - docker exec ${CI_JOB_NAME}-${CI_JOB_ID}-3 ./src/healthz.py -m WEB
+        # ヘルスチェック実行
+        - echo "Running health checks..."
+        - docker exec ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL ./src/healthz.py -m CTRL
+        - docker exec ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT ./src/healthz.py -m ACT
+        - docker exec ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB ./src/healthz.py -m WEB
 
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-1 > controller_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-2 > actuator_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-3 > webui_log.txt
+        # 最終ログ取得
+        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL > controller_log.txt
+        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT > actuator_log.txt
+        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB > webui_log.txt
 
-        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-1
-        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-2
-        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-3
+        # クリーンアップ
+        - docker stop ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL || true
+        - docker stop ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT || true
+        - docker stop ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB || true
+        - docker network rm ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network || true
     artifacts:
         when: always
         paths:
