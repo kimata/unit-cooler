@@ -285,7 +285,7 @@ test-webui-docker:
         - >
             WEB_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
         - >
-            WEB_URL="http://${APP_HOST}:${APP_PORT}/unit-cooler/"
+            WEB_URL="http://${WEB_HOST}:${WEB_PORT}/unit-cooler/"
         - >
             echo "WEB_URL: ${WEB_URL}"
 
