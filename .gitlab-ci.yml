@@ -199,7 +199,7 @@ test-controller-regular:
                     echo "Actuator is ready"
                     break
                 fi
-                echo "Waiting for actuator to be ready... ($i/12)"
+                echo "Waiting for actuator to be ready... ($i/20)"
                 sleep 2
             done
 
