@@ -398,6 +398,12 @@ test-healthz-docker:
         - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT > actuator_log.txt
         - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB > webui_log.txt
 
+        # Controllerの状態を確認
+        - echo "Checking controller container status..."
+        - >
+            docker ps -a --filter name=${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL
+            --format "table {{.Names}}\t{{.Status}}\t{{.State}}"
+
         # ヘルスチェック実行
         - echo "Running health checks..."
         - docker exec ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL ./src/healthz.py -m CTRL
