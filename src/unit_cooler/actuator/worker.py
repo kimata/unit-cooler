@@ -111,7 +111,9 @@ def queue_put(message_queue, message, liveness_file):
 def sleep_until_next_iter(start_time, interval_sec):
     sleep_sec = max(interval_sec - (time.time() - start_time), 0.5)
     logging.debug("Seep %.1f sec...", sleep_sec)
-    time.sleep(sleep_sec)
+
+    # should_terminate が設定されるまで待機（最大 sleep_sec 秒）
+    should_terminate.wait(timeout=sleep_sec)
 
 
 # NOTE: コントローラから制御指示を受け取ってキューに積むワーカ
