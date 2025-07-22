@@ -61,11 +61,82 @@ Raspberry Pi を使ったエアコン室外機自動冷却システム
 
 ![ソフトアーキ図](./img/ソフトアーキ図.png)
 
+#### システム構成図
+
+```mermaid
+graph TB
+    %% 外部システム
+    InfluxDB[(InfluxDB)]
+    Browser[ユーザーブラウザ]
+    Slack[Slack通知]
+
+    %% 主要コンポーネント
+    Controller[Controller<br/>controller.py]
+    Actuator[Actuator<br/>actuator.py]
+    WebUI[Web UI<br/>webui.py]
+
+    %% ZeroMQプロキシ
+    Proxy[ZeroMQ Proxy<br/>LVC Proxy]
+
+    %% データベース・ファイル
+    SQLite[(SQLite<br/>metrics.db)]
+    Liveness[Liveness Files]
+
+    %% ハードウェア
+    GPIO[GPIO制御]
+    Valve[電磁弁]
+    FlowSensor[流量センサー<br/>FD-Q10C]
+
+    %% React Frontend
+    React[React Frontend]
+
+    %% データフロー（Controller）
+    InfluxDB -->|電力データ| Controller
+    Controller -->|制御メッセージ| Proxy
+    Controller -->|ハートビート| Liveness
+
+    %% データフロー（Actuator）
+    Proxy -->|ZeroMQ<br/>Port 5559| Actuator
+    Actuator -->|GPIO制御| GPIO
+    GPIO --> Valve
+    FlowSensor -->|SPI通信| Actuator
+    Actuator -->|メトリクス| SQLite
+    Actuator -->|エラー通知| Slack
+    Actuator -->|ハートビート| Liveness
+
+    %% データフロー（Web UI）
+    WebUI -->|ZeroMQ購読<br/>Port 5560| Proxy
+    WebUI -->|API Proxy| Actuator
+    WebUI -->|Flask API| React
+    React -->|HTTP| Browser
+    WebUI -->|ハートビート| Liveness
+
+    %% スタイリング
+    classDef primary fill:#e1f5fe
+    classDef secondary fill:#f3e5f5
+    classDef hardware fill:#ffecb3
+    classDef database fill:#e8f5e8
+    classDef external fill:#fff3e0
+
+    class Controller,Actuator,WebUI primary
+    class Proxy,React secondary
+    class GPIO,Valve,FlowSensor hardware
+    class InfluxDB,SQLite,Liveness database
+    class Browser,Slack external
+```
+
 システムは3つの主要コンポーネントで構成：
 
 1. **Controller（コントローラ）** - InfluxDBから消費電力データを監視し、制御信号を生成
 2. **Actuator（アクチュエータ）** - 電磁弁を制御し、水流量を監視
 3. **Web UI** - システム状況の可視化とログ表示
+
+#### プロセス間通信
+
+- **ZeroMQ Publisher-Subscriber**パターンでリアルタイム分散メッセージング
+- **Last Value Caching (LVC) Proxy**による信頼性向上と最新値キャッシュ
+- Controller → Actuator: ポート5559（制御信号）
+- Web UI ← Controller: ポート5560（状態監視）
 
 ### 技術スタック
 
