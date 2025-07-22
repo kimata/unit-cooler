@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import pathlib
+import sys
 import time
 from unittest import mock
 
@@ -110,6 +111,10 @@ def _clear(config):
 
     my_lib.notify.slack.interval_clear()
     my_lib.notify.slack.hist_clear()
+
+    if "my_lib.sensor.fd_q10c" in sys.modules:
+        logging.debug("unload my_lib.sensor.fd_q10c")
+        del sys.modules["my_lib.sensor.fd_q10c"]
 
 
 @pytest.fixture(autouse=True)
@@ -1218,6 +1223,8 @@ def test_actuator_unable_to_receive(  # noqa: PLR0913
 
     component_manager.start_controller(config, server_port, real_port, msg_count=10)
 
+    time.sleep(1)
+
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
 
@@ -2309,6 +2316,8 @@ def test_webui_queue_overflow(mocker, config, server_port, real_port, log_port):
 
     mocker.patch("my_lib.sensor_data.fetch_data", return_value=gen_sense_data())
     mocker.patch("my_lib.sensor_data.get_day_sum", return_value=100)
+
+    mocker.patch.dict("os.environ", {"DUMMY_MODE": "true"})
 
     actuator_handle = actuator.start(
         config,

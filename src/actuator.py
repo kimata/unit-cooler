@@ -43,7 +43,6 @@ def wait_before_start(config):
 
 
 def start(config, arg):
-    global should_terminate  # noqa: PLW0603
     global log_server_handle  # noqa: PLW0603
 
     setting = {
@@ -56,8 +55,6 @@ def start(config, arg):
         "debug_mode": False,
     }
     setting.update(arg)
-
-    should_terminate = False
 
     logging.info("Using ZMQ server of %s:%d", setting["control_host"], setting["pub_port"])
 
@@ -108,13 +105,11 @@ def start(config, arg):
     return (executor, thread_list, log_server_handle)
 
 
-def wait_and_term(executor, thread_list, log_server_handle, terminate=True):
-    global should_terminate  # noqa: PLW0603
-
+def wait_and_term(executor, thread_list, log_server_handle, terminate=True):  # noqa: ARG001
     import unit_cooler.actuator.web_server
     import unit_cooler.actuator.work_log
 
-    should_terminate = terminate
+    unit_cooler.actuator.worker.term()
 
     ret = 0
     for thread_info in thread_list:
