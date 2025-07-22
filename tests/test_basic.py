@@ -208,7 +208,8 @@ def check_liveness(config, conf_path, is_healthy, threshold_sec=120):
 def check_notify_slack(message, index=-1):
     import my_lib.notify.slack
 
-    notify_hist = my_lib.notify.slack.hist_get(False)
+    # NOTE: 並列実行時の競合を避けるため、スレッドローカルストレージを使用
+    notify_hist = my_lib.notify.slack.hist_get(True)
     logging.debug(notify_hist)
 
     if message is None:
