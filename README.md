@@ -227,45 +227,6 @@ sequenceDiagram
     W->>W: ログビューア更新
 ```
 
-##### 手動制御シーケンス
-
-```mermaid
-sequenceDiagram
-    participant U as ユーザー
-    participant B as Browser
-    participant W as Web UI
-    participant A as Actuator
-    participant V as 電磁弁
-    participant F as 流量センサー
-
-    Note over U,V: 手動バルブ制御
-
-    U->>B: バルブ制御ボタンクリック
-    B->>W: POST /api/valve_ctrl
-    W->>A: 制御指示転送
-
-    alt バルブ開指示
-        A->>V: GPIO HIGH
-        A->>F: 流量監視開始
-        loop 5分間または手動停止まで
-            F-->>A: 流量値
-            A->>W: リアルタイム流量送信
-            W->>B: Server-Sent Events
-            B->>B: 流量グラフ更新
-        end
-
-    else バルブ閉指示
-        A->>V: GPIO LOW
-        A->>W: 停止完了通知
-    end
-
-    W-->>B: 制御結果レスポンス
-    B->>B: UI状態更新
-
-    Note over U: 制御結果確認
-    U->>B: 状態確認
-```
-
 システムは3つの主要コンポーネントで構成：
 
 1. **Controller（コントローラ）** - InfluxDBから消費電力データを監視し、制御信号を生成
