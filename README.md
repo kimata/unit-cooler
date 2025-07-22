@@ -125,6 +125,147 @@ graph TB
     class Browser,Slack external
 ```
 
+#### シーケンス図
+
+##### 通常の冷却動作シーケンス
+
+```mermaid
+sequenceDiagram
+    participant U as ユーザー
+    participant I as InfluxDB
+    participant C as Controller
+    participant P as ZeroMQ Proxy
+    participant A as Actuator
+    participant V as 電磁弁
+    participant F as 流量センサー
+    participant W as Web UI
+    participant B as Browser
+
+    Note over I,A: 電力監視による自動制御開始
+
+    loop 定期監視 (30秒間隔)
+        C->>I: 電力データ取得
+        I-->>C: 消費電力値
+
+        alt 電力値が閾値を超過
+            Note over C: エアコン稼働検知
+            C->>P: cooling_on メッセージ
+            P->>A: 冷却開始指示
+            A->>V: GPIO HIGH (電磁弁開)
+
+            Note over A,F: ミスト噴射開始
+            loop 間欠制御 (ON: 30秒, OFF: 30秒)
+                A->>F: 流量値読み取り
+                F-->>A: 流量データ (L/min)
+
+                alt 流量異常検知
+                    A->>A: エラーログ記録
+                    A->>U: Slack通知
+                end
+
+                A->>V: GPIO LOW (電磁弁閉)
+                Note over V: 30秒待機
+                A->>V: GPIO HIGH (電磁弁開)
+            end
+        else 電力値が閾値以下
+            C->>P: cooling_off メッセージ
+            P->>A: 冷却停止指示
+            A->>V: GPIO LOW (電磁弁閉)
+        end
+    end
+
+    Note over W,B: リアルタイム状態表示
+    loop 状態更新 (58秒間隔)
+        W->>P: 状態データ購読
+        P-->>W: システム状態
+        W->>A: センサーデータ取得
+        A-->>W: 流量・温湿度データ
+        W->>B: Server-Sent Events
+        B->>B: UI更新 (グラフ・ステータス)
+    end
+```
+
+##### エラーハンドリングシーケンス
+
+```mermaid
+sequenceDiagram
+    participant A as Actuator
+    participant F as 流量センサー
+    participant S as Slack
+    participant W as Web UI
+    participant D as SQLite DB
+
+    Note over A,F: 異常検知フロー
+
+    A->>F: 流量値取得
+    F-->>A: 流量データ
+
+    alt 水漏れ検知 (流量 > 閾値)
+        A->>A: 緊急停止処理
+        A->>A: GPIO LOW (電磁弁強制閉)
+        A->>D: エラーイベント記録
+        A->>S: 🚨 水漏れアラート送信
+        A->>W: エラー状態通知
+
+    else 断水検知 (流量 = 0)
+        A->>D: 警告イベント記録
+        A->>S: ⚠️ 断水警告送信
+        A->>W: 警告状態通知
+
+    else センサー通信エラー
+        A->>A: センサー再接続試行
+        alt 再接続失敗
+            A->>D: 通信エラー記録
+            A->>S: 📡 センサーエラー通知
+            A->>A: ダミーモード移行
+        end
+    end
+
+    Note over W: エラー状態の可視化
+    W->>W: エラーバッジ表示
+    W->>W: アラート音再生
+    W->>W: ログビューア更新
+```
+
+##### 手動制御シーケンス
+
+```mermaid
+sequenceDiagram
+    participant U as ユーザー
+    participant B as Browser
+    participant W as Web UI
+    participant A as Actuator
+    participant V as 電磁弁
+    participant F as 流量センサー
+
+    Note over U,V: 手動バルブ制御
+
+    U->>B: バルブ制御ボタンクリック
+    B->>W: POST /api/valve_ctrl
+    W->>A: 制御指示転送
+
+    alt バルブ開指示
+        A->>V: GPIO HIGH
+        A->>F: 流量監視開始
+        loop 5分間または手動停止まで
+            F-->>A: 流量値
+            A->>W: リアルタイム流量送信
+            W->>B: Server-Sent Events
+            B->>B: 流量グラフ更新
+        end
+
+    else バルブ閉指示
+        A->>V: GPIO LOW
+        A->>W: 停止完了通知
+    end
+
+    W-->>B: 制御結果レスポンス
+    B->>B: UI状態更新
+
+    Note over U: 制御結果確認
+    U->>B: 状態確認
+```
+
 システムは3つの主要コンポーネントで構成：
 
 1. **Controller（コントローラ）** - InfluxDBから消費電力データを監視し、制御信号を生成
