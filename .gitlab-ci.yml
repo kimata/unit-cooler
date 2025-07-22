@@ -477,7 +477,7 @@ deploy:
         - 'IMAGE="${CI_REGISTRY_IMAGE}:${TAG}"'
         - 'echo "Deploying controller image: $IMAGE"'
         - kubectl config get-contexts
-        - kubectl config use-context kimata/outdoor_unit_cooler:pod-rollout
+        - kubectl config use-context kimata/unit-cooler:pod-rollout
 
         - kubectl -n hems set image deployment/unit-cooler-controller unit-cooler-controller=${IMAGE}
         - kubectl -n hems set image deployment/unit-cooler-actuator unit-cooler-actuator=${IMAGE}
