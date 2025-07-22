@@ -4,6 +4,10 @@ variables:
     UV_LINK_MODE: copy
     UV_CACHE_DIR: .uv-cache
 
+default:
+    before_script:
+        - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+
 stages:
     - generate-tag
     - build
@@ -27,6 +31,8 @@ build-react:
     needs: []
 
     image: node:24.1
+
+    before_script: []
 
     script:
         - cd react
@@ -145,6 +151,7 @@ test-walk-through:
             docker run --rm --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}
             --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
             ./src/controller.py ${CONTROLLER_ARGS}
+
 test-controller-sample:
     extends: .test-controller-base
     variables:
@@ -159,59 +166,78 @@ test-controller-regular:
     extends: .docker-test-base
     stage: test
 
-    variables:
-        CURL_IMAGE: curlimages/curl:8.1.2
-
     script:
-        - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-1
-            --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG} ./src/controller.py -d -t 2
+        # クリーンアップ: 古いコンテナを停止
+        - |
+            for id in $(docker ps --filter "label=job=${CI_PROJECT_NAME}-${CI_JOB_NAME}" --format "{{.ID}}"); do
+                started_at=$(docker inspect --format '{{.State.StartedAt}}' "$id")
+                started_epoch=$(date --date="$started_at" +%s)
+                now_epoch=$(date +%s)
+                diff=$(( now_epoch - started_epoch ))
 
-        - >
-            CTRL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-1)
-        - '[ -n "$CTRL_IP" ] || (echo "Failed to get Controller IP" && exit 1)'
-        - 'echo "Controller: ${CTRL_IP}"'
-        - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-2
-            --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
-            ./src/actuator.py -n 3 -d ${ACTUATOR_ARGS}
-            -s $(docker inspect
-            --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-1)
-        - sleep 10
-        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}
-
-        # NOTE: Fail した時の原因究明用にこの時点のログを保存する
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-1 > controller_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-2 > actuator_log.txt
-
-        - >
-            ACT_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-2)
-        - 'echo "Actuator: ${ACT_IP}"'
-        # Wait for actuator to be ready
-        - URL="http://${ACT_IP}:5001/unit-cooler/api/log_view"
-        - CURL_OPTS="--silent --fail --head --connect-timeout 5 --max-time 10"
-        - >
-            for i in {1..20}; do
-                if docker run --rm ${CURL_IMAGE} ${CURL_OPTS} ${URL} > /dev/null 2>&1; then
-                    echo "Actuator is ready"
-                    break
+                if [ "$diff" -ge 600 ]; then
+                    echo "Stopping container $id (running for $diff seconds)"
+                    docker stop -t 10 "$id" || true
                 fi
-                echo "Waiting for actuator to be ready... ($i/20)"
             done
 
+        - DOCKER_NETWORK=${CI_PROJECT_NAME}-${CI_JOB_NAME}-${CI_JOB_ID}-network
+
+        # 専用ネットワーク作成（プロジェクト固有）
+        - docker network create ${DOCKER_NETWORK}
+
         - >
-            docker run --rm ${CURL_IMAGE} --head
-            http://$(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-2):5001/unit-cooler/api/log_view
+            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
+            --network ${DOCKER_NETWORK} --publish :2222
+            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            ./src/controller.py -d -t 2
 
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-2 > controller_log.txt
-        - docker attach --no-stdin ${CI_JOB_NAME}-${CI_JOB_ID}-2
+        - echo "Container started, checking status..."
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-1 > controller_log.txt
-        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-1
+        - >
+            CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
+        - >
+            CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
+        - 'echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"'
+        - >
+            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+            --network ${DOCKER_NETWORK} --publish :5001
+            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            ./src/actuator.py -n 3 -d ${ACTUATOR_ARGS} -s ${CTRL_HOST} -p ${CTRL_PORT}
+        - sleep 10
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+
+        # NOTE: Fail した時の原因究明用にこの時点のログを保存する
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+
+        - >
+            ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
+        - >
+            ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 5001 | cut -d: -f2)
+        - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
+        # Wait for actuator to be ready
+        - LOG_URL="http://${ACT_HOST}:${ACT_PORT}/unit-cooler/api/log_view"
+        - >
+            timeout 60 bash -c "until curl --fail --connect-timeout 10 --max-time 15 \"${LOG_URL}\" > /dev/null 2>&1;
+            do echo 'Retrying in 5 seconds...'; sleep 5; done" || ACCESS_FAILED=1
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > controller_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+        - |
+            if [ "$ACCESS_FAILED" = "1" ]; then
+                echo "Failed to access App"
+                docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-ACT || true
+                docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL || true
+                docker network rm ${DOCKER_NETWORK} || true
+                exit 1
+            fi
+
+        - docker attach --no-stdin ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL || true
+        - docker network rm ${DOCKER_NETWORK} || true
 
     artifacts:
         when: always
@@ -473,6 +499,8 @@ deploy:
         - job: test-walk-through
           artifacts: false
 
+    before_script: []
+
     script:
         - 'IMAGE="${CI_REGISTRY_IMAGE}:${TAG}"'
         - 'echo "Deploying controller image: $IMAGE"'
@@ -499,16 +527,17 @@ deploy:
 
 renovate:
     stage: renovate
+    dependencies: []
     image:
         name: gitlab.green-rabbit.net:5050/kimata/local-renovate:250715_3b8866ff
 
+    before_script: []
+
     script:
         - renovate --platform gitlab --token ${RENOVATE_TOKEN} --endpoint ${CI_SERVER_URL}/api/v4 ${CI_PROJECT_PATH}
-        # # NOTE: ついでにお掃除
-        #  - docker rm $(docker ps -a --filter "status=exited" -q) || true
     rules:
-        - if: '$CI_COMMIT_BRANCH != "master"'
+        - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
           when: never
-        - if: '$CI_PIPELINE_SOURCE == "schedule"'
+        - if: $CI_PIPELINE_SOURCE == "schedule"
         - changes:
               - renovate.json

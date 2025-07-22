@@ -412,9 +412,6 @@
                         "webapp": {
                             "type": "object",
                             "properties": {
-                                "port": {
-                                    "type": "integer"
-                                },
                                 "data": {
                                     "type": "object",
                                     "properties": {
@@ -428,8 +425,7 @@
                                 }
                             },
                             "required": [
-                                "data",
-                                "port"
+                                "data"
                             ]
                         }
                     },

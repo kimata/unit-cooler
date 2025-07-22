@@ -104,7 +104,6 @@ actuator:
             file: /dev/shm/healthz.actuator.monitor
     web_server:
         webapp:
-            port: 5001
             data:
                 log_file_path: data/hems.unit_cooler.log
 

@@ -3,12 +3,13 @@
 電磁弁を制御してエアコン室外機の冷却を行います。
 
 Usage:
-  actuator.py [-c CONFIG] [-s CONTROL_HOST] [-p PUB_PORT] [-n COUNT] [-d] [-t SPEEDUP] [-D]
+  actuator.py [-c CONFIG] [-s CONTROL_HOST] [-p PUB_PORT] [-l LOG_PORT] [-n COUNT] [-d] [-t SPEEDUP] [-D]
 
 Options:
   -c CONFIG         : CONFIG を設定ファイルとして読み込んで実行します。 [default: config.yaml]
   -s CONTROL_HOST   : コントローラのホスト名を指定します。 [default: localhost]
-  -p PUB_PORT       : ZeroMQ の Pub サーバーを動作させるポートを指定します。 [default: 2222]
+  -p PUB_PORT       : コントローラの ZeroMQ Pub サーバーのポートを指定します。 [default: 2222]
+  -l LOG_PORT       : 動作ログを提供する WEB サーバーのポートを指定します。 [default: 5001]
   -n COUNT          : n 回制御メッセージを受信したら終了します。0 は制限なし。 [default: 0]
   -d                : ダミーモードで実行します。
   -t SPEEDUP        : 時短モード。演算間隔を SPEEDUP 分の一にします。 [default: 1]
@@ -144,6 +145,7 @@ if __name__ == "__main__":
     config_file = args["-c"]
     control_host = os.environ.get("HEMS_CONTROL_HOST", args["-s"])
     pub_port = int(os.environ.get("HEMS_PUB_PORT", args["-p"]))
+    log_port = int(os.environ.get("HEMS_LOG_PORT", args["-l"]))
     dummy_mode = os.environ.get("DUMMY_MODE", args["-d"])
     speedup = int(args["-t"])
     msg_count = int(args["-n"])
@@ -159,7 +161,7 @@ if __name__ == "__main__":
                 {
                     "control_host": control_host,
                     "pub_port": pub_port,
-                    "log_port": config["actuator"]["web_server"]["webapp"]["port"],
+                    "log_port": log_port,
                     "dummy_mode": dummy_mode,
                     "speedup": speedup,
                     "msg_count": msg_count,
