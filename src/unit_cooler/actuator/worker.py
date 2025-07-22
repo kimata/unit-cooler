@@ -313,6 +313,7 @@ def start(executor, worker_def):
 
 
 def term():
+    logging.info("Terminate actuator worker")
     get_should_terminate().set()
 
 
