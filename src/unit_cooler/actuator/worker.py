@@ -31,27 +31,43 @@ import unit_cooler.pubsub.subscribe
 import unit_cooler.util
 
 # グローバル辞書（pytestワーカー毎に独立）
-control_messages = {}
+_control_messages = {}
+_should_terminate = {}
 
 # メッセージの初期値
 MESSAGE_INIT = {"mode_index": 0, "state": unit_cooler.const.COOLING_STATE.IDLE}
 
 
+def get_worker_id():
+    return os.environ.get("PYTEST_XDIST_WORKER", "")
+
+
 def get_last_control_message():
     """グローバル辞書からlast_control_messageを取得"""
-    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "main")
-    if worker_id not in control_messages:
-        control_messages[worker_id] = MESSAGE_INIT.copy()
-    return control_messages[worker_id]
+    worker_id = get_worker_id()
+    if worker_id not in _control_messages:
+        set_last_control_message(MESSAGE_INIT.copy())
+
+    return _control_messages[worker_id]
 
 
 def set_last_control_message(message):
     """グローバル辞書にlast_control_messageを設定"""
-    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "main")
-    control_messages[worker_id] = message
+    _control_messages[get_worker_id()] = message
 
 
-should_terminate = threading.Event()
+def get_should_terminate():
+    return _should_terminate.get(get_worker_id(), None)
+
+
+def init_should_terminate():
+    should_terminate = get_should_terminate()
+
+    if should_terminate is None:
+        _should_terminate[get_worker_id()] = threading.Event()
+
+    else:
+        should_terminate.clear()
 
 
 def collect_environmental_metrics(config, current_message):
@@ -113,7 +129,7 @@ def sleep_until_next_iter(start_time, interval_sec):
     logging.debug("Seep %.1f sec...", sleep_sec)
 
     # should_terminate が設定されるまで待機（最大 sleep_sec 秒）
-    should_terminate.wait(timeout=sleep_sec)
+    get_should_terminate().wait(timeout=sleep_sec)
 
 
 # NOTE: コントローラから制御指示を受け取ってキューに積むワーカ
@@ -138,8 +154,6 @@ def subscribe_worker(config, control_host, pub_port, message_queue, liveness_fil
 
 # NOTE: バルブの状態をモニタするワーカ
 def monitor_worker(config, liveness_file, dummy_mode=False, speedup=1, msg_count=0):
-    global should_terminate
-
     logging.info("Start monitor worker")
 
     interval_sec = config["actuator"]["monitor"]["interval_sec"] / speedup
@@ -170,7 +184,7 @@ def monitor_worker(config, liveness_file, dummy_mode=False, speedup=1, msg_count
 
             my_lib.footprint.update(liveness_file)
 
-            if should_terminate.is_set():
+            if get_should_terminate().is_set():
                 logging.info("Terminate monitor worker")
                 break
 
@@ -194,8 +208,6 @@ def monitor_worker(config, liveness_file, dummy_mode=False, speedup=1, msg_count
 
 # NOTE: バルブを制御するワーカ
 def control_worker(config, message_queue, liveness_file, dummy_mode=False, speedup=1, msg_count=0):  # noqa: PLR0913
-    global should_terminate
-
     logging.info("Start control worker")
 
     if dummy_mode:
@@ -225,7 +237,7 @@ def control_worker(config, message_queue, liveness_file, dummy_mode=False, speed
 
             my_lib.footprint.update(liveness_file)
 
-            if should_terminate.is_set():
+            if get_should_terminate().is_set():
                 logging.info("Terminate control worker")
                 break
 
@@ -290,13 +302,8 @@ def get_worker_def(config, message_queue, setting):
 
 
 def start(executor, worker_def):
-    global should_terminate
-
-    should_terminate.clear()
+    init_should_terminate()
     thread_list = []
-
-    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "main")
-    control_messages[worker_id] = MESSAGE_INIT.copy()
 
     for worker_info in worker_def:
         future = executor.submit(*worker_info["param"])
@@ -306,9 +313,7 @@ def start(executor, worker_def):
 
 
 def term():
-    global should_terminate
-
-    should_terminate.set()
+    get_should_terminate().set()
 
 
 if __name__ == "__main__":
