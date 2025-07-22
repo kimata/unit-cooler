@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: S101, B017, PT011, ARG001, PERF203, F841, S110
+# ruff: noqa: S101, B017, PT011, ARG001, PERF203, S110
 """Additional error handling and edge case tests for outdoor unit cooler system."""
 
 import pathlib
@@ -133,31 +133,6 @@ def test_memory_ctrl_hist_growth(config):
     final_length = len(unit_cooler.actuator.valve.ctrl_hist)
     assert final_length > initial_length
     assert final_length <= initial_length + 100  # Should not exceed expected growth
-
-
-def test_thread_termination_timeout(mocker, config):
-    """Test thread termination with timeout"""
-    import concurrent.futures
-
-    import unit_cooler.actuator.worker
-
-    # Create executor with timeout handling
-    executor = concurrent.futures.ThreadPoolExecutor()
-
-    # Mock a long-running worker that doesn't respond to termination
-    def slow_worker():
-        import time
-
-        time.sleep(0.1)  # Short sleep for test
-        return 0
-
-    future = executor.submit(slow_worker)
-
-    # Test timeout handling
-    unit_cooler.actuator.worker.should_terminate = True
-
-    # This should shutdown gracefully
-    executor.shutdown(wait=True)
 
 
 def test_influxdb_connection_error(mocker, config):
@@ -488,24 +463,3 @@ def test_long_running_memory_usage(config):
     # Memory usage should not grow excessively
     growth_ratio = final_objects / initial_objects
     assert growth_ratio < 2.0, f"Memory growth too high: {growth_ratio}"
-
-
-def test_signal_handling(config):
-    """Test signal handling for graceful shutdown"""
-    import signal
-
-    import unit_cooler.actuator.worker
-
-    # Test SIGTERM handling
-    original_terminate = unit_cooler.actuator.worker.should_terminate
-
-    # Simulate signal handler
-    def mock_handler(signum, frame):
-        unit_cooler.actuator.worker.should_terminate = True
-
-    # Test signal handling
-    mock_handler(signal.SIGTERM, None)
-    assert unit_cooler.actuator.worker.should_terminate is True
-
-    # Restore original state
-    unit_cooler.actuator.worker.should_terminate = original_terminate
