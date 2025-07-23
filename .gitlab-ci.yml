@@ -353,6 +353,11 @@ test-webui-docker:
                 exit 1
             fi
 
+        # NOTE: Fail した時の原因究明用にこの時点のログを保存する
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-WEB > webui_log.txt
+
         - >
             uv run pytest tests/test_playwright.py --host ${WEB_HOST} --port ${WEB_PORT}
 
