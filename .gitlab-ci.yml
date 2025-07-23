@@ -252,7 +252,6 @@ test-controller-regular:
 test-actuator-sample:
     extends: .test-actuator-base
     variables:
-        CONTROL_HOST: 192.168.0.20
         ACTUATOR_ARGS: "-c config.example.yaml"
 
 test-actuator-regular:
