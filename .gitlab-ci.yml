@@ -199,7 +199,7 @@ test-controller-regular:
             CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
         - >
             CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
-        - 'echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"'
+        - echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
             --network ${DOCKER_NETWORK} --publish :5001
@@ -219,7 +219,7 @@ test-controller-regular:
             ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
         - >
             ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
-        - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
+        - echo "Actuator: ${ACT_HOST}:${ACT_PORT}"
         # Wait for actuator to be ready
         - LOG_URL="http://${ACT_HOST}:${ACT_PORT}/unit-cooler/api/log_view"
         - >
@@ -260,7 +260,9 @@ test-actuator-regular:
         ACTUATOR_ARGS: ""
 
 test-webui-docker:
-    extends: [.docker-test-base, .cache-base]
+    extends:
+        - .docker-test-base
+        - .cache-base
     stage: test
     needs:
         - generate-tag
@@ -317,7 +319,7 @@ test-webui-docker:
             ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
         - >
             ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
-        - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
+        - echo "Actuator: ${ACT_HOST}:${ACT_PORT}"
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-WEB
             --network ${DOCKER_NETWORK} --publish :5000
@@ -483,7 +485,7 @@ test-healthz-docker:
         - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-ACT || true
         - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-WEB || true
 
-        - docker network rm ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network || true
+        - docker network rm ${DOCKER_NETWORK} || true
     artifacts:
         when: always
         paths:
