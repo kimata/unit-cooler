@@ -1430,14 +1430,9 @@ def test_actuator_leak(  # noqa: PLR0913
     # NOTE: set_cooling_working が呼ばれるまで待つ
     wait_for_set_cooling_working()
 
-    move_to(time_machine, 1)
-    time.sleep(0.5)
-    move_to(time_machine, 2)
-    time.sleep(0.5)
-    move_to(time_machine, 3)
-    time.sleep(0.5)
-    move_to(time_machine, 4)
-    time.sleep(0.5)
+    for i in range(1, 10):
+        move_to(time_machine, i)
+        time.sleep(0.5)
 
     controller.wait_and_term(*control_handle)
     actuator.wait_and_term(*actuator_handle)
