@@ -1245,8 +1245,8 @@ def test_actuator_open(  # noqa: PLR0913
 
     move_to(time_machine, 0)
 
-    component_manager.start_actuator(config, server_port, log_port, msg_count=10)
-    component_manager.start_controller(config, server_port, real_port, msg_count=10)
+    component_manager.start_actuator(config, server_port, log_port, msg_count=15)
+    component_manager.start_controller(config, server_port, real_port, msg_count=15)
 
     # NOTE: set_cooling_working が呼ばれるまで最大30秒待つ
     wait_for_set_cooling_working()
@@ -1254,20 +1254,16 @@ def test_actuator_open(  # noqa: PLR0913
     time.sleep(1)  # Keep original timing for error detection
     move_to(time_machine, 1)
 
-    time.sleep(0.5)  # Slightly reduced from 1 for testing
+    time.sleep(0.5)
     move_to(time_machine, 2)
 
     standard_mocks.patch("unit_cooler.controller.engine.dummy_cooling_mode", return_value={"cooling_mode": 0})
 
-    time.sleep(0.5)  # Slightly reduced from 1 for testing
-    move_to(time_machine, 3)
-    time.sleep(0.5)  # Slightly reduced from 1 for testing
-    move_to(time_machine, 4)
-    time.sleep(0.5)  # Slightly reduced from 1 for testing
-    move_to(time_machine, 5)
-    time.sleep(0.5)  # Slightly reduced from 1 for testing
-    move_to(time_machine, 6)
-    time.sleep(0.5)  # Slightly reduced from 1 for testing
+    time.sleep(0.5)
+
+    for i in range(3, 10):
+        move_to(time_machine, i)
+        time.sleep(0.5)
 
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
