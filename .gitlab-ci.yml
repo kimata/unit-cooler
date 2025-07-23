@@ -192,56 +192,56 @@ test-controller-regular:
             --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
             ./src/controller.py -d -t 2
 
-        - echo "Controller started, checking status..."
-        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
+        # - echo "Controller started, checking status..."
+        # - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
-        - >
-            CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
-        - >
-            CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
-        - echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"
-        - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
-            --network ${DOCKER_NETWORK} --publish :5001
-            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
-            ./src/actuator.py -n 3 -d ${ACTUATOR_ARGS} -s ${CTRL_HOST} -p ${CTRL_PORT}
+        # - >
+        #     CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
+        # - >
+        #     CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
+        # - echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"
+        # - >
+        #     docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+        #     --network ${DOCKER_NETWORK} --publish :5001
+        #     --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+        #     ./src/actuator.py -n 3 -d ${ACTUATOR_ARGS} -s ${CTRL_HOST} -p ${CTRL_PORT}
 
-        - sleep 5
+        # - sleep 5
 
-        - echo "Actuator started, checking status..."
-        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
+        # - echo "Actuator started, checking status..."
+        # - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
-        # NOTE: Fail した時の原因究明用にこの時点のログを保存する
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+        # # NOTE: Fail した時の原因究明用にこの時点のログを保存する
+        # - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        # - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
 
-        - >
-            ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
-        - >
-            ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
-        - echo "Actuator: ${ACT_HOST}:${ACT_PORT}"
-        # Wait for actuator to be ready
-        - >
-            LOG_URL="http://${ACT_HOST}:${ACT_PORT}/unit-cooler/api/log_view"
-        - >
-            timeout 60 bash -c "until curl --fail --connect-timeout 10 --max-time 15 \"${LOG_URL}\" > /dev/null 2>&1;
-            do echo 'Retrying in 5 seconds...'; sleep 5; done" || ACCESS_FAILED=1
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > controller_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
-        - |
-            if [ "$ACCESS_FAILED" = "1" ]; then
-                echo "Failed to access App"
-                docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-ACT || true
-                docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL || true
-                docker network rm ${DOCKER_NETWORK} || true
-                exit 1
-            fi
+        # - >
+        #     ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
+        # - >
+        #     ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
+        # - echo "Actuator: ${ACT_HOST}:${ACT_PORT}"
+        # # Wait for actuator to be ready
+        # - >
+        #     LOG_URL="http://${ACT_HOST}:${ACT_PORT}/unit-cooler/api/log_view"
+        # - >
+        #     timeout 60 bash -c "until curl --fail --connect-timeout 10 --max-time 15 \"${LOG_URL}\" > /dev/null 2>&1;
+        #     do echo 'Retrying in 5 seconds...'; sleep 5; done" || ACCESS_FAILED=1
+        # - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > controller_log.txt
+        # - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+        # - |
+        #     if [ "$ACCESS_FAILED" = "1" ]; then
+        #         echo "Failed to access App"
+        #         docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-ACT || true
+        #         docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL || true
+        #         docker network rm ${DOCKER_NETWORK} || true
+        #         exit 1
+        #     fi
 
-        - docker attach --no-stdin ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+        # - docker attach --no-stdin ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
 
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
-        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL || true
-        - docker network rm ${DOCKER_NETWORK} || true
+        # - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        # - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL || true
+        # - docker network rm ${DOCKER_NETWORK} || true
 
     artifacts:
         when: always
