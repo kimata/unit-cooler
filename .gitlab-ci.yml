@@ -192,14 +192,14 @@ test-controller-regular:
             --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
             ./src/controller.py -d -t 2
 
-        - echo "Controller started, checking status..."
+        - 'echo "Controller started, checking status..."'
         - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
         - >
             CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
         - >
             CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
-        - echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"
+        - 'echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"'
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
             --network ${DOCKER_NETWORK} --publish :5001
@@ -208,7 +208,7 @@ test-controller-regular:
 
         - sleep 5
 
-        - echo "Actuator started, checking status..."
+        - 'echo "Actuator started, checking status..."'
         - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
         # NOTE: Fail した時の原因究明用にこの時点のログを保存する
