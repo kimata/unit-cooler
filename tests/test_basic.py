@@ -797,7 +797,7 @@ def test_actuator_log(  # noqa: PLR0913, PLR0915
     # NOTE: set_cooling_working が呼ばれるまで最大30秒待つ
     wait_for_set_cooling_working()
 
-    time.sleep(1)
+    time.sleep(2)
 
     res = requests.get(
         f"http://localhost:{log_port}/{my_lib.webapp.config.URL_PREFIX}/api/log_view",
