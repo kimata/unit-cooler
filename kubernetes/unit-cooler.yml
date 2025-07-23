@@ -40,7 +40,7 @@ spec:
         spec:
             containers:
                 - name: unit-cooler-controller
-                  image: registry.green-rabbit.net:5000/kimata/outdoor_unit_cooler:latest
+                  image: registry.green-rabbit.net:5000/kimata/unit-cooler:latest
                   imagePullPolicy: Always
                   command: ["./src/controller.py"]
                   ports:
@@ -94,7 +94,7 @@ spec:
                       path: /dev/ttyAMA0
             containers:
                 - name: unit-cooler-actuator
-                  image: registry.green-rabbit.net:5000/kimata/outdoor_unit_cooler:latest
+                  image: registry.green-rabbit.net:5000/kimata/unit-cooler:latest
                   imagePullPolicy: Always
                   command: ["./src/actuator.py"]
                   env:
@@ -166,7 +166,7 @@ spec:
         spec:
             containers:
                 - name: unit-cooler-controller
-                  image: registry.green-rabbit.net:5000/kimata/outdoor_unit_cooler:latest
+                  image: registry.green-rabbit.net:5000/kimata/unit-cooler:latest
                   imagePullPolicy: Always
                   command: ["./src/webui.py"]
                   ports:

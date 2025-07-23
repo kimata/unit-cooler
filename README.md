@@ -2,7 +2,7 @@
 
 Raspberry Pi を使ったエアコン室外機自動冷却システム
 
-[![Regression](https://github.com/kimata/outdoor_unit_cooler/actions/workflows/regression.yaml/badge.svg)](https://github.com/kimata/outdoor_unit_cooler/actions/workflows/regression.yaml)
+[![Regression](https://github.com/kimata/unit-cooler/actions/workflows/regression.yaml/badge.svg)](https://github.com/kimata/unit-cooler/actions/workflows/regression.yaml)
 
 ## 📑 目次
 
@@ -53,7 +53,7 @@ Raspberry Pi を使ったエアコン室外機自動冷却システム
 
 実際の動作を体験できるデモサイト：
 
-🔗 https://unit-cooler-webui-demo.kubernetes.green-rabbit.net/unit_cooler/
+🔗 https://unit-cooler-webui-demo.kubernetes.green-rabbit.net/unit-cooler/
 
 ## 🏗️ システム構成
 
@@ -274,8 +274,8 @@ sequenceDiagram
 ### 1. リポジトリのクローン
 
 ```bash
-git clone https://github.com/kimata/outdoor_unit_cooler.git
-cd outdoor_unit_cooler
+git clone https://github.com/kimata/unit-cooler.git
+cd unit-cooler
 ```
 
 ### 2. Raspberry Pi の設定
@@ -472,22 +472,22 @@ uv add pandas scipy  # 相関分析・統計計算用
 
 ### システム状態
 
-- `GET /unit_cooler/api/status` - システム全体の状態取得
-- `GET /unit_cooler/api/sensor` - センサーデータ取得
+- `GET /unit-cooler/api/status` - システム全体の状態取得
+- `GET /unit-cooler/api/sensor` - センサーデータ取得
 
 ### 制御
 
-- `POST /unit_cooler/api/valve_ctrl` - 電磁弁の手動制御
-- `GET /unit_cooler/api/mode` - 動作モード取得/設定
+- `POST /unit-cooler/api/valve_ctrl` - 電磁弁の手動制御
+- `GET /unit-cooler/api/mode` - 動作モード取得/設定
 
 ### ログ・履歴
 
-- `GET /unit_cooler/api/log` - システムログ取得
-- `GET /unit_cooler/api/log_view` - ログビューア
+- `GET /unit-cooler/api/log` - システムログ取得
+- `GET /unit-cooler/api/log_view` - ログビューア
 
 ### メトリクス
 
-- `GET /unit_cooler/api/metrics` - 包括的メトリクスダッシュボード
+- `GET /unit-cooler/api/metrics` - 包括的メトリクスダッシュボード
 
 ## ☸️ Kubernetes デプロイ
 
@@ -498,11 +498,12 @@ Kubernetes用の設定ファイルが含まれています：
 kubectl create namespace hems
 
 # デプロイ
-kubectl apply -f kubernetes/outdoor_unit_cooler.yml
+kubectl apply -f kubernetes/unit-cooler.yml
 
 # 状態確認
 kubectl get pods -n hems
-kubectl logs -n hems -l app=outdoor-unit-cooler
+kubectl logs -n hems -l app=unit-cooler-controller
+kubectl logs -n hems -l app=unit-cooler-actuator
 ```
 
 詳細は設定ファイルをカスタマイズしてご利用ください。
@@ -543,8 +544,8 @@ docker-compose logs -f webui
 
 GitHub Actions によるCI/CDパイプライン：
 
-- テスト結果: https://kimata.github.io/outdoor_unit_cooler/
-- カバレッジレポート: https://kimata.github.io/outdoor_unit_cooler/coverage/
+- テスト結果: https://kimata.github.io/unit-cooler/
+- カバレッジレポート: https://kimata.github.io/unit-cooler/coverage/
 
 ## 📝 ライセンス
 
@@ -556,6 +557,6 @@ GitHub Actions によるCI/CDパイプライン：
 
 **⭐ このプロジェクトが役に立った場合は、Star をお願いします！**
 
-[🐛 Issue 報告](https://github.com/kimata/outdoor_unit_cooler/issues) | [💡 Feature Request](https://github.com/kimata/outdoor_unit_cooler/issues/new?template=feature_request.md) | [📖 詳細なドキュメント](./docs)
+[🐛 Issue 報告](https://github.com/kimata/unit-cooler/issues) | [💡 Feature Request](https://github.com/kimata/unit-cooler/issues/new?template=feature_request.md) | [📖 詳細なドキュメント](./docs)
 
 </div>
