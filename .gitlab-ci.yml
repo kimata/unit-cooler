@@ -195,10 +195,8 @@ test-controller-regular:
         - echo "Controller started, checking status..."
         - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
-        - >
-            CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
-        - >
-            CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
+        - CTRL_HOST=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
+        - CTRL_PORT=2222
         - 'echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"'
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
@@ -215,10 +213,8 @@ test-controller-regular:
         - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
         - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
 
-        - >
-            ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
-        - >
-            ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
+        - ACT_HOST=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+        - ACT_PORT=5001
         - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
         # Wait for actuator to be ready
         - >
@@ -299,10 +295,8 @@ test-webui-docker:
         - echo "Controller started, checking status..."
         - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
-        - >
-            CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
-        - >
-            CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
+        - CTRL_HOST=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
+        - CTRL_PORT=2222
         - 'echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"'
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
@@ -315,10 +309,8 @@ test-webui-docker:
         - echo "Actuator started, checking status..."
         - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
 
-        - >
-            ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
-        - >
-            ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
+        - ACT_HOST=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+        - ACT_PORT=5001
         - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-WEB
@@ -416,10 +408,8 @@ test-healthz-docker:
         - echo "Controller started, checking status..."
         - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
-        - >
-            CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
-        - >
-            CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
+        - CTRL_HOST=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
+        - CTRL_PORT=2222
         - 'echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"'
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
@@ -432,10 +422,8 @@ test-healthz-docker:
         - echo "Actuator started, checking status..."
         - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
 
-        - >
-            ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
-        - >
-            ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
+        - ACT_HOST=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+        - ACT_PORT=5001
         - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-WEB
