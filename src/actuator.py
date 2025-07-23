@@ -110,8 +110,6 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True):  # 
     import unit_cooler.actuator.web_server
     import unit_cooler.actuator.work_log
 
-    unit_cooler.actuator.worker.term()
-
     ret = 0
     for thread_info in thread_list:
         logging.info("Wait %s finish", thread_info["name"])
@@ -119,6 +117,8 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True):  # 
         if thread_info["future"].result() != 0:
             logging.error("Error occurred in %s", thread_info["name"])
             ret = -1
+
+    unit_cooler.actuator.worker.term()
 
     logging.info("Shutdown executor")
     executor.shutdown(wait=True)

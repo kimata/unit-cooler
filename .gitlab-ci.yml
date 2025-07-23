@@ -192,7 +192,7 @@ test-controller-regular:
             --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
             ./src/controller.py -d -t 2
 
-        - echo "Container started, checking status..."
+        - echo "Controller started, checking status..."
         - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
         - >
@@ -205,8 +205,11 @@ test-controller-regular:
             --network ${DOCKER_NETWORK} --publish :5001
             --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
             ./src/actuator.py -n 3 -d ${ACTUATOR_ARGS} -s ${CTRL_HOST} -p ${CTRL_PORT}
-        - sleep 10
-        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+
+        - sleep 5
+
+        - echo "Actuator started, checking status..."
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
         # NOTE: Fail した時の原因究明用にこの時点のログを保存する
         - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
@@ -264,56 +267,81 @@ test-webui-docker:
         - build-image
         - test-prepare
     script:
-        - uv run playwright install --with-deps chromium
-        - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-1
-            --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG} ./src/controller.py -d
+        # クリーンアップ: 古いコンテナを停止
+        - |
+            for id in $(docker ps --filter "label=job=${CI_PROJECT_NAME}-${CI_JOB_NAME}" --format "{{.ID}}"); do
+                started_at=$(docker inspect --format '{{.State.StartedAt}}' "$id")
+                started_epoch=$(date --date="$started_at" +%s)
+                now_epoch=$(date +%s)
+                diff=$(( now_epoch - started_epoch ))
+
+                if [ "$diff" -ge 600 ]; then
+                    echo "Stopping container $id (running for $diff seconds)"
+                    docker stop -t 10 "$id" || true
+                fi
+            done
+
+        - DOCKER_NETWORK=${CI_PROJECT_NAME}-${CI_JOB_NAME}-${CI_JOB_ID}-network
+
+        # 専用ネットワーク作成（プロジェクト固有）
+        - docker network create ${DOCKER_NETWORK}
 
         - >
-            CTRL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-1)
-        - '[ -n "$CTRL_IP" ] || (echo "Failed to get Controller IP" && exit 1)'
-        - 'echo "Controller: ${CTRL_IP}"'
+            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
+            --network ${DOCKER_NETWORK} --publish :2222
+            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            ./src/controller.py -d
+
+        - sleep 5
+
+        - echo "Controller started, checking status..."
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
         - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-2
-            --label job=${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
-            ./src/actuator.py -d
-            -s $(docker inspect
-            --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-1)
+            CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
+        - >
+            CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
+        - 'echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"'
+        - >
+            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+            --network ${DOCKER_NETWORK} --publish :5001
+            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            ./src/actuator.py -d -s ${CTRL_HOST} -p ${CTRL_PORT}
+
+        - sleep 5
+
+        - echo "Actuator started, checking status..."
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
 
         - >
-            ACT_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-2)
-        - '[ -n "$ACT_IP" ] || (echo "Failed to get Actuator IP" && exit 1)'
-        - 'echo "Actuator: ${ACT_IP}"'
-
+            ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
         - >
-            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-3
-            --label job=${CI_JOB_NAME} --publish :5000
-            ${CI_REGISTRY_IMAGE}:${TAG}
-            ./src/webui.py
-            -s $(docker inspect
-            --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-1)
-            -a $(docker inspect
-            --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_JOB_NAME}-${CI_JOB_ID}-2)
+            ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
+        - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
+        - >
+            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-WEB
+            --network ${DOCKER_NETWORK} --publish :5000
+            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            ./src/webui.py -s ${CTRL_HOST} -p ${CTRL_PORT} -a ${ACT_HOST} -l ${ACT_PORT} -d
+
+        - sleep 5
+
+        - echo "WebUI started, checking status..."
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-WEB
 
         # NOTE: Fail した時の原因究明用にこの時点のログを保存する
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-1 > controller_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-2 > actuator_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-3 > webui_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-WEB > webui_log.txt
 
-        - >
-            WEB_PORT=$(docker port "${CI_JOB_NAME}-${CI_JOB_ID}-3" 5000 | cut -d: -f2)
+        - uv run playwright install --with-deps chromium
+
         - >
             WEB_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
         - >
-            WEB_URL="http://${WEB_HOST}:${WEB_PORT}/unit-cooler/"
-        - >
-            echo "WEB_URL: ${WEB_URL}"
+            WEB_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-WEB 5000 | cut -d: -f2)
+        - WEB_URL="http://${WEB_HOST}:${WEB_PORT}/unit-cooler/"
+        - echo "WEB_URL: ${WEB_URL}"
 
         - >
             timeout 60 bash -c "until curl --fail --connect-timeout 5 --max-time 10 \"${WEB_URL}\" > /dev/null 2>&1;
@@ -321,21 +349,25 @@ test-webui-docker:
         - |
             if [ "$ACCESS_FAILED" = "1" ]; then
                 echo "Failed to access WEB app"
-                docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-1 > controller_log.txt
-                docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-2 > actuator_log.txt
-                docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-3 > webui_log.txt
+                docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+                docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+                docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-WEB > webui_log.txt
                 exit 1
             fi
 
         - >
             uv run pytest tests/test_playwright.py --host ${WEB_HOST} --port ${WEB_PORT}
 
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-1 > controller_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-2 > actuator_log.txt
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-3 > webui_log.txt
-        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-1
-        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-2
-        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-3
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-WEB > webui_log.txt
+
+        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL || true
+        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-ACT || true
+        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-WEB || true
+
+        - docker network rm ${DOCKER_NETWORK} || true
+
     artifacts:
         when: always
         paths:
@@ -353,65 +385,72 @@ test-healthz-docker:
 
     script:
         # クリーンアップ: 古いコンテナを停止
-        - >
-            docker ps --filter "label=job=${CI_JOB_NAME}" --format "{{.ID}}" |
-            xargs -r docker stop -t 10 || true
+        - |
+            for id in $(docker ps --filter "label=job=${CI_PROJECT_NAME}-${CI_JOB_NAME}" --format "{{.ID}}"); do
+                started_at=$(docker inspect --format '{{.State.StartedAt}}' "$id")
+                started_epoch=$(date --date="$started_at" +%s)
+                now_epoch=$(date +%s)
+                diff=$(( now_epoch - started_epoch ))
 
-        # クリーンアップ: 古いネットワークを削除
-        - docker network rm ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network 2>/dev/null || true
+                if [ "$diff" -ge 600 ]; then
+                    echo "Stopping container $id (running for $diff seconds)"
+                    docker stop -t 10 "$id" || true
+                fi
+            done
+
+        - DOCKER_NETWORK=${CI_PROJECT_NAME}-${CI_JOB_NAME}-${CI_JOB_ID}-network
 
         # 専用ネットワーク作成（プロジェクト固有）
-        - docker network create ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network
-        - >
-            docker run --rm --detach=true --tty=true
-            --name ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL
-            --label job=${CI_JOB_NAME}
-            --network ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network
-            ${CI_REGISTRY_IMAGE}:${TAG} ./src/controller.py
+        - docker network create ${DOCKER_NETWORK}
 
         - >
-            CTRL_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL)
-        - 'echo "Controller: ${CTRL_IP}"'
-        - >
-            docker run --rm --detach=true --tty=true
-            --name ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT
-            --label job=${CI_JOB_NAME}
-            --network ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network
-            ${CI_REGISTRY_IMAGE}:${TAG}
-            ./src/actuator.py -d
-            -s $(docker inspect
-            --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL)
+            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
+            --network ${DOCKER_NETWORK} --publish :2222
+            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            ./src/controller.py
+
+        - sleep 5
+
+        - echo "Controller started, checking status..."
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
 
         - >
-            ACT_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT)
-        - '[ -n "$ACT_IP" ] || (echo "Failed to get Actuator IP" && exit 1)'
-        - 'echo "Actuator: ${ACT_IP}"'
+            CTRL_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
+        - >
+            CTRL_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL 2222 | cut -d: -f2)
+        - 'echo "Controller: ${CTRL_HOST}:${CTRL_PORT}"'
+        - >
+            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
+            --network ${DOCKER_NETWORK} --publish :5001
+            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            ./src/actuator.py -d -s ${CTRL_HOST} -p ${CTRL_PORT}
+
+        - sleep 5
+
+        - echo "Actuator started, checking status..."
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
 
         - >
-            docker run --rm --detach=true --tty=true
-            --name ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB
-            --label job=${CI_JOB_NAME}
-            --network ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network
-            ${CI_REGISTRY_IMAGE}:${TAG}
-            ./src/webui.py
-            -s $(docker inspect
-            --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL)
-            -a $(docker inspect
-            --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-            ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT)
+            ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
+        - >
+            ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
+        - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
+        - >
+            docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-WEB
+            --network ${DOCKER_NETWORK} --publish :5000
+            --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
+            ./src/webui.py -s ${CTRL_HOST} -p ${CTRL_PORT} -a ${ACT_HOST} -l ${ACT_PORT} -d
 
-        - echo "Containers started, checking status..."
-        - docker ps | grep ${CI_PROJECT_NAME}-${CI_JOB_NAME}
+        - sleep 5
+
+        - echo "WebUI started, checking status..."
+        - docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-WEB
 
         # Controllerの初回liveness更新を確認
         - echo "Waiting for controller to start updating liveness..."
         - >
             for i in {1..20}; do
-                if docker exec ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL ls /dev/shm/healthz.controller 2>/dev/null; then
+                if docker exec ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL ls /dev/shm/healthz.controller 2>/dev/null; then
                     echo "Controller liveness file created after $i attempts"
                     break
                 fi
@@ -420,31 +459,30 @@ test-healthz-docker:
             done
 
         # NOTE: healthz をチェックする前にその時点のログを取得しておく
-        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL > controller_log.txt
-        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT > actuator_log.txt
-        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB > webui_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-WEB > webui_log.txt
 
         # Controllerの状態を確認
         - echo "Checking controller container status..."
         - >
-            docker ps -a --filter name=${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL
+            docker ps -a --filter name=${CI_JOB_NAME}-${CI_JOB_ID}-CTRL
             --format "table {{.Names}}\t{{.Status}}\t{{.State}}"
 
         # ヘルスチェック実行
         - echo "Running health checks..."
-        - docker exec ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL ./src/healthz.py -m CTRL
-        - docker exec ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT ./src/healthz.py -m ACT
-        - docker exec ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB ./src/healthz.py -m WEB
+        - docker exec ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL ./src/healthz.py -m CTRL
+        - docker exec ${CI_JOB_NAME}-${CI_JOB_ID}-ACT ./src/healthz.py -m ACT
+        - docker exec ${CI_JOB_NAME}-${CI_JOB_ID}-WEB ./src/healthz.py -m WEB
 
-        # 最終ログ取得
-        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL > controller_log.txt
-        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT > actuator_log.txt
-        - docker logs ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB > webui_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-WEB > webui_log.txt
 
-        # クリーンアップ
-        - docker stop ${CI_PROJECT_NAME}-${CI_JOB_NAME}-CTRL || true
-        - docker stop ${CI_PROJECT_NAME}-${CI_JOB_NAME}-ACT || true
-        - docker stop ${CI_PROJECT_NAME}-${CI_JOB_NAME}-WEB || true
+        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL || true
+        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-ACT || true
+        - docker stop ${CI_JOB_NAME}-${CI_JOB_ID}-WEB || true
+
         - docker network rm ${CI_PROJECT_NAME}-${CI_JOB_NAME}-network || true
     artifacts:
         when: always

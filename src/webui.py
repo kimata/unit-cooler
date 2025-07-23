@@ -3,13 +3,14 @@
 エアコン室外機冷却システムの Web UI です。
 
 Usage:
-  webapp.py [-c CONFIG] [-s CONTROL_HOST] [-p PUB_PORT] [-a ACTUATOR_HOST] [-n COUNT] [-D] [-d]
+  webapp.py [-c CONFIG] [-s CONTROL_HOST] [-p PUB_PORT] [-a ACTUATOR_HOST] [-l LOG_PORT] [-n COUNT] [-D] [-d]
 
 Options:
   -c CONFIG         : CONFIG を設定ファイルとして読み込んで実行します。 [default: config.yaml]
   -s CONTROL_HOST   : コントローラのホスト名を指定します。 [default: localhost]
   -p PUB_PORT       : ZeroMQ の Pub サーバーを動作させるポートを指定します。 [default: 2222]
   -a ACTUATOR_HOST  : アクチュエータのホスト名を指定します。 [default: localhost]
+  -l LOG_PORT       : 動作ログを提供するアクチュエータの WEB サーバーのポートを指定します。 [default: 5001]
   -n COUNT          : n 回制御メッセージを受信したら終了します。0 は制限なし。 [default: 0]
   -d                : ダミーモードで実行します。
   -D                : デバッグモードで動作します。
@@ -164,6 +165,7 @@ if __name__ == "__main__":
     control_host = os.environ.get("HEMS_CONTROL_HOST", args["-s"])
     pub_port = int(os.environ.get("HEMS_PUB_PORT", args["-p"]))
     actuator_host = os.environ.get("HEMS_ACTUATOR_HOST", args["-a"])
+    log_port = int(os.environ.get("HEMS_LOG_PORT", args["-l"]))
     dummy_mode = args["-d"]
     msg_count = int(args["-n"])
     debug_mode = args["-D"]
@@ -178,7 +180,7 @@ if __name__ == "__main__":
             "control_host": control_host,
             "pub_port": pub_port,
             "actuator_host": actuator_host,
-            "log_port": config["actuator"]["web_server"]["webapp"]["port"],
+            "log_port": log_port,
             "dummy_mode": dummy_mode,
             "msg_count": msg_count,
         },
