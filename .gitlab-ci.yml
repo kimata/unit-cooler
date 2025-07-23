@@ -202,7 +202,7 @@ test-controller-regular:
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-ACT
             --network ${DOCKER_NETWORK} --publish :5001
             --label job=${CI_PROJECT_NAME}-${CI_JOB_NAME} ${CI_REGISTRY_IMAGE}:${TAG}
-            ./src/actuator.py -n 3 -d ${ACTUATOR_ARGS} -s ${CTRL_HOST} -p ${CTRL_PORT}
+            ./src/actuator.py -n 5 -d ${ACTUATOR_ARGS} -s ${CTRL_HOST} -p ${CTRL_PORT}
 
         - sleep 5
 
