@@ -319,7 +319,7 @@ test-webui-docker:
             ACT_HOST=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
         - >
             ACT_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
-        - echo "Actuator: ${ACT_HOST}:${ACT_PORT}"
+        - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
         - >
             docker run --rm --detach=true --tty=true --name ${CI_JOB_NAME}-${CI_JOB_ID}-WEB
             --network ${DOCKER_NETWORK} --publish :5000
