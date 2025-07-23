@@ -1266,6 +1266,8 @@ def test_actuator_open(  # noqa: PLR0913
     time.sleep(0.5)  # Slightly reduced from 1 for testing
     move_to(time_machine, 5)
     time.sleep(0.5)  # Slightly reduced from 1 for testing
+    move_to(time_machine, 6)
+    time.sleep(0.5)  # Slightly reduced from 1 for testing
 
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
