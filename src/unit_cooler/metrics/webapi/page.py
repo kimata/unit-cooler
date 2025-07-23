@@ -53,19 +53,22 @@ def metrics_view():
         # メトリクス収集器を取得
         collector = get_metrics_collector(metrics_data_path)
 
-        # 最近100日間のデータを取得
+        # 全期間のデータを取得（制限なし）
         end_time = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Tokyo"))
-        start_time = end_time - datetime.timedelta(days=100)
+        start_time = None  # 無制限
 
-        minute_data = collector.get_minute_data(start_time, end_time, limit=144000)  # 100日分
-        hourly_data = collector.get_hourly_data(start_time, end_time, limit=2400)  # 100日分
-        error_data = collector.get_error_data(start_time, end_time, limit=1000)
+        minute_data = collector.get_minute_data(start_time, end_time)
+        hourly_data = collector.get_hourly_data(start_time, end_time)
+        error_data = collector.get_error_data(start_time, end_time)
 
         # 統計データを生成
         stats = generate_statistics(minute_data, hourly_data, error_data)
 
+        # データ期間情報を取得
+        period_info = get_data_period_info(minute_data, hourly_data)
+
         # HTMLを生成
-        html_content = generate_metrics_html(stats, minute_data, hourly_data)
+        html_content = generate_metrics_html(stats, minute_data, hourly_data, period_info)
 
         return flask.Response(html_content, mimetype="text/html")
 
@@ -151,6 +154,54 @@ def generate_cooler_metrics_icon():
 
     # 32x32に縮小してアンチエイリアス効果を得る
     return img.resize((size, size), Image.LANCZOS)
+
+
+def get_data_period_info(minute_data: list[dict], hourly_data: list[dict]) -> dict:
+    """データ期間の情報を取得"""
+    all_data = minute_data + hourly_data
+    if not all_data:
+        return {"start_date": None, "end_date": None, "total_days": 0, "period_text": "データなし"}
+
+    # タイムスタンプを解析
+    timestamps = []
+    for data in all_data:
+        if data.get("timestamp"):
+            try:
+                if isinstance(data["timestamp"], str):
+                    if "T" in data["timestamp"]:
+                        dt = datetime.datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
+                    else:
+                        dt = datetime.datetime.strptime(data["timestamp"], "%Y-%m-%d %H:%M:%S").replace(
+                            tzinfo=zoneinfo.ZoneInfo("Asia/Tokyo")
+                        )
+                else:
+                    dt = data["timestamp"]
+                timestamps.append(dt)
+            except Exception:
+                logging.debug("Failed to parse timestamp: %s", data["timestamp"])
+
+    if not timestamps:
+        return {
+            "start_date": None,
+            "end_date": None,
+            "total_days": 0,
+            "period_text": "タイムスタンプ情報なし",
+        }
+
+    start_date = min(timestamps)
+    end_date = max(timestamps)
+    total_days = (end_date - start_date).days + 1
+
+    # 期間テキストを生成
+    start_str = start_date.strftime("%Y年%m月%d日")
+    period_text = f"過去{total_days}日間（{start_str}〜）の冷却システム統計"
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "total_days": total_days,
+        "period_text": period_text,
+    }
 
 
 def generate_statistics(minute_data: list[dict], hourly_data: list[dict], error_data: list[dict]) -> dict:
@@ -461,7 +512,9 @@ def prepare_chart_data(minute_data: list[dict], hourly_data: list[dict]) -> dict
     }
 
 
-def generate_metrics_html(stats: dict, minute_data: list[dict], hourly_data: list[dict]) -> str:
+def generate_metrics_html(
+    stats: dict, minute_data: list[dict], hourly_data: list[dict], period_info: dict
+) -> str:
     """Bulma CSSを使用したメトリクスHTMLを生成"""
     # JavaScript用データを準備
     chart_data = prepare_chart_data(minute_data, hourly_data)
@@ -529,7 +582,7 @@ def generate_metrics_html(stats: dict, minute_data: list[dict], hourly_data: lis
                     <span class="icon is-large"><i class="fas fa-snowflake"></i></span>
                     室外機冷却システム メトリクス ダッシュボード
                 </h1>
-                <p class="subtitle has-text-centered">過去30日間の冷却システム統計</p>
+                <p class="subtitle has-text-centered">{period_info["period_text"]}</p>
 
                 <!-- 基本統計 -->
                 {generate_basic_stats_section(stats)}
@@ -584,7 +637,7 @@ def generate_basic_stats_section(stats: dict) -> str:
     <div class="section">
         <h2 class="title is-4 permalink-header" id="basic-stats">
             <span class="icon"><i class="fas fa-chart-bar"></i></span>
-            基本統計（過去100日間）
+            基本統計
             <span class="permalink-icon" onclick="copyPermalink('basic-stats')">
                 <i class="fas fa-link"></i>
             </span>
