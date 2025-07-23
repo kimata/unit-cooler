@@ -216,9 +216,13 @@ test-controller-regular:
         - ACT_HOST=${CI_JOB_NAME}-${CI_JOB_ID}-ACT
         - ACT_PORT=5001
         - 'echo "Actuator: ${ACT_HOST}:${ACT_PORT}"'
-        # Wait for actuator to be ready
+        # Wait for actuator to be ready (from host)
         - >
-            LOG_URL="http://${ACT_HOST}:${ACT_PORT}/unit-cooler/api/log_view"
+            ACT_HOST_IP=$(docker network inspect bridge --format="{{range .IPAM.Config}}{{.Gateway}}{{end}}")
+        - >
+            ACT_HOST_PORT=$(docker port ${CI_JOB_NAME}-${CI_JOB_ID}-ACT 5001 | cut -d: -f2)
+        - >
+            LOG_URL="http://${ACT_HOST_IP}:${ACT_HOST_PORT}/unit-cooler/api/log_view"
         - >
             timeout 60 bash -c "until curl --fail --connect-timeout 10 --max-time 15 \"${LOG_URL}\" > /dev/null 2>&1;
             do echo 'Retrying in 5 seconds...'; sleep 5; done" || ACCESS_FAILED=1
