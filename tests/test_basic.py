@@ -8,7 +8,7 @@ import os
 import pathlib
 import sys
 import time
-from unittest import mock
+import unittest
 
 import my_lib.notify.slack
 import my_lib.webapp.config
@@ -34,7 +34,7 @@ SCHEMA_CONFIG = "config.schema"
 
 @pytest.fixture(scope="session", autouse=True)
 def env_mock():
-    with mock.patch.dict(
+    with unittest.mock.patch.dict(
         "os.environ",
         {
             "TEST": "true",
@@ -46,7 +46,7 @@ def env_mock():
 
 @pytest.fixture(scope="session", autouse=True)
 def slack_mock():
-    with mock.patch(
+    with unittest.mock.patch(
         "my_lib.notify.slack.slack_sdk.web.client.WebClient.chat_postMessage",
         return_value={"ok": True, "ts": "1234567890.123456"},
     ) as fixture:
@@ -87,7 +87,7 @@ def _clear(config):
     import my_lib.footprint
     import my_lib.webapp.log
 
-    with mock.patch.dict("os.environ", {"DUMMY_MODE": "true"}):
+    with unittest.mock.patch.dict("os.environ", {"DUMMY_MODE": "true"}):
         import unit_cooler.actuator.control
         import unit_cooler.actuator.valve
         import unit_cooler.actuator.work_log
@@ -119,7 +119,7 @@ def _clear(config):
 
 @pytest.fixture(autouse=True)
 def fluent_mock():
-    with mock.patch("fluent.sender.FluentSender.emit") as fixture:
+    with unittest.mock.patch("fluent.sender.FluentSender.emit") as fixture:
 
         def emit_mock(label, data):  # noqa: ARG001
             return True
@@ -2189,7 +2189,7 @@ def test_webui(mocker, config, server_port, real_port, log_port):  # noqa: PLR09
     time.sleep(5)
 
     # Temporarily override DUMMY_MODE to avoid stop_day=7
-    with mock.patch.dict(os.environ, {"DUMMY_MODE": "false"}):
+    with unittest.mock.patch.dict(os.environ, {"DUMMY_MODE": "false"}):
         res = client.get(f"{my_lib.webapp.config.URL_PREFIX}/api/proxy/json/api/log_view")
         assert res.status_code == 200
         assert "data" in res.json
@@ -2275,10 +2275,10 @@ def test_webui_dummy_mode(standard_mocks, config, server_port, real_port, log_po
     assert "cooler_status" in res.json
     assert "outdoor_status" in res.json
 
-    with mock.patch(
+    with unittest.mock.patch(
         "flask.wrappers.Response.status_code",
         return_value=301,
-        new_callable=mock.PropertyMock,
+        new_callable=unittest.mock.PropertyMock,
     ):
         res = client.get(f"{my_lib.webapp.config.URL_PREFIX}/", headers={"Accept-Encoding": "gzip"})
         assert res.status_code == 301

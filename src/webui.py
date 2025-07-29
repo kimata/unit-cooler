@@ -3,7 +3,7 @@
 エアコン室外機冷却システムの Web UI です。
 
 Usage:
-  webapp.py [-c CONFIG] [-s CONTROL_HOST] [-p PUB_PORT] [-a ACTUATOR_HOST] [-l LOG_PORT] [-n COUNT] [-D] [-d]
+  webui.py [-c CONFIG] [-s CONTROL_HOST] [-p PUB_PORT] [-a ACTUATOR_HOST] [-l LOG_PORT] [-n COUNT] [-D] [-d]
 
 Options:
   -c CONFIG         : CONFIG を設定ファイルとして読み込んで実行します。 [default: config.yaml]
@@ -27,13 +27,6 @@ import threading
 import flask
 import flask_cors
 import my_lib.proc_util
-import my_lib.webapp.base
-import my_lib.webapp.config
-import my_lib.webapp.proxy
-import my_lib.webapp.util
-
-import unit_cooler.webui.webapi.cooler_stat
-import unit_cooler.webui.worker
 
 SCHEMA_CONFIG = "config.schema"
 
@@ -85,6 +78,14 @@ def create_app(config, arg):
 
     my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
     my_lib.webapp.config.init(config["webui"])
+
+    import my_lib.webapp.base
+    import my_lib.webapp.config
+    import my_lib.webapp.proxy
+    import my_lib.webapp.util
+
+    import unit_cooler.webui.webapi.cooler_stat
+    import unit_cooler.webui.worker
 
     message_queue = multiprocessing.Manager().Queue(10)
     global worker_thread  # noqa: PLW0603

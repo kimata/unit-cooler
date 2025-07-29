@@ -13,7 +13,6 @@ dayjs.locale("ja");
 dayjs.extend(relativeTime);
 dayjs.extend(localizedFormat);
 
-import preval from "preval.macro";
 import { version as reactVersion } from "react";
 
 import { ApiResponse } from "./lib/ApiResponse";
@@ -153,8 +152,8 @@ function App() {
     }), [sysInfo?.image_build_date, actuatorSysInfo?.uptime, actuatorSysInfo?.load_average]);
 
     const buildInfo = useMemo(() => ({
-        buildDate: dayjs(preval`module.exports = new Date().toUTCString();`).format("LLL"),
-        buildDateFrom: dayjs(preval`module.exports = new Date().toUTCString();`).fromNow()
+        buildDate: dayjs(import.meta.env.VITE_BUILD_DATE || new Date().toISOString()).format("LLL"),
+        buildDateFrom: dayjs(import.meta.env.VITE_BUILD_DATE || new Date().toISOString()).fromNow()
     }), []);
 
 

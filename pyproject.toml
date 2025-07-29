@@ -15,7 +15,7 @@ dependencies = [
     "flask-cors>=5.0.1",
     "docopt-ng>=0.9.0",
     "influxdb-client[ciso]>=1.49.0",
-    "my-lib @ git+https://github.com/kimata/my-py-lib@30bb0cb7bdc8d4b063be302321b37783ebbb2c13",
+    "my-lib @ git+https://github.com/kimata/my-py-lib@527a759ec545a7e7fbb5a51bfd18807c059c9fc3",
     "spidev>=3.7",
     "fluent-logger>=0.11.1",
     "pyzmq>=27.0.0",
@@ -29,7 +29,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pre-commit>=4.2.0",
-    "flaky>=3.8.1",
     "playwright>=1.53.0",
     "pytest-cov>=6.2.1",
     "pytest-html>=4.1.1",
@@ -44,7 +43,6 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
-
 
 [build-system]
 requires = ["hatchling"]
