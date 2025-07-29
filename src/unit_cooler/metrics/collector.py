@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class MetricsCollector:
-    """Metrics collection system focused on cooling mode analysis."""  # noqa: D203
+    """Metrics collection system focused on cooling mode analysis."""
 
     def __init__(self, db_path: str | pathlib.Path = DEFAULT_DB_PATH):
         """Initialize MetricsCollector with database path."""
@@ -252,7 +252,7 @@ class MetricsCollector:
         self,
         start_time: datetime.datetime | None = None,
         end_time: datetime.datetime | None = None,
-        limit: int = 1000,
+        limit: int | None = None,
     ) -> list:
         """Get minute-level metrics data."""
         with self._get_db_connection() as conn:
@@ -270,8 +270,10 @@ class MetricsCollector:
                     params.append(end_time)
                 query += " AND".join(conditions)
 
-            query += " ORDER BY timestamp DESC LIMIT ?"
-            params.append(limit)
+            query += " ORDER BY timestamp DESC"
+            if limit is not None:
+                query += " LIMIT ?"
+                params.append(limit)
 
             return [dict(row) for row in conn.execute(query, params).fetchall()]
 
@@ -279,8 +281,8 @@ class MetricsCollector:
         self,
         start_time: datetime.datetime | None = None,
         end_time: datetime.datetime | None = None,
-        limit: int = 168,
-    ) -> list:  # 1週間分
+        limit: int | None = None,
+    ) -> list:
         """Get hourly-level metrics data."""
         with self._get_db_connection() as conn:
             query = "SELECT * FROM hourly_metrics"
@@ -297,8 +299,10 @@ class MetricsCollector:
                     params.append(end_time)
                 query += " AND".join(conditions)
 
-            query += " ORDER BY timestamp DESC LIMIT ?"
-            params.append(limit)
+            query += " ORDER BY timestamp DESC"
+            if limit is not None:
+                query += " LIMIT ?"
+                params.append(limit)
 
             return [dict(row) for row in conn.execute(query, params).fetchall()]
 
@@ -306,7 +310,7 @@ class MetricsCollector:
         self,
         start_time: datetime.datetime | None = None,
         end_time: datetime.datetime | None = None,
-        limit: int = 100,
+        limit: int | None = None,
     ) -> list:
         """Get error events data."""
         with self._get_db_connection() as conn:
@@ -324,8 +328,10 @@ class MetricsCollector:
                     params.append(end_time)
                 query += " AND".join(conditions)
 
-            query += " ORDER BY timestamp DESC LIMIT ?"
-            params.append(limit)
+            query += " ORDER BY timestamp DESC"
+            if limit is not None:
+                query += " LIMIT ?"
+                params.append(limit)
 
             return [dict(row) for row in conn.execute(query, params).fetchall()]
 

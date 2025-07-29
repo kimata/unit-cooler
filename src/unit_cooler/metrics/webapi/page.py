@@ -57,9 +57,9 @@ def metrics_view():
         end_time = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Tokyo"))
         start_time = None  # 無制限
 
-        minute_data = collector.get_minute_data(start_time, end_time)
-        hourly_data = collector.get_hourly_data(start_time, end_time)
-        error_data = collector.get_error_data(start_time, end_time)
+        minute_data = collector.get_minute_data(start_time, end_time, limit=None)
+        hourly_data = collector.get_hourly_data(start_time, end_time, limit=None)
+        error_data = collector.get_error_data(start_time, end_time, limit=None)
 
         # 統計データを生成
         stats = generate_statistics(minute_data, hourly_data, error_data)
