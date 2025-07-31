@@ -76,11 +76,12 @@ def create_app(config, arg):
 
     logging.info("Using ZMQ server of %s:%d", setting["control_host"], setting["pub_port"])
 
+    import my_lib.webapp.config
+
     my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
     my_lib.webapp.config.init(config["webui"])
 
     import my_lib.webapp.base
-    import my_lib.webapp.config
     import my_lib.webapp.proxy
     import my_lib.webapp.util
 
