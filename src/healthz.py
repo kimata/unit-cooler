@@ -14,7 +14,6 @@ Options:
 
 import logging
 import pathlib
-import sys
 
 import my_lib.healthz
 
@@ -33,6 +32,8 @@ def check_liveness(target_list, port=None):
 
 
 if __name__ == "__main__":
+    import sys
+
     import docopt
     import my_lib.config
     import my_lib.logger
