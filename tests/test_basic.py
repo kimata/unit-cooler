@@ -575,7 +575,7 @@ def test_controller_aircon_invalid(mocker, config, server_port, real_port):
     check_liveness(config, ["actuator", "control"], False)
     check_liveness(config, ["actuator", "monitor"], False)
     check_liveness(config, ["webui", "subscribe"], False)
-    check_notify_slack("データを取得できませんでした。")
+    check_notify_slack("データを取得できませんでした")
 
 
 def test_controller_temp_invalid(mocker, config, server_port, real_port):
