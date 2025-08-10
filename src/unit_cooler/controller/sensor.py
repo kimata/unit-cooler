@@ -298,6 +298,8 @@ def get_sense_data(config):
         stop = "now()"
 
     sense_data = {}
+    failed_sensors = []  # データ取得に失敗したセンサー名を記録
+
     for kind in config["controller"]["sensor"]:
         kind_data = []
         for sensor in config["controller"]["sensor"][kind]:
@@ -324,13 +326,18 @@ def get_sense_data(config):
                     }
                 )
             else:
-                unit_cooler.util.notify_error(
-                    config,
-                    f"{sensor['name']} のデータを取得できませんでした。",
-                )
+                failed_sensors.append(sensor["name"])
                 kind_data.append({"name": sensor["name"], "value": None})
 
         sense_data[kind] = kind_data
+
+    # まとめてエラー通知
+    if failed_sensors:
+        sensor_names = "、".join(failed_sensors)
+        unit_cooler.util.notify_error(
+            config,
+            f"次のセンサーのデータを取得できませんでした: {sensor_names}",
+        )
 
     return sense_data
 

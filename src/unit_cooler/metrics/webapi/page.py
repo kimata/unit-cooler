@@ -170,6 +170,9 @@ def get_data_period_info(minute_data: list[dict], hourly_data: list[dict]) -> di
                 if isinstance(data["timestamp"], str):
                     if "T" in data["timestamp"]:
                         dt = datetime.datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
+                    elif "+" in data["timestamp"] or data["timestamp"].endswith("Z"):
+                        # タイムゾーン付きの場合はそのまま fromisoformat を使用
+                        dt = datetime.datetime.fromisoformat(data["timestamp"])
                     else:
                         dt = datetime.datetime.strptime(data["timestamp"], "%Y-%m-%d %H:%M:%S").replace(
                             tzinfo=zoneinfo.ZoneInfo("Asia/Tokyo")
