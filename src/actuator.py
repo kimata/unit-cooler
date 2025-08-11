@@ -123,6 +123,15 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True):  # 
     logging.info("Shutdown executor")
     executor.shutdown(wait=True)
 
+    # メトリクスコレクターのクローズ
+    from unit_cooler.metrics import get_metrics_collector
+
+    try:
+        metrics_collector = get_metrics_collector()
+        metrics_collector.close()
+    except Exception:
+        logging.exception("Failed to close metrics collector")
+
     unit_cooler.actuator.web_server.term(log_server_handle)
     unit_cooler.actuator.work_log.term()
 

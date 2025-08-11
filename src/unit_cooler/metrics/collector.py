@@ -43,6 +43,11 @@ class MetricsCollector:
     def _init_database(self):
         """Initialize database tables for new metrics schema."""
         with self._get_db_connection() as conn:
+            # WALモードを設定（分散ストレージに適している）
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA wal_autocheckpoint=100")
+
             # 1分毎のメトリクス
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS minute_metrics (
@@ -334,6 +339,28 @@ class MetricsCollector:
                 params.append(limit)
 
             return [dict(row) for row in conn.execute(query, params).fetchall()]
+
+    def close(self):
+        """Clean shutdown of metrics collector."""
+        with self._lock:
+            # 最後のデータを保存
+            now = datetime.datetime.now(TIMEZONE)
+            current_minute = now.replace(second=0, microsecond=0)
+            if self._current_minute_data:
+                self._save_minute_data(current_minute)
+
+            current_hour = now.replace(minute=0, second=0, microsecond=0)
+            if self._current_hour_data.get("valve_operations", 0) > 0:
+                self._save_hour_data(current_hour)
+
+            # WALチェックポイントを実行
+            try:
+                conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                conn.close()
+                logger.info("Metrics database closed cleanly")
+            except Exception:
+                logger.exception("Failed to checkpoint WAL")
 
 
 # Global instance
