@@ -22,6 +22,7 @@ import multiprocessing
 import os
 import pathlib
 import signal
+import sys
 import threading
 
 import flask
@@ -52,7 +53,7 @@ def term():
 
     # プロセス終了
     logging.info("Graceful shutdown completed")
-    os._exit(0)
+    sys.exit(0)
 
 
 def signal_handler(signum, _frame):

@@ -42,7 +42,7 @@ def app_url(host, port):
 
 ######################################################################
 def test_valve(page, host, port):
-    page.goto(app_url(host, port))
+    page.goto(app_url(host, port), wait_until="domcontentloaded")
 
     expect(page.get_by_test_id("aircon-info")).to_have_count(1)
     expect(page.get_by_test_id("sensor-info")).to_have_count(1)
