@@ -18,6 +18,8 @@ import threading
 import zoneinfo
 from contextlib import contextmanager
 
+import my_lib.sqlite_util
+
 TIMEZONE = zoneinfo.ZoneInfo("Asia/Tokyo")
 DEFAULT_DB_PATH = pathlib.Path("data/metrics.db")
 
@@ -96,20 +98,14 @@ class MetricsCollector:
     @contextmanager
     def _get_db_connection(self):
         """Get database connection with proper error handling."""
-        conn = None
         try:
-            conn = sqlite3.connect(str(self.db_path), timeout=30.0)
-            conn.row_factory = sqlite3.Row
-            yield conn
-            conn.commit()
+            with my_lib.sqlite_util.connect(self.db_path, timeout=30.0) as conn:
+                conn.row_factory = sqlite3.Row
+                yield conn
+                conn.commit()
         except Exception:
-            if conn:
-                conn.rollback()
             logger.exception("Database error")
             raise
-        finally:
-            if conn:
-                conn.close()
 
     def update_cooling_mode(self, cooling_mode: int):
         """Update current cooling mode value."""
@@ -355,9 +351,8 @@ class MetricsCollector:
 
             # WALチェックポイントを実行
             try:
-                conn = sqlite3.connect(str(self.db_path), timeout=30.0)
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                conn.close()
+                with my_lib.sqlite_util.connect(self.db_path, timeout=30.0) as conn:
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 logger.info("Metrics database closed cleanly")
             except Exception:
                 logger.exception("Failed to checkpoint WAL")
