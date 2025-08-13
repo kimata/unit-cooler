@@ -799,13 +799,23 @@ def test_actuator_log(  # noqa: PLR0913, PLR0915
 
     time.sleep(2)
 
-    res = requests.get(
-        f"http://localhost:{log_port}/{my_lib.webapp.config.URL_PREFIX}/api/log_view",
-        headers={"Accept-Encoding": "gzip"},
-        timeout=15,
-    )
-    assert res.status_code == 200
-    assert "data" in json.loads(res.text)
+    # ログデータが生成されるまでリトライする
+    max_retries = 5
+    for retry in range(max_retries):
+        res = requests.get(
+            f"http://localhost:{log_port}/{my_lib.webapp.config.URL_PREFIX}/api/log_view",
+            headers={"Accept-Encoding": "gzip"},
+            timeout=15,
+        )
+        assert res.status_code == 200
+        assert "data" in json.loads(res.text)
+
+        if len(json.loads(res.text)["data"]) > 0:
+            break
+
+        if retry < max_retries - 1:
+            time.sleep(1)  # リトライ前に1秒待機
+
     assert len(json.loads(res.text)["data"]) != 0
     assert (
         datetime.datetime.strptime(json.loads(res.text)["data"][0]["date"], "%Y-%m-%d %H:%M:%S").replace(
