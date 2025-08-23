@@ -1,7 +1,7 @@
 controller:
     influxdb:
         url: http://proxy.green-rabbit.net:8086
-        token: strBCB9segqccgxsR5Xe_9RnCqkBFYX9aOKvxVR4lr3iLEb7HXuGqsN40YU6DIb6TZm9bvKLW5OWQS7sB8AQbQ==
+        token: TUi-cgEEDqEeD1o14fLaH6FdEgMoeqShRYlCHxuo63weJ5Nnmze_MFqRHJ0XeGlMS9r_1iZe3-HGgJDqZ9bqRA==
         org: home
         bucket: sensor
     sensor:
