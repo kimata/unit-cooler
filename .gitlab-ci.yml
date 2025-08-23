@@ -30,7 +30,7 @@ build-react:
 
     needs: []
 
-    image: node:24.1
+    image: node:24.6
 
     before_script: []
 
