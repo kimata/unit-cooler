@@ -145,14 +145,12 @@ test-walk-through:
         - test-prepare
     script:
         - >
-            uv run pytest --numprocesses=auto --junit-xml=tests/evidence/junit-report.xml
+            uv run pytest --numprocesses=auto --junit-xml=reports/junit-report.xml
             --maxfail=1 --dist=loadgroup tests/test_basic.py tests/test_error_handling.py
     artifacts:
         when: always
-        paths:
-            - tests/evidence/**
         reports:
-            junit: tests/evidence/junit-report.xml
+            junit: reports/junit-report.xml
 
 # Base templates
 .docker-cleanup-base:
@@ -402,7 +400,6 @@ test-webui-docker:
             - controller_log.txt
             - actuator_log.txt
             - webui_log.txt
-            - tests/evidence/**
 
 test-healthz-docker:
     extends: .docker-test-base
