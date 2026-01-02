@@ -1,5 +1,3 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
 repos:
     - repo: https://github.com/pre-commit/pre-commit-hooks
       rev: v5.0.0
@@ -8,6 +6,14 @@ repos:
           - id: end-of-file-fixer
           - id: check-added-large-files
             args: [--maxkb=4096]
+          - id: check-yaml
+            args: [--allow-multiple-documents]
+          - id: check-json
+            exclude: ^.vscode/
+          - id: check-toml
+          - id: check-merge-conflict
+          - id: mixed-line-ending
+            args: ['--fix=lf']
 
     - repo: local
       hooks:
@@ -18,7 +24,7 @@ repos:
             files: "\\.(js|ts|json|css|html|ya?ml|md)$"
 
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.12.0
+      rev: v0.12.2
       hooks:
           - id: ruff
             types_or: [python, pyi, jupyter]
@@ -30,3 +36,19 @@ repos:
       rev: v1.37.1
       hooks:
           - id: yamllint
+
+    - repo: local
+      hooks:
+          - id: pyright
+            name: Run pyright
+            entry: env PYRIGHT_PYTHON_FORCE_VERSION=latest uv run pyright
+            language: system
+            types: [python]
+            pass_filenames: false
+
+          - id: check-gitkeep
+            name: Check data/.gitkeep exists
+            entry: "bash -c '[ ! -d data ] || [ -f data/.gitkeep ] || (echo \"ERROR: data/.gitkeep is missing!\" && exit 1)'"
+            language: system
+            always_run: true
+            pass_filenames: false

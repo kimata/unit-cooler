@@ -1,42 +1,44 @@
 {
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-    "extends": ["config:base", ":timezone(Asia/Tokyo)", "group:allNonMajor"],
+    "extends": [
+        "config:best-practices",
+        ":timezone(Asia/Tokyo)"
+    ],
     "hostRules": [
         {
-            "matchHost": "registry.green-rabbit.net:5000",
+            "matchHost": "https://registry.green-rabbit.net:5000",
             "insecureRegistry": true
         }
     ],
     "automerge": true,
-    "labels": ["renovate"],
-    "schedule": ["every weekend"],
-    "platform": "gitlab",
-    "repositories": ["kimata/outdoor_unit_cooler"],
-
+    "automergeType": "pr",
+    "labels": [
+        "renovate"
+    ],
+    "schedule": [
+        "every weekend"
+    ],
+    "prConcurrentLimit": 5,
+    "lockFileMaintenance": {
+        "enabled": true,
+        "schedule": [
+            "before 5am on the first day of the month"
+        ]
+    },
     "packageRules": [
         {
-            "matchPaths": [".gitlab-ci.yml"],
-            "matchPackagePatterns": ["local_playwright"],
-            "enabled": false
+            "matchUpdateTypes": [
+                "minor",
+                "patch"
+            ],
+            "groupName": "minor and patch updates",
+            "automerge": true
         },
         {
-            "matchManagers": ["pip_requirements"],
-            "matchFiles": ["pyproject.toml"],
-            "rangeStrategy": "bump",
-            "automerge": true,
-            "labels": ["dependencies", "python"]
-        },
-        {
-            "matchManagers": ["npm"],
-            "matchFiles": ["react/package.json", "myappname/package.json"],
-            "rangeStrategy": "bump",
-            "automerge": true,
-            "labels": ["dependencies", "npm"]
-        },
-        {
-            "matchDepTypes": ["devDependencies"],
-            "automerge": true,
-            "labels": ["dependencies", "dev"]
+            "matchUpdateTypes": [
+                "major"
+            ],
+            "automerge": false
         }
     ]
 }
