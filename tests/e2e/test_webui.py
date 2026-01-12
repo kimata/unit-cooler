@@ -15,7 +15,7 @@ def _page_init(page, host, port):
 
     time.sleep(5)
 
-    page.on("console", lambda msg: print(msg.text))  # noqa: T201
+    page.on("console", lambda msg: print(msg.text))
     page.set_viewport_size({"width": 2400, "height": 1600})
 
 
@@ -33,7 +33,7 @@ def wait_for_server_ready(host, port):
             pass
         time.sleep(1)
 
-    raise RuntimeError(f"サーバーが {TIMEOUT_SEC}秒以内に起動しませんでした。")  # noqa: TRY003, EM102
+    raise RuntimeError(f"サーバーが {TIMEOUT_SEC}秒以内に起動しませんでした。")
 
 
 def app_url(host, port):
