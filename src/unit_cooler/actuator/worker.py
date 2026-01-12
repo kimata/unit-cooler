@@ -23,6 +23,8 @@ import pathlib
 import threading
 import time
 import traceback
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import my_lib.footprint
@@ -42,9 +44,89 @@ if TYPE_CHECKING:
 
     from unit_cooler.config import Config
 
+
+# =============================================================================
+# WorkerState: テスト同期用のイベントベース状態管理
+# =============================================================================
+@dataclass
+class WorkerState:
+    """ワーカー状態管理（テスト同期用）
+
+    ワーカーの処理完了を通知し、テストコードで待機できるようにする。
+    time.sleep() を使わずに確実な同期を実現する。
+
+    threading.Condition を使用して process_count ベースの待機を実装。
+    これにより、特定の処理回数に達するまで待つことが可能。
+    """
+
+    process_count: int = 0
+    last_process_time: datetime | None = None
+    _condition: threading.Condition = field(default_factory=threading.Condition, init=False)
+
+    def notify_processed(self) -> None:
+        """処理完了を通知
+
+        ワーカーが1回の処理ループを完了した際に呼び出す。
+        wait_for_process() や wait_for_count() で待機しているスレッドに通知される。
+        """
+        with self._condition:
+            self.process_count += 1
+            self.last_process_time = datetime.now()
+            self._condition.notify_all()
+
+    def wait_for_process(self, timeout: float = 1.0) -> bool:
+        """次の処理完了を待機
+
+        現在の process_count から +1 されるまで待機する。
+
+        Args:
+            timeout: 最大待機時間（秒）
+
+        Returns:
+            処理完了通知を受け取った場合 True、タイムアウトした場合 False
+        """
+        with self._condition:
+            target = self.process_count + 1
+            return self._condition.wait_for(
+                lambda: self.process_count >= target,
+                timeout=timeout,
+            )
+
+    def wait_for_count(self, target_count: int, timeout: float = 1.0) -> bool:
+        """特定の処理回数に達するまで待機
+
+        Args:
+            target_count: 待機する処理回数
+            timeout: 最大待機時間（秒）
+
+        Returns:
+            目標回数に達した場合 True、タイムアウトした場合 False
+        """
+        with self._condition:
+            return self._condition.wait_for(
+                lambda: self.process_count >= target_count,
+                timeout=timeout,
+            )
+
+    def get_count(self) -> int:
+        """現在の処理回数を取得"""
+        with self._condition:
+            return self.process_count
+
+    def reset(self) -> None:
+        """状態をリセット"""
+        with self._condition:
+            self.process_count = 0
+            self.last_process_time = None
+
+
+# =============================================================================
+# グローバル状態管理（pytestワーカー毎に独立）
+# =============================================================================
 # グローバル辞書（pytestワーカー毎に独立）
 _control_messages: dict[str, dict[str, Any]] = {}
 _should_terminate: dict[str, threading.Event] = {}
+_worker_states: dict[str, dict[str, WorkerState]] = {}
 
 # LifecycleManager インスタンス（オプション）
 _lifecycle_manager: LifecycleManager | None = None
@@ -109,6 +191,69 @@ def init_should_terminate() -> None:
         _should_terminate[get_worker_id()] = threading.Event()
     else:
         should_terminate.clear()
+
+
+# =============================================================================
+# WorkerState アクセス関数
+# =============================================================================
+def get_worker_state(worker_name: str) -> WorkerState:
+    """指定したワーカーの WorkerState を取得する
+
+    Args:
+        worker_name: ワーカー名（"control_worker", "monitor_worker" など）
+
+    Returns:
+        指定したワーカーの WorkerState インスタンス
+    """
+    worker_id = get_worker_id()
+    if worker_id not in _worker_states:
+        _worker_states[worker_id] = {}
+    if worker_name not in _worker_states[worker_id]:
+        _worker_states[worker_id][worker_name] = WorkerState()
+    return _worker_states[worker_id][worker_name]
+
+
+def init_worker_states() -> None:
+    """全ワーカーの WorkerState を初期化/リセットする"""
+    worker_id = get_worker_id()
+    if worker_id in _worker_states:
+        for state in _worker_states[worker_id].values():
+            state.reset()
+    else:
+        _worker_states[worker_id] = {}
+
+
+def wait_for_control_process(timeout: float = 1.0) -> bool:
+    """control_worker の処理完了を待機する（テスト用便利関数）"""
+    return get_worker_state("control_worker").wait_for_process(timeout)
+
+
+def wait_for_monitor_process(timeout: float = 1.0) -> bool:
+    """monitor_worker の処理完了を待機する（テスト用便利関数）"""
+    return get_worker_state("monitor_worker").wait_for_process(timeout)
+
+
+# =============================================================================
+# StateManager への通知（オプション）
+# =============================================================================
+def _notify_state_manager_control_processed() -> None:
+    """StateManager に control_worker の処理完了を通知"""
+    try:
+        from unit_cooler.state_manager import get_state_manager
+
+        get_state_manager().notify_control_processed()
+    except Exception:
+        logging.debug("StateManager notification failed (control_processed)")
+
+
+def _notify_state_manager_monitor_processed() -> None:
+    """StateManager に monitor_worker の処理完了を通知"""
+    try:
+        from unit_cooler.state_manager import get_state_manager
+
+        get_state_manager().notify_monitor_processed()
+    except Exception:
+        logging.debug("StateManager notification failed (monitor_processed)")
 
 
 def collect_environmental_metrics(config: Config, current_message: dict[str, Any]) -> None:
@@ -257,6 +402,10 @@ def monitor_worker(
 
             my_lib.footprint.update(liveness_file)
 
+            # テスト用: 処理完了を通知
+            get_worker_state("monitor_worker").notify_processed()
+            _notify_state_manager_monitor_processed()
+
             if get_should_terminate().is_set():
                 logging.info("Terminate monitor worker")
                 break
@@ -323,6 +472,10 @@ def control_worker(
                 logging.debug("Failed to collect environmental metrics")
 
             my_lib.footprint.update(liveness_file)
+
+            # テスト用: 処理完了を通知
+            get_worker_state("control_worker").notify_processed()
+            _notify_state_manager_control_processed()
 
             if get_should_terminate().is_set():
                 logging.info("Terminate control worker")
@@ -393,6 +546,7 @@ def get_worker_def(
 
 def start(executor, worker_def):
     init_should_terminate()
+    init_worker_states()
     thread_list = []
 
     for worker_info in worker_def:

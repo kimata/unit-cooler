@@ -24,6 +24,9 @@ from tests.test_helpers import (
     create_config_with_giveup,
     create_fetch_data_mock,
     mock_react_index_html,
+    sm_wait_for_control_count,
+    sm_wait_for_monitor_count,
+    sm_wait_for_subscribe_count,
     wait_for_set_cooling_working,
 )
 
@@ -815,7 +818,8 @@ def test_actuator_log(
     # NOTE: set_cooling_working が呼ばれるまで最大30秒待つ
     wait_for_set_cooling_working()
 
-    time.sleep(2)
+    # ログデータが生成されるまで待機
+    sm_wait_for_control_count(3, timeout=5.0)
 
     # ログデータが生成されるまでリトライする
     max_retries = 5
@@ -832,7 +836,7 @@ def test_actuator_log(
             break
 
         if retry < max_retries - 1:
-            time.sleep(1)  # リトライ前に1秒待機
+            sm_wait_for_control_count(4 + retry, timeout=5.0)  # 追加の処理を待機
 
     assert len(json.loads(res.text)["data"]) != 0
     assert (
@@ -853,7 +857,8 @@ def test_actuator_log(
     assert res.status_code == 200
     assert json.loads(res.text)["result"] == "success"
 
-    time.sleep(2)
+    # ログクリア後のデータが生成されるまで待機
+    sm_wait_for_control_count(10, timeout=5.0)
 
     res = requests.get(
         f"http://localhost:{log_port}/{my_lib.webapp.config.URL_PREFIX}/api/log_view",
@@ -1004,33 +1009,40 @@ def test_actuator_power_off_1(
 
     standard_mocks.patch("unit_cooler.controller.engine.dummy_cooling_mode", side_effect=dummy_mode_mock)
 
+    from tests.test_helpers import sm_wait_for_control_count
+
     move_to(time_machine, 0)
 
     component_manager.start_actuator(config, server_port, log_port, msg_count=20)
     component_manager.start_controller(config, server_port, real_port, msg_count=20)
 
-    time.sleep(0.3)  # Reduced from 1 for testing
+    # 時間を進めてからワーカー処理完了を待つ（順序が重要）
     move_to(time_machine, 1)
+    sm_wait_for_control_count(1, timeout=5.0)
 
-    time.sleep(0.3)  # Reduced from 1 for testing
     move_to(time_machine, 2)
+    sm_wait_for_control_count(2, timeout=5.0)
 
-    time.sleep(0.5)  # Reduced from 2 for testing
     move_to(time_machine, 3, 1)
+    sm_wait_for_control_count(3, timeout=5.0)
 
-    time.sleep(0.5)  # Reduced from 2 for testing
     move_to(time_machine, 3, 2)
+    sm_wait_for_control_count(4, timeout=5.0)
 
-    time.sleep(0.5)  # Reduced from 2 for testing
     move_to(time_machine, 3, 3)
+    sm_wait_for_control_count(5, timeout=5.0)
 
-    time.sleep(0.5)  # Reduced from 2 for testing
     move_to(time_machine, 3, 4)
+    sm_wait_for_control_count(6, timeout=5.0)
 
-    time.sleep(0.5)  # Reduced from 2 for testing
     move_to(time_machine, 3, 5)
+    sm_wait_for_control_count(7, timeout=5.0)
 
-    time.sleep(0.5)  # Reduced from 2 for testing
+    # 最終的なワーカー処理を待つ
+    sm_wait_for_control_count(8, timeout=5.0)
+
+    # monitor_worker が実行されて work_log に書き込むのを待つ
+    sm_wait_for_monitor_count(5, timeout=10.0)
 
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
@@ -1069,14 +1081,14 @@ def test_actuator_power_off_2(
     component_manager.start_actuator(config, server_port, log_port, msg_count=10)
     component_manager.start_controller(config, server_port, real_port, msg_count=10)
 
-    time.sleep(0.5)  # Reduced from 2 for testing
     move_to(time_machine, 1)
-    time.sleep(0.2)  # Reduced from 1 for testing
+    sm_wait_for_control_count(1, timeout=5.0)
     move_to(time_machine, 2)
-    time.sleep(0.2)  # Reduced from 1 for testing
+    sm_wait_for_control_count(2, timeout=5.0)
     move_to(time_machine, 3)
-    time.sleep(0.2)  # Reduced from 1 for testing
+    sm_wait_for_control_count(3, timeout=5.0)
     move_to(time_machine, 4)
+    sm_wait_for_control_count(4, timeout=5.0)
 
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
@@ -1119,15 +1131,14 @@ def test_actuator_fd_q10c_stop_error(
     component_manager.start_actuator(config, server_port, log_port, msg_count=50)
     component_manager.start_controller(config, server_port, real_port, msg_count=50)
 
-    time.sleep(5)
     move_to(time_machine, 1)
-    time.sleep(3)
+    sm_wait_for_control_count(1, timeout=5.0)
     move_to(time_machine, 2)
-    time.sleep(3)
+    sm_wait_for_control_count(2, timeout=5.0)
     move_to(time_machine, 0, 1)
-    time.sleep(3)
+    sm_wait_for_control_count(3, timeout=5.0)
     move_to(time_machine, 1, 1)
-    time.sleep(3)
+    sm_wait_for_control_count(4, timeout=5.0)
 
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
@@ -1177,15 +1188,14 @@ def test_actuator_fd_q10c_get_state_error(
     component_manager.start_actuator(config, server_port, log_port, msg_count=20)
     component_manager.start_controller(config, server_port, real_port, msg_count=20)
 
-    time.sleep(3)
     move_to(time_machine, 1)
-    time.sleep(2)
+    sm_wait_for_control_count(1, timeout=5.0)
     move_to(time_machine, 2)
-    time.sleep(2)
+    sm_wait_for_control_count(2, timeout=5.0)
     move_to(time_machine, 0, 1)
-    time.sleep(2)
+    sm_wait_for_control_count(3, timeout=5.0)
     move_to(time_machine, 1, 1)
-    time.sleep(2)
+    sm_wait_for_control_count(4, timeout=5.0)
 
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
@@ -1210,7 +1220,7 @@ def test_actuator_no_test(mocker, component_manager, config, server_port, real_p
     component_manager.start_actuator(config, server_port, log_port, speedup=100, msg_count=2)
     component_manager.start_controller(config, server_port, real_port, speedup=100, msg_count=2)
 
-    time.sleep(1)
+    sm_wait_for_control_count(2, timeout=5.0)
 
     # NOTE: signal のテストもついでにやっておく
     import actuator
@@ -1239,14 +1249,15 @@ def test_actuator_unable_to_receive(
 
     component_manager.start_actuator(config, server_port, log_port, msg_count=10)
 
-    time.sleep(2)
+    # actuator が受信待機状態になるまで monitor_worker の処理を待つ
+    sm_wait_for_monitor_count(1, timeout=5.0)
+    # 20分経過させて受信エラーを発生させる
     move_to(time_machine, 20)
-
-    time.sleep(1)
+    sm_wait_for_monitor_count(2, timeout=5.0)
 
     component_manager.start_controller(config, server_port, real_port, msg_count=10)
 
-    time.sleep(1)
+    sm_wait_for_control_count(1, timeout=5.0)
 
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
@@ -1274,16 +1285,17 @@ def test_actuator_open(
     # NOTE: set_cooling_working が呼ばれるまで最大30秒待つ
     wait_for_set_cooling_working()
 
-    time.sleep(1)  # Keep original timing for error detection
     move_to(time_machine, 1)
+    sm_wait_for_control_count(1, timeout=5.0)
 
-    time.sleep(0.5)
     move_to(time_machine, 2)
+    sm_wait_for_control_count(2, timeout=5.0)
 
     standard_mocks.patch("unit_cooler.controller.engine.dummy_cooling_mode", return_value={"cooling_mode": 0})
 
-    time.sleep(0.5)
-
+    # NOTE: 「電磁弁が壊れている」条件（duration > 120秒かつflow > off.max）を満たすには
+    # 実際の時間経過が必要。footprint.elapsed は実際のファイルの mtime を使用するため、
+    # time_machine の仮想時間では条件を満たせない。
     for i in range(3, 10):
         move_to(time_machine, i)
         time.sleep(0.5)
@@ -1452,7 +1464,7 @@ def test_actuator_leak(mocker, time_machine, config, server_port, real_port, log
 
     for i in range(1, 10):
         move_to(time_machine, i)
-        time.sleep(0.5)
+        sm_wait_for_control_count(i, timeout=5.0)
 
     controller.wait_and_term(*control_handle)
     actuator.wait_and_term(*actuator_handle)
@@ -1530,7 +1542,7 @@ def test_actuator_monitor_error(standard_mocks, config, server_port, real_port, 
         },
     )
 
-    time.sleep(2)
+    sm_wait_for_control_count(2, timeout=5.0)
 
     controller.wait_and_term(*control_handle)
     actuator.wait_and_term(*actuator_handle)
@@ -1633,13 +1645,13 @@ def test_actuator_close(mocker, time_machine, config, server_port, real_port, lo
         },
     )
     move_to(time_machine, 1)
-    time.sleep(2)
+    sm_wait_for_control_count(1, timeout=5.0)
     move_to(time_machine, 2)
-    time.sleep(2)
+    sm_wait_for_control_count(2, timeout=5.0)
     move_to(time_machine, 3)
-    time.sleep(2)
+    sm_wait_for_control_count(3, timeout=5.0)
     move_to(time_machine, 4)
-    time.sleep(2)
+    sm_wait_for_control_count(4, timeout=5.0)
 
     actuator.wait_and_term(*actuator_handle)
     controller.wait_and_term(*control_handle)
@@ -1736,7 +1748,7 @@ def test_actuator_notify_hazard(mocker, time_machine, config, server_port, real_
         },
     )
 
-    time.sleep(2)
+    sm_wait_for_control_count(5, timeout=5.0)
 
     controller.wait_and_term(*control_handle)
     actuator.wait_and_term(*actuator_handle)
@@ -1876,7 +1888,7 @@ def test_actuator_iolink_short(mocker, config, server_port, real_port, log_port)
             "real_port": real_port,
         },
     )
-    time.sleep(1)
+    sm_wait_for_control_count(5, timeout=5.0)
     mock_fd_q10c(mocker, gen_fd_q10c_ser_trans_sense())
 
     controller.wait_and_term(*control_handle)
@@ -2217,8 +2229,8 @@ def test_webui(mocker, config, server_port, real_port, log_port):
     assert res.status_code == 200
     assert "室外機" in gzip.decompress(res.data).decode("utf-8")
 
-    # Wait for logs to be committed to database
-    time.sleep(5)
+    # ログがデータベースにコミットされるまで待機
+    sm_wait_for_control_count(5, timeout=10.0)
 
     # Temporarily override DUMMY_MODE to avoid stop_day=7
     with unittest.mock.patch.dict(os.environ, {"DUMMY_MODE": "false"}):
@@ -2296,8 +2308,8 @@ def test_webui_dummy_mode(standard_mocks, config, server_port, real_port, log_po
     )
     client = app.test_client()
 
-    # Wait for services to initialize and worker to receive its message
-    time.sleep(2)
+    # サービスが初期化され、ワーカーがメッセージを受信するまで待機
+    sm_wait_for_subscribe_count(1, timeout=5.0)
 
     res = client.get(f"{my_lib.webapp.config.URL_PREFIX}/api/stat")
     assert res.status_code == 200
@@ -2317,9 +2329,6 @@ def test_webui_dummy_mode(standard_mocks, config, server_port, real_port, log_po
 
     controller.wait_and_term(*control_handle)
     actuator.wait_and_term(*actuator_handle)
-
-    # Give worker thread time to exit cleanly after receiving its message
-    time.sleep(0.5)
 
     client.delete()
 
@@ -2432,7 +2441,8 @@ def test_webui_day_sum(mocker, config, server_port, real_port, log_port):
         },
     )
 
-    time.sleep(1)
+    # サービスが初期化されるまで待機
+    sm_wait_for_control_count(1, timeout=5.0)
 
     app = webui.create_app(
         config, {"msg_count": 1, "dummy_mode": True, "pub_port": server_port, "log_port": log_port}

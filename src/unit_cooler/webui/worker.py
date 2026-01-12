@@ -59,6 +59,19 @@ def queue_put(message_queue: Queue[Any], message: dict[str, Any], liveness_file:
     message_queue.put(message)
     my_lib.footprint.update(liveness_file)
 
+    # StateManager に通知
+    _notify_state_manager_subscribe_processed()
+
+
+def _notify_state_manager_subscribe_processed() -> None:
+    """StateManager に subscribe_worker の処理完了を通知"""
+    try:
+        from unit_cooler.state_manager import get_state_manager
+
+        get_state_manager().notify_subscribe_processed()
+    except Exception:
+        logging.debug("StateManager notification failed (subscribe_processed)")
+
 
 # NOTE: 制御メッセージを Subscribe して、キューに積み、cooler_stat.py で WebUI に渡すワーカ
 def subscribe_worker(

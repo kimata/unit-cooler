@@ -8,6 +8,16 @@ import pytest
 from .test_helpers import component_manager, controller_mocks, standard_mocks, webapp_client  # noqa: F401
 
 
+@pytest.fixture(autouse=True)
+def reset_state_manager_fixture():
+    """各テストの前後で StateManager をリセット"""
+    from unit_cooler.state_manager import reset_state_manager
+
+    reset_state_manager()
+    yield
+    reset_state_manager()
+
+
 def pytest_addoption(parser):
     parser.addoption("--host", default="127.0.0.1")
     parser.addoption("--port", default="5000")

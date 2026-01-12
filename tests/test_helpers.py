@@ -407,6 +407,179 @@ def advance_time_sequence(time_machine, minutes: list[int], sleep_duration: floa
         time.sleep(sleep_duration)
 
 
+def wait_for_worker_process(worker_name: str = "control_worker", timeout: float = 1.0) -> bool:
+    """ワーカーの処理完了を待機する
+
+    Args:
+        worker_name: 待機するワーカー名（"control_worker", "monitor_worker"）
+        timeout: 最大待機時間（秒）
+
+    Returns:
+        処理完了通知を受け取った場合 True、タイムアウトした場合 False
+    """
+    import unit_cooler.actuator.worker
+
+    return unit_cooler.actuator.worker.get_worker_state(worker_name).wait_for_process(timeout)
+
+
+def wait_for_control_process(timeout: float = 1.0) -> bool:
+    """control_worker の処理完了を待機する（便利関数）"""
+    return wait_for_worker_process("control_worker", timeout)
+
+
+def wait_for_monitor_process(timeout: float = 1.0) -> bool:
+    """monitor_worker の処理完了を待機する（便利関数）"""
+    return wait_for_worker_process("monitor_worker", timeout)
+
+
+def wait_for_control_count(target_count: int, timeout: float = 1.0) -> bool:
+    """control_worker が指定回数の処理を完了するまで待機する
+
+    Args:
+        target_count: 待機する処理回数
+        timeout: 最大待機時間（秒）
+
+    Returns:
+        目標回数に達した場合 True、タイムアウトした場合 False
+    """
+    import unit_cooler.actuator.worker
+
+    return unit_cooler.actuator.worker.get_worker_state("control_worker").wait_for_count(
+        target_count, timeout
+    )
+
+
+def get_control_process_count() -> int:
+    """control_worker の現在の処理回数を取得する"""
+    import unit_cooler.actuator.worker
+
+    return unit_cooler.actuator.worker.get_worker_state("control_worker").get_count()
+
+
+# =============================================================================
+# StateManager ベースの待機関数
+# =============================================================================
+def get_state_manager():
+    """StateManager インスタンスを取得"""
+    from unit_cooler.state_manager import get_state_manager as _get_state_manager
+
+    return _get_state_manager()
+
+
+def reset_state_manager():
+    """StateManager をリセット"""
+    from unit_cooler.state_manager import reset_state_manager as _reset_state_manager
+
+    _reset_state_manager()
+
+
+def wait_for_valve_open(timeout: float = 5.0) -> bool:
+    """バルブが OPEN になるまで待機"""
+    return get_state_manager().wait_for_valve_open(timeout)
+
+
+def wait_for_valve_close(timeout: float = 5.0) -> bool:
+    """バルブが CLOSE になるまで待機"""
+    return get_state_manager().wait_for_valve_close(timeout)
+
+
+def wait_for_cooling_working(timeout: float = 5.0) -> bool:
+    """冷却が WORKING になるまで待機"""
+    return get_state_manager().wait_for_cooling_working(timeout)
+
+
+def wait_for_cooling_idle(timeout: float = 5.0) -> bool:
+    """冷却が IDLE になるまで待機"""
+    return get_state_manager().wait_for_cooling_idle(timeout)
+
+
+def wait_for_state(predicate, timeout: float = 5.0) -> bool:
+    """カスタム条件で待機
+
+    Args:
+        predicate: StateManager を受け取り bool を返す関数
+        timeout: 最大待機時間（秒）
+
+    Example:
+        wait_for_state(lambda s: s.control_worker_count >= 5)
+    """
+    return get_state_manager().wait_for(predicate, timeout)
+
+
+def sm_wait_for_control_count(target_count: int, timeout: float = 5.0) -> bool:
+    """StateManager 経由で control_worker の処理回数を待機"""
+    return get_state_manager().wait_for_control_count(target_count, timeout)
+
+
+def sm_wait_for_monitor_count(target_count: int, timeout: float = 5.0) -> bool:
+    """StateManager 経由で monitor_worker の処理回数を待機"""
+    return get_state_manager().wait_for_monitor_count(target_count, timeout)
+
+
+def sm_wait_for_subscribe_count(target_count: int, timeout: float = 5.0) -> bool:
+    """StateManager 経由で subscribe_worker の処理回数を待機"""
+    return get_state_manager().wait_for_count("subscribe_worker_count", target_count, timeout)
+
+
+def sm_wait_for_control_process(timeout: float = 1.0) -> bool:
+    """StateManager 経由で control_worker の次の処理を待機"""
+    return get_state_manager().wait_for_control_process(timeout)
+
+
+def sm_wait_for_monitor_process(timeout: float = 1.0) -> bool:
+    """StateManager 経由で monitor_worker の次の処理を待機"""
+    return get_state_manager().wait_for_monitor_process(timeout)
+
+
+def advance_time_with_sync(
+    time_machine, minute: int | tuple[int, int], worker_name: str = "control_worker", timeout: float = 1.0
+):
+    """時間を進めてワーカーの処理完了を待機する
+
+    time.sleep() + move_to() のパターンを置き換える。
+    ワーカーが実際に処理を完了するまで待機するため、
+    テストの信頼性が向上し、不要な待ち時間を削減できる。
+
+    Args:
+        time_machine: time_machine fixture
+        minute: 進める時刻（分、または (時, 分) のタプル）
+        worker_name: 待機するワーカー名
+        timeout: 最大待機時間（秒）
+
+    Returns:
+        ワーカーが処理を完了した場合 True
+    """
+    from tests.test_basic import move_to
+
+    if isinstance(minute, tuple):
+        move_to(time_machine, minute[1], minute[0])  # (hour, minute)
+    else:
+        move_to(time_machine, minute)
+
+    return wait_for_worker_process(worker_name, timeout)
+
+
+def advance_time_sequence_with_sync(
+    time_machine,
+    minutes: list[int | tuple[int, int]],
+    worker_name: str = "control_worker",
+    timeout: float = 1.0,
+):
+    """時間を順次進めてワーカーの処理完了を待機する
+
+    advance_time_sequence() の改良版。time.sleep() の代わりに
+    ワーカーの処理完了イベントを使用して同期する。
+
+    Args:
+        time_machine: time_machine fixture
+        minutes: 進める時刻のリスト
+        worker_name: 待機するワーカー名
+        timeout: 各ステップの最大待機時間（秒）
+    """
+    for minute in minutes:
+        advance_time_with_sync(time_machine, minute, worker_name, timeout)
+
+
 def control_message_modifier(mocker):
     """Modify control message list settings. Takes mocker as parameter."""
 

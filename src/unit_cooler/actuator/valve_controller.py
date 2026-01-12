@@ -71,8 +71,9 @@ class ValveController:
         """バルブ状態を設定"""
         with self._lock:
             curr_state = self.get_state()
+            state_changed = valve_state != curr_state
 
-            if valve_state != curr_state:
+            if state_changed:
                 logging.info("VALVE: %s -> %s", curr_state.name, valve_state.name)
                 self._operation_count += 1
 
@@ -94,7 +95,20 @@ class ValveController:
                 if not my_lib.footprint.exists(STAT_PATH_VALVE_CLOSE):
                     my_lib.footprint.update(STAT_PATH_VALVE_CLOSE)
 
+            # StateManager に状態変更を通知
+            if state_changed:
+                self._notify_state_manager(valve_state)
+
         return self.get_status()
+
+    def _notify_state_manager(self, valve_state: unit_cooler.const.VALVE_STATE) -> None:
+        """StateManager にバルブ状態変更を通知"""
+        try:
+            from unit_cooler.state_manager import get_state_manager
+
+            get_state_manager().notify_valve_state_changed(valve_state)
+        except Exception:
+            logging.debug("StateManager notification failed (valve_state)")
 
     def get_status(self) -> ValveStatus:
         """バルブ状態と経過時間を取得"""
