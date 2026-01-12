@@ -33,8 +33,8 @@ log_hist: list[str] = []
 
 
 def init(config_: Config, event_queue_: Queue[Any]) -> None:
-    global config  # noqa: PLW0603
-    global event_queue  # noqa: PLW0603
+    global config
+    global event_queue
 
     config = config_
     event_queue = event_queue_
@@ -47,7 +47,7 @@ def term():
 
 # NOTE: テスト用
 def hist_clear():
-    global log_hist  # noqa: PLW0603
+    global log_hist
 
     log_hist = []
 

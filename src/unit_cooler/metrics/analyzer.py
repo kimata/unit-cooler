@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class MetricsAnalyzer:
-    """Metrics analysis focused on cooling mode and environmental correlations."""  # noqa: D203
+    """Metrics analysis focused on cooling mode and environmental correlations."""
 
     def __init__(self, collector: MetricsCollector | None = None):
         """Initialize analyzer with metrics collector."""

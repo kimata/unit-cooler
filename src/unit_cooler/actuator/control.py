@@ -40,10 +40,7 @@ def hazard_clear(config: Config) -> None:
 
 
 def hazard_notify(config: Config, message: str) -> None:
-    if (
-        my_lib.footprint.elapsed(config.actuator.control.hazard.file) / 60
-        > HAZARD_NOTIFY_INTERVAL_MIN
-    ):
+    if my_lib.footprint.elapsed(config.actuator.control.hazard.file) / 60 > HAZARD_NOTIFY_INTERVAL_MIN:
         unit_cooler.actuator.work_log.add(message, unit_cooler.const.LOG_LEVEL.ERROR)
 
         hazard_register(config)
@@ -61,7 +58,9 @@ def hazard_check(config: Config) -> bool:
 
 def get_control_message_impl(handle: dict[str, Any], last_message: dict[str, Any]) -> dict[str, Any]:
     if handle["message_queue"].empty():
-        if (my_lib.time.now() - handle["receive_time"]).total_seconds() > handle["config"].controller.interval_sec * 3:
+        elapsed = (my_lib.time.now() - handle["receive_time"]).total_seconds()
+        threshold = handle["config"].controller.interval_sec * 3
+        if elapsed > threshold:
             unit_cooler.actuator.work_log.add(
                 "冷却モードの指示を受信できません。", unit_cooler.const.LOG_LEVEL.ERROR
             )

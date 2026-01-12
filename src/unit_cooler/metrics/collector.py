@@ -364,7 +364,7 @@ _metrics_collector = None
 
 def get_metrics_collector(db_path: str | pathlib.Path = DEFAULT_DB_PATH) -> MetricsCollector:
     """Get global metrics collector instance."""
-    global _metrics_collector  # noqa: PLW0603
+    global _metrics_collector
     if _metrics_collector is None:
         _metrics_collector = MetricsCollector(db_path)
     return _metrics_collector

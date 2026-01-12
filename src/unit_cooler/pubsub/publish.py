@@ -99,7 +99,7 @@ def start_server(server_port, func, interval_sec, msg_count=0):
 
 # NOTE: Last Value Caching Proxy
 # see https://zguide.zeromq.org/docs/chapter5/
-def start_proxy(server_host, server_port, proxy_port, msg_count=0):  # noqa: PLR0915, C901
+def start_proxy(server_host, server_port, proxy_port, msg_count=0):
     logging.info("Start ZMQ proxy server (front: %s:%d, port: %d)...", server_host, server_port, proxy_port)
 
     context = zmq.Context()

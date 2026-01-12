@@ -2,6 +2,7 @@
 import logging
 import os
 import random
+from typing import ClassVar
 
 import my_lib.rpi
 
@@ -14,11 +15,11 @@ if os.environ.get("DUMMY_MODE", "false") != "true":  # pragma: no cover
     from my_lib.sensor.fd_q10c import FD_Q10C
 else:
 
-    class FD_Q10C:  # noqa: N801
+    class FD_Q10C:
         # ワーカーごとの電源状態を管理する辞書（初期値はTrue）
-        _power_states = {}
+        _power_states: ClassVar[dict[str, bool]] = {}
 
-        def __init__(self, lock_file="DUMMY", timeout=2):  # noqa: D107, ARG002
+        def __init__(self, lock_file="DUMMY", timeout=2):
             worker_id = self._get_worker_id()
             self._power_states[worker_id] = True
 
@@ -51,8 +52,8 @@ else:
 
 
 def init(pin_no_):
-    global fd_q10c  # noqa: PLW0603
-    global pin_no  # noqa: PLW0603
+    global fd_q10c
+    global pin_no
 
     pin_no = pin_no_
     fd_q10c = FD_Q10C()
