@@ -149,18 +149,19 @@ def move_to(time_machine, minute, hour=0):
 
 
 def gen_sense_data(value=[30, 34, 25], valid=True):  # noqa: B006
-    sensor_data = {
-        "value": value,
-        "time": [],
-        "valid": valid,
-    }
+    from my_lib.sensor_data import SensorDataResult
 
-    for i in range(len(value)):
-        sensor_data["time"].append(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=i - len(value))
-        )
+    time_list = [
+        datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=i - len(value))
+        for i in range(len(value))
+    ]
 
-    return sensor_data
+    return SensorDataResult(
+        value=value,
+        time=time_list,
+        valid=valid,
+        raw_record_count=len(value) if valid else 0,
+    )
 
 
 def gen_fd_q10c_ser_trans_sense(is_zero=False):
@@ -466,9 +467,8 @@ def test_controller_influxdb_error(mocker, config, server_port, real_port):
 
     # NOTE: InfluxDB エラー時はコントローラーの healthz が更新されないため、
     # controller の liveness チェックは行わない
-    # また、InfluxDB が完全に失敗した場合、現在のコードでは Slack 通知が送信されない
-    # （スレッド内でエラーがキャッチされログに記録されるのみ）
-    check_notify_slack(None)
+    # InfluxDB が失敗した場合、外気温不明によるエラー通知が送信される
+    check_notify_slack("エアコン動作モードを判断できません")
 
 
 def test_controller_outdoor_normal(mocker, config, server_port, real_port):
@@ -571,9 +571,7 @@ def test_controller_aircon_invalid(mocker, config, server_port, real_port):
         last=False,
     ):
         if field == "power":
-            sensor_data = gen_sense_data()
-            sensor_data["valid"] = False
-            return sensor_data
+            return gen_sense_data(valid=False)
         else:
             return gen_sense_data()
 
@@ -616,9 +614,7 @@ def test_controller_temp_invalid(mocker, config, server_port, real_port):
         last=False,
     ):
         if field == "temp":
-            sensor_data = gen_sense_data()
-            sensor_data["valid"] = False
-            return sensor_data
+            return gen_sense_data(valid=False)
         else:
             return gen_sense_data()
 
@@ -700,9 +696,8 @@ def test_controller_sensor_error(mocker, config, server_port, real_port):
 
     # NOTE: InfluxDB エラー時はコントローラーの healthz が更新されないため、
     # controller の liveness チェックは行わない
-    # また、InfluxDB が完全に失敗した場合、現在のコードでは Slack 通知が送信されない
-    # （スレッド内でエラーがキャッチされログに記録されるのみ）
-    check_notify_slack(None)
+    # InfluxDB が失敗した場合、外気温不明によるエラー通知が送信される
+    check_notify_slack("エアコン動作モードを判断できません")
 
 
 def test_controller_dummy_error(controller_mocks, config, server_port, real_port):
