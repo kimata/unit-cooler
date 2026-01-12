@@ -16,14 +16,15 @@ import logging
 import pathlib
 
 import my_lib.healthz
+from my_lib.healthz import HealthzTarget
 
 SCHEMA_CONFIG = "config.schema"
 
 
-def check_liveness(target_list, port=None):
-    for target in target_list:
-        if not my_lib.healthz.check_liveness(target["name"], target["liveness_file"], target["interval"]):
-            return False
+def check_liveness(target_list: list[HealthzTarget], port: int | None = None) -> bool:
+    failed = my_lib.healthz.check_liveness_all(target_list)
+    if failed:
+        return False
 
     if port is not None:
         return my_lib.healthz.check_http_port(port)
@@ -61,15 +62,15 @@ if __name__ == "__main__":
         port = None
 
     target_list = [
-        {
-            "name": " - ".join(conf_path),
-            "liveness_file": my_lib.config.get_path(config, conf_path, ["liveness", "file"]),
-            "interval": (  # noqa: PLC3002
+        HealthzTarget(
+            name=" - ".join(conf_path),
+            liveness_file=my_lib.config.get_path(config, conf_path, ["liveness", "file"]),
+            interval=(
                 lambda x: x
                 if x is not None
                 else my_lib.config.get_data(config, ["controller"], ["interval_sec"])
             )(my_lib.config.get_data(config, conf_path, ["interval_sec"])),
-        }
+        )
         for conf_path in conf_list
     ]
 
