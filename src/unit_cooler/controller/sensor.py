@@ -412,15 +412,15 @@ def _fetch_sensor_data(
         stop,
         last=True,
     )
-    if data["valid"]:
-        value = data["value"][0]
+    if data.valid:
+        value = data.value[0]
         if kind == "rain":
             # NOTE: 観測している雨量は1分間の降水量なので、1時間雨量に換算
             value *= 60
 
         return {
             "name": sensor.name,
-            "time": data["time"][0].replace(tzinfo=zoneinfo),
+            "time": data.time[0].replace(tzinfo=zoneinfo),
             "value": value,
         }
     return {"name": sensor.name, "value": None}
