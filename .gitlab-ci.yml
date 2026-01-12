@@ -3,6 +3,7 @@ image: gitlab.green-rabbit.net:5050/kimata/local-ubuntu:260104_3efe597c
 variables:
     UV_LINK_MODE: copy
     UV_CACHE_DIR: .uv-cache
+    PYRIGHT_PYTHON_FORCE_VERSION: latest
 
 default:
     before_script:
@@ -138,6 +139,17 @@ test-prepare:
           paths:
               - ${UV_CACHE_DIR}
 
+test-typecheck:
+    extends: .cache-base
+    stage: test
+
+    needs:
+        - test-prepare
+
+    script:
+        - uv run python -m pyright
+        - uv run mypy src/
+
 test-walk-through:
     extends: .cache-base
     stage: test
@@ -145,12 +157,21 @@ test-walk-through:
         - test-prepare
     script:
         - >
-            uv run pytest --numprocesses=auto --junit-xml=reports/junit-report.xml
-            --maxfail=1 --dist=loadgroup tests/test_basic.py tests/test_error_handling.py
+            uv run pytest tests/unit/ tests/integration/
+            --numprocesses=auto --junit-xml=reports/junit-report.xml --maxfail=1 --dist=loadgroup
+
+    coverage: '/TOTAL.*\s+(\d+%)/'
+
     artifacts:
         when: always
+        paths:
+            - reports/**
+            - htmlcov/**
         reports:
             junit: reports/junit-report.xml
+            coverage_report:
+                coverage_format: cobertura
+                path: reports/coverage.xml
 
 # Base templates
 .docker-cleanup-base:
@@ -285,12 +306,20 @@ test-actuator-regular:
 test-webui-docker:
     extends:
         - .docker-test-base
-        - .cache-base
     stage: test
     needs:
         - generate-tag
         - build-image
         - test-prepare
+    cache:
+        - key:
+              files:
+                  - uv.lock
+          paths:
+              - ${UV_CACHE_DIR}
+        - key: playwright-cache
+          paths:
+              - .cache/ms-playwright/
     script:
         # クリーンアップ: 古いコンテナを停止
         - |
@@ -382,7 +411,8 @@ test-webui-docker:
         - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-WEB > webui_log.txt
 
         - >
-            uv run pytest tests/test_playwright.py --no-cov --host ${WEB_HOST} --port ${WEB_PORT}
+            uv run pytest tests/e2e/test_webui.py --no-cov --host ${WEB_HOST} --port ${WEB_PORT}
+            --junit-xml=reports/e2e-junit.xml
 
     after_script:
         # テスト成功・失敗に関わらず必ずログを取得
@@ -400,6 +430,9 @@ test-webui-docker:
             - controller_log.txt
             - actuator_log.txt
             - webui_log.txt
+            - reports/**
+        reports:
+            junit: reports/e2e-junit.xml
 
 test-healthz-docker:
     extends: .docker-test-base
@@ -516,6 +549,8 @@ tag-latest:
     stage: tag-latest
     needs:
         - generate-tag
+        - job: test-typecheck
+          artifacts: false
         - job: test-controller-regular
           artifacts: false
         - job: test-actuator-regular
@@ -547,6 +582,8 @@ deploy:
 
     needs:
         - generate-tag
+        - job: test-typecheck
+          artifacts: false
         - job: test-controller-regular
           artifacts: false
         - job: test-actuator-regular
