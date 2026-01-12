@@ -857,15 +857,24 @@ def test_actuator_log(
     assert res.status_code == 200
     assert json.loads(res.text)["result"] == "success"
 
-    # ログクリア後のデータが生成されるまで待機
-    sm_wait_for_control_count(10, timeout=5.0)
+    # ログクリア後のデータが生成されるまでリトライする
+    max_retries = 5
+    for retry in range(max_retries):
+        res = requests.get(
+            f"http://localhost:{log_port}/{my_lib.webapp.config.URL_PREFIX}/api/log_view",
+            timeout=15,
+        )
+        assert res.status_code == 200
+        assert "data" in json.loads(res.text)
 
-    res = requests.get(
-        f"http://localhost:{log_port}/{my_lib.webapp.config.URL_PREFIX}/api/log_view",
-        timeout=15,
-    )
-    assert res.status_code == 200
-    assert "data" in json.loads(res.text)
+        data = json.loads(res.text)["data"]
+        if len(data) > 0 and data[-1]["message"].find("ログがクリアされました。") != -1:
+            break
+
+        if retry < max_retries - 1:
+            sm_wait_for_control_count(10 + retry, timeout=5.0)
+
+    assert len(json.loads(res.text)["data"]) != 0
     assert json.loads(res.text)["data"][-1]["message"].find("ログがクリアされました。") != -1
     assert (
         datetime.datetime.strptime(json.loads(res.text)["data"][-1]["date"], "%Y-%m-%d %H:%M:%S").replace(
@@ -1272,10 +1281,11 @@ def test_actuator_open(
     mock_gpio(standard_mocks)
     mock_fd_q10c(standard_mocks)
     standard_mocks.patch("my_lib.sensor.ltc2874.com_status", return_value=True)
-    standard_mocks.patch("unit_cooler.controller.engine.dummy_cooling_mode", return_value={"cooling_mode": 1})
 
-    # NOTE: mock で差し替えたセンサーを使わせるため、ダミーモードを取り消す
-    standard_mocks.patch.dict("os.environ", {"DUMMY_MODE": "false"})
+    # NOTE: DUMMY_MODE=true で dummy_cooling_mode が使われる
+    # MagicMock で return_value を動的に変更可能にする
+    cooling_mode_mock = standard_mocks.MagicMock(return_value={"cooling_mode": 1})
+    standard_mocks.patch("unit_cooler.controller.engine.dummy_cooling_mode", cooling_mode_mock)
 
     move_to(time_machine, 0)
 
@@ -1291,14 +1301,16 @@ def test_actuator_open(
     move_to(time_machine, 2)
     sm_wait_for_control_count(2, timeout=5.0)
 
-    standard_mocks.patch("unit_cooler.controller.engine.dummy_cooling_mode", return_value={"cooling_mode": 0})
+    # 冷却モードを 0 (IDLE) に変更 - バルブが閉じる
+    cooling_mode_mock.return_value = {"cooling_mode": 0}
 
     # NOTE: 「電磁弁が壊れている」条件（duration > 120秒かつflow > off.max）を満たすには
-    # 実際の時間経過が必要。footprint.elapsed は実際のファイルの mtime を使用するため、
-    # time_machine の仮想時間では条件を満たせない。
+    # 実時間の経過が必要。ZeroMQ メッセージングとスレッドスケジューリングの同期のため、
+    # 各ループで time.sleep() を使用する
     for i in range(3, 10):
         move_to(time_machine, i)
         time.sleep(0.5)
+        sm_wait_for_monitor_count(i, timeout=5.0)
 
     component_manager.wait_and_term_controller()
     component_manager.wait_and_term_actuator()
