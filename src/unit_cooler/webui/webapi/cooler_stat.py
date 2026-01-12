@@ -10,8 +10,11 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+from __future__ import annotations
+
 import logging
 import os
+from typing import TYPE_CHECKING, Any
 
 import flask
 import my_lib.flask_util
@@ -20,6 +23,11 @@ import my_lib.webapp.config
 
 import unit_cooler.controller.engine
 import unit_cooler.controller.sensor
+
+if TYPE_CHECKING:
+    from multiprocessing import Queue
+
+    from unit_cooler.config import Config
 
 blueprint = flask.Blueprint("cooler-stat", __name__)
 
@@ -32,13 +40,13 @@ def init(api_base_url_):
     api_base_url = api_base_url_
 
 
-def watering(config, day_before):
+def watering(config: Config, day_before: int) -> dict[str, float]:
     day_offset = 7 if os.environ.get("DUMMY_MODE", "false") == "true" else 0
 
     amount = my_lib.sensor_data.get_day_sum(
-        config["controller"]["influxdb"],
-        config["controller"]["watering"]["measure"],
-        config["controller"]["watering"]["hostname"],
+        config.controller.influxdb.to_dict(),
+        config.controller.watering.measure,
+        config.controller.watering.hostname,
         "flow",
         1,
         day_before,
@@ -47,15 +55,15 @@ def watering(config, day_before):
 
     return {
         "amount": amount,
-        "price": amount * config["controller"]["watering"]["unit_price"] / 1000.0,
+        "price": amount * config.controller.watering.unit_price / 1000.0,
     }
 
 
-def watering_list(config):
+def watering_list(config: Config) -> list[dict[str, float]]:
     return [watering(config, i) for i in range(10)]
 
 
-def get_last_message(message_queue):
+def get_last_message(message_queue: Queue[Any]) -> dict[str, Any] | None:
     # NOTE: 現在の実際の制御モードを取得する。
     while not message_queue.empty():
         get_last_message.last_message = message_queue.get()
@@ -65,7 +73,7 @@ def get_last_message(message_queue):
 get_last_message.last_message = None
 
 
-def get_stats(config, message_queue):
+def get_stats(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
     # NOTE: データを受け渡すのは面倒なので、直接計算してしまう
     sense_data = unit_cooler.controller.sensor.get_sense_data(config)
     mode = unit_cooler.controller.engine.judge_cooling_mode(config, sense_data)

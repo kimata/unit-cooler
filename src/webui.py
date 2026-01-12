@@ -16,6 +16,8 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+from __future__ import annotations
+
 import atexit
 import logging
 import multiprocessing
@@ -24,10 +26,14 @@ import pathlib
 import signal
 import sys
 import threading
+from typing import TYPE_CHECKING, Any
 
 import flask
 import flask_cors
 import my_lib.proc_util
+
+if TYPE_CHECKING:
+    from unit_cooler.config import Config
 
 SCHEMA_CONFIG = "config.schema"
 
@@ -63,7 +69,7 @@ def signal_handler(signum, _frame):
     term()
 
 
-def create_app(config, arg):
+def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
     setting = {
         "control_host": "localhost",
         "pub_port": 2222,
@@ -80,7 +86,7 @@ def create_app(config, arg):
     import my_lib.webapp.config
 
     my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
-    my_lib.webapp.config.init(config["webui"])
+    my_lib.webapp.config.init(config.webui.webapp.to_webapp_config())
 
     import my_lib.webapp.base
     import my_lib.webapp.proxy
@@ -98,7 +104,7 @@ def create_app(config, arg):
             setting["control_host"],
             setting["pub_port"],
             message_queue,
-            pathlib.Path(config["webui"]["subscribe"]["liveness"]["file"]),
+            pathlib.Path(config.webui.subscribe.liveness.file),
             setting["msg_count"],
         ),
     )
@@ -159,8 +165,9 @@ def create_app(config, arg):
 
 if __name__ == "__main__":
     import docopt
-    import my_lib.config
     import my_lib.logger
+
+    from unit_cooler.config import Config
 
     args = docopt.docopt(__doc__)
 
@@ -175,7 +182,7 @@ if __name__ == "__main__":
 
     my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
+    config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
 
     app = create_app(
         config,
@@ -192,7 +199,7 @@ if __name__ == "__main__":
     # Flaskアプリケーションを実行
     try:
         # NOTE: スクリプトの自動リロード停止したい場合は use_reloader=False にする
-        app.run(host="0.0.0.0", threaded=True, use_reloader=True, port=config["webui"]["webapp"]["port"])  # noqa: S104
+        app.run(host="0.0.0.0", threaded=True, use_reloader=True, port=config.webui.webapp.port)  # noqa: S104
     except KeyboardInterrupt:
         logging.info("Received KeyboardInterrupt, shutting down...")
         signal_handler(signal.SIGINT, None)

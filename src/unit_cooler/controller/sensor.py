@@ -12,13 +12,14 @@ Options:
 
 import logging
 import os
+from typing import Any
 
-import my_lib.notify.slack
 import my_lib.sensor_data
 import my_lib.time
 
 import unit_cooler.const
-import unit_cooler.controller.message
+import unit_cooler.util
+from unit_cooler.config import Config, SensorItemConfig
 
 ############################################################
 # 屋外の状況を判断する際に参照する閾値 (判定対象は過去一時間の平均)
@@ -287,9 +288,42 @@ def get_cooler_state(aircon_power, temp):
     return mode
 
 
-def get_sense_data(config):
+def _fetch_sensor_data(
+    config: Config, sensor: SensorItemConfig, kind: str, start: str, stop: str
+) -> dict[str, Any]:
+    """単一のセンサーからデータを取得する"""
     zoneinfo = my_lib.time.get_zoneinfo()
+    influxdb_config = {
+        "url": config.controller.influxdb.url,
+        "token": config.controller.influxdb.token,
+        "org": config.controller.influxdb.org,
+        "bucket": config.controller.influxdb.bucket,
+    }
 
+    data = my_lib.sensor_data.fetch_data(
+        influxdb_config,
+        sensor.measure,
+        sensor.hostname,
+        kind,
+        start,
+        stop,
+        last=True,
+    )
+    if data["valid"]:
+        value = data["value"][0]
+        if kind == "rain":
+            # NOTE: 観測している雨量は1分間の降水量なので、1時間雨量に換算
+            value *= 60
+
+        return {
+            "name": sensor.name,
+            "time": data["time"][0].replace(tzinfo=zoneinfo),
+            "value": value,
+        }
+    return {"name": sensor.name, "value": None}
+
+
+def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
     if os.environ.get("DUMMY_MODE", "false") == "true":
         start = "-169h"
         stop = "-168h"
@@ -297,37 +331,26 @@ def get_sense_data(config):
         start = "-1h"
         stop = "now()"
 
-    sense_data = {}
-    failed_sensors = []  # データ取得に失敗したセンサー名を記録
+    sense_data: dict[str, list[dict[str, Any]]] = {}
+    failed_sensors: list[str] = []  # データ取得に失敗したセンサー名を記録
 
-    for kind in config["controller"]["sensor"]:
+    # センサー種別とセンサーリストのマッピング
+    sensor_kinds = {
+        "temp": config.controller.sensor.temp,
+        "humi": config.controller.sensor.humi,
+        "lux": config.controller.sensor.lux,
+        "solar_rad": config.controller.sensor.solar_rad,
+        "rain": config.controller.sensor.rain,
+        "power": config.controller.sensor.power,
+    }
+
+    for kind, sensors in sensor_kinds.items():
         kind_data = []
-        for sensor in config["controller"]["sensor"][kind]:
-            data = my_lib.sensor_data.fetch_data(
-                config["controller"]["influxdb"],
-                sensor["measure"],
-                sensor["hostname"],
-                kind,
-                start,
-                stop,
-                last=True,
-            )
-            if data["valid"]:
-                value = data["value"][0]
-                if kind == "rain":
-                    # NOTE: 観測している雨量は1分間の降水量なので、1時間雨量に換算
-                    value *= 60
-
-                kind_data.append(
-                    {
-                        "name": sensor["name"],
-                        "time": data["time"][0].replace(tzinfo=zoneinfo),
-                        "value": value,
-                    }
-                )
-            else:
-                failed_sensors.append(sensor["name"])
-                kind_data.append({"name": sensor["name"], "value": None})
+        for sensor in sensors:
+            result = _fetch_sensor_data(config, sensor, kind, start, stop)
+            kind_data.append(result)
+            if result["value"] is None:
+                failed_sensors.append(sensor.name)
 
         sense_data[kind] = kind_data
 
@@ -345,7 +368,6 @@ def get_sense_data(config):
 if __name__ == "__main__":
     # TEST Code
     import docopt
-    import my_lib.config
     import my_lib.logger
     import my_lib.pretty
 
@@ -356,7 +378,7 @@ if __name__ == "__main__":
 
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file)
+    config = Config.load(config_file)
 
     sense_data = get_sense_data(config)
 

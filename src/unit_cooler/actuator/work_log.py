@@ -10,7 +10,10 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING, Any
 
 import my_lib.webapp.event
 import my_lib.webapp.log
@@ -18,13 +21,18 @@ import my_lib.webapp.log
 import unit_cooler.const
 import unit_cooler.util
 
-config = None
-enven_queue = None
+if TYPE_CHECKING:
+    from multiprocessing import Queue
 
-log_hist = []
+    from unit_cooler.config import Config
+
+config: Config | None = None
+event_queue: Queue[Any] | None = None
+
+log_hist: list[str] = []
 
 
-def init(config_, event_queue_):
+def init(config_: Config, event_queue_: Queue[Any]) -> None:
     global config  # noqa: PLW0603
     global event_queue  # noqa: PLW0603
 
@@ -51,18 +59,20 @@ def hist_get():
     return log_hist
 
 
-def add(message, level=unit_cooler.const.LOG_LEVEL.INFO):
+def add(message: str, level: unit_cooler.const.LOG_LEVEL = unit_cooler.const.LOG_LEVEL.INFO) -> None:
     global log_hist
     global config
     global event_queue
 
-    event_queue.put(my_lib.webapp.event.EVENT_TYPE.LOG)
+    if event_queue is not None:
+        event_queue.put(my_lib.webapp.event.EVENT_TYPE.LOG)
     my_lib.webapp.log.add(message, level)
 
     log_hist.append(message)
 
     if level == unit_cooler.const.LOG_LEVEL.ERROR:
-        unit_cooler.util.notify_error(config, message)
+        if config is not None:
+            unit_cooler.util.notify_error(config, message)
         # エラーメトリクス記録
         try:
             from unit_cooler.actuator.webapi.metrics import record_error
@@ -85,10 +95,11 @@ if __name__ == "__main__":
     import multiprocessing
 
     import docopt
-    import my_lib.config
     import my_lib.logger
     import my_lib.pretty
     import my_lib.webapp.config
+
+    from unit_cooler.config import Config
 
     args = docopt.docopt(__doc__)
 
@@ -97,11 +108,11 @@ if __name__ == "__main__":
 
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file)
+    config = Config.load(config_file)
     event_queue = multiprocessing.Queue()
 
-    my_lib.webapp.config.init(config["actuator"])
-    my_lib.webapp.log.init(config)
+    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())
     init(config, event_queue)
 
     add("Test", unit_cooler.const.LOG_LEVEL.INFO)

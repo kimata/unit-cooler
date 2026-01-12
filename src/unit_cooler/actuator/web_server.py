@@ -11,8 +11,11 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+from __future__ import annotations
+
 import logging
 import threading
+from typing import TYPE_CHECKING, Any
 
 import flask
 import flask_cors
@@ -28,10 +31,15 @@ import unit_cooler.actuator.webapi.valve_status
 import unit_cooler.metrics.webapi.page
 from unit_cooler.metrics import get_metrics_collector
 
+if TYPE_CHECKING:
+    from multiprocessing import Queue
 
-def create_app(config, event_queue):
+    from unit_cooler.config import Config
+
+
+def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
     my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
-    my_lib.webapp.config.init(config["actuator"]["web_server"])
+    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
 
     # NOTE: アクセスログは無効にする
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -60,11 +68,11 @@ def create_app(config, event_queue):
 
     my_lib.webapp.config.show_handler_list(app, True)
 
-    my_lib.webapp.log.init(config)
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())
     my_lib.webapp.event.start(event_queue)
 
     # メトリクスデータベースの初期化
-    metrics_db_path = config["actuator"].get("metrics", {}).get("data", "data/metrics.db")
+    metrics_db_path = config.actuator.metrics.data
     try:
         metrics_collector = get_metrics_collector(metrics_db_path)
         logging.info("Metrics database initialized at: %s", metrics_db_path)
@@ -77,7 +85,7 @@ def create_app(config, event_queue):
     return app
 
 
-def start(config, event_queue, port):
+def start(config: Config, event_queue: Queue[Any], port: int) -> dict[str, Any]:
     # NOTE: Flask は別のプロセスで実行
     try:
         app = create_app(config, event_queue)
@@ -104,7 +112,7 @@ def start(config, event_queue, port):
     }
 
 
-def term(handle):
+def term(handle: dict[str, Any]) -> None:
     import my_lib.webapp.event
 
     logging.warning("Stop web server")
@@ -123,9 +131,9 @@ if __name__ == "__main__":
     import multiprocessing
 
     import docopt
-    import my_lib.config
     import my_lib.logger
-    import my_lib.pretty
+
+    from unit_cooler.config import Config
 
     args = docopt.docopt(__doc__)
 
@@ -135,7 +143,7 @@ if __name__ == "__main__":
 
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file)
+    config = Config.load(config_file)
     event_queue = multiprocessing.Queue()
 
     log_server_handle = start(config, event_queue, port)

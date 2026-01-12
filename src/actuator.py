@@ -22,6 +22,9 @@ import multiprocessing
 import os
 import signal
 import time
+from typing import Any
+
+from unit_cooler.config import Config
 
 SCHEMA_CONFIG = "config.schema"
 
@@ -35,15 +38,15 @@ def sig_handler(num, frame):  # noqa: ARG001
         unit_cooler.actuator.worker.term()
 
 
-def wait_before_start(config):
-    for i in range(config["actuator"]["control"]["interval_sec"]):
+def wait_before_start(config: Config) -> None:
+    for i in range(config.actuator.control.interval_sec):
         logging.info(
-            "Wait for the old Pod to finish (%3d / %3d)", i + 1, config["actuator"]["control"]["interval_sec"]
+            "Wait for the old Pod to finish (%3d / %3d)", i + 1, config.actuator.control.interval_sec
         )
         time.sleep(1)
 
 
-def start(config, arg):
+def start(config: Config, arg: dict[str, Any]) -> tuple[Any, list[Any], Any]:
     global log_server_handle  # noqa: PLW0603
 
     setting = {
@@ -81,8 +84,8 @@ def start(config, arg):
     unit_cooler.actuator.work_log.init(config, event_queue)
 
     logging.info("Initialize valve")
-    unit_cooler.actuator.valve.init(config["actuator"]["control"]["valve"]["pin_no"], config)
-    unit_cooler.actuator.monitor.init(config["actuator"]["control"]["valve"]["pin_no"])
+    unit_cooler.actuator.valve.init(config.actuator.control.valve.pin_no, config)
+    unit_cooler.actuator.monitor.init(config.actuator.control.valve.pin_no)
 
     # NOTE: Blueprint のパス指定を YAML で行いたいので、my_lib.webapp の import 順を制御
     import unit_cooler.actuator.web_server
@@ -146,7 +149,6 @@ if __name__ == "__main__":
     import sys
 
     import docopt
-    import my_lib.config
     import my_lib.logger
 
     args = docopt.docopt(__doc__)
@@ -162,7 +164,7 @@ if __name__ == "__main__":
 
     my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
+    config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
     sys.exit(
         wait_and_term(
             *start(

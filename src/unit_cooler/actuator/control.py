@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import logging
 import os
+from typing import TYPE_CHECKING, Any
 
+import my_lib.footprint
 import my_lib.time
 
 import unit_cooler.actuator.valve
+import unit_cooler.actuator.work_log
 import unit_cooler.const
 import unit_cooler.util
 from unit_cooler.metrics import get_metrics_collector
 
+if TYPE_CHECKING:
+    from multiprocessing import Queue
+
+    from unit_cooler.config import Config
+
 HAZARD_NOTIFY_INTERVAL_MIN = 30
 
 
-def gen_handle(config, message_queue):
+def gen_handle(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
     return {
         "config": config,
         "message_queue": message_queue,
@@ -21,17 +31,17 @@ def gen_handle(config, message_queue):
     }
 
 
-def hazard_register(config):
-    my_lib.footprint.update(config["actuator"]["control"]["hazard"]["file"])
+def hazard_register(config: Config) -> None:
+    my_lib.footprint.update(config.actuator.control.hazard.file)
 
 
-def hazard_clear(config):
-    my_lib.footprint.clear(config["actuator"]["control"]["hazard"]["file"])
+def hazard_clear(config: Config) -> None:
+    my_lib.footprint.clear(config.actuator.control.hazard.file)
 
 
-def hazard_notify(config, message):
+def hazard_notify(config: Config, message: str) -> None:
     if (
-        my_lib.footprint.elapsed(config["actuator"]["control"]["hazard"]["file"]) / 60
+        my_lib.footprint.elapsed(config.actuator.control.hazard.file) / 60
         > HAZARD_NOTIFY_INTERVAL_MIN
     ):
         unit_cooler.actuator.work_log.add(message, unit_cooler.const.LOG_LEVEL.ERROR)
@@ -41,19 +51,17 @@ def hazard_notify(config, message):
     unit_cooler.actuator.valve.set_state(unit_cooler.const.VALVE_STATE.CLOSE)
 
 
-def hazard_check(config):
-    if my_lib.footprint.exists(config["actuator"]["control"]["hazard"]["file"]):
+def hazard_check(config: Config) -> bool:
+    if my_lib.footprint.exists(config.actuator.control.hazard.file):
         hazard_notify(config, "過去に水漏れもしくは電磁弁の故障が検出されているので制御を停止しています。")
         return True
     else:
         return False
 
 
-def get_control_message_impl(handle, last_message):
+def get_control_message_impl(handle: dict[str, Any], last_message: dict[str, Any]) -> dict[str, Any]:
     if handle["message_queue"].empty():
-        if (my_lib.time.now() - handle["receive_time"]).total_seconds() > handle["config"]["controller"][
-            "interval_sec"
-        ] * 3:
+        if (my_lib.time.now() - handle["receive_time"]).total_seconds() > handle["config"].controller.interval_sec * 3:
             unit_cooler.actuator.work_log.add(
                 "冷却モードの指示を受信できません。", unit_cooler.const.LOG_LEVEL.ERROR
             )
@@ -84,7 +92,7 @@ def get_control_message_impl(handle, last_message):
     return control_message
 
 
-def get_control_message(handle, last_message):
+def get_control_message(handle: dict[str, Any], last_message: dict[str, Any]) -> dict[str, Any]:
     try:
         return get_control_message_impl(handle, last_message)
     except OverflowError:  # pragma: no cover
@@ -93,13 +101,13 @@ def get_control_message(handle, last_message):
         return last_message
 
 
-def execute(config, control_message):
+def execute(config: Config, control_message: dict[str, Any]) -> None:
     if hazard_check(config):
         control_message = {"mode_index": 0, "state": unit_cooler.const.COOLING_STATE.IDLE}
 
     # メトリクス収集
     try:
-        metrics_db_path = config["actuator"]["metrics"]["data"]
+        metrics_db_path = config.actuator.metrics.data
         metrics_collector = get_metrics_collector(metrics_db_path)
 
         # 冷却モードの記録

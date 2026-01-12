@@ -10,16 +10,22 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+from __future__ import annotations
+
 import logging
 import pathlib
 import threading
 import time
+from typing import TYPE_CHECKING
 
 import my_lib.footprint
 import my_lib.rpi
 
 import unit_cooler.actuator.work_log
 import unit_cooler.const
+
+if TYPE_CHECKING:
+    from unit_cooler.config import Config
 
 STAT_DIR_PATH = pathlib.Path("/dev/shm")  # noqa: S108
 
@@ -42,13 +48,13 @@ STAT_PATH_VALVE_OPEN = STAT_DIR_PATH / "unit_cooler" / "valve" / "open"
 # 実際にバルブを開いた際に削除される。
 STAT_PATH_VALVE_CLOSE = STAT_DIR_PATH / "unit_cooler" / "valve" / "close"
 
-pin_no = None
-valve_lock = None
-ctrl_hist = []
-config = None
+pin_no: int | None = None
+valve_lock: threading.Lock | None = None
+ctrl_hist: list = []
+config: Config | None = None
 
 
-def init(pin, valve_config):
+def init(pin: int, valve_config: Config) -> None:
     global pin_no  # noqa: PLW0603
     global valve_lock  # noqa: PLW0603
     global config  # noqa: PLW0603
@@ -109,8 +115,8 @@ def set_state(valve_state):
 
                 global config
 
-                if config and "actuator" in config and "metrics" in config["actuator"]:
-                    metrics_db_path = config["actuator"]["metrics"]["data"]
+                if config is not None:
+                    metrics_db_path = config.actuator.metrics.data
                     metrics_collector = get_metrics_collector(metrics_db_path)
                     metrics_collector.record_valve_operation()
             except Exception:
@@ -234,9 +240,11 @@ if __name__ == "__main__":
     import multiprocessing
 
     import docopt
-    import my_lib.config
     import my_lib.logger
-    import my_lib.pretty
+    import my_lib.webapp.config
+    import my_lib.webapp.log
+
+    from unit_cooler.config import Config
 
     args = docopt.docopt(__doc__)
 
@@ -245,13 +253,13 @@ if __name__ == "__main__":
 
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file)
+    config = Config.load(config_file)
     event_queue = multiprocessing.Queue()
 
-    my_lib.webapp.config.init(config["actuator"])
-    my_lib.webapp.log.init(config)
+    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())
     unit_cooler.actuator.work_log.init(config, event_queue)
-    init(config["actuator"]["control"]["valve"]["pin_no"])
+    init(config.actuator.control.valve.pin_no, config)
 
     while True:
         set_cooling_state(

@@ -25,16 +25,17 @@ import traceback
 import my_lib.footprint
 
 import unit_cooler.controller.engine
-import unit_cooler.controller.message
 import unit_cooler.pubsub.publish
+import unit_cooler.pubsub.subscribe
 import unit_cooler.util
+from unit_cooler.config import Config
 
 SCHEMA_CONFIG = "config.schema"
 
 
-def test_client(server_host, server_port):
+def test_client(server_host: str, server_port: int) -> None:
     logging.info("Start test client (host: %s:%d)", server_host, server_port)
-    unit_cooler.controller.pubsub.start_client(
+    unit_cooler.pubsub.subscribe.start_client(
         server_host,
         server_port,
         lambda message: logging.info("receive: %s", message),
@@ -53,20 +54,22 @@ def cache_proxy_start(server_host, real_port, server_port, msg_count):
     return thread
 
 
-def gen_control_msg(config, dummy_mode, speedup):
+def gen_control_msg(config: Config, dummy_mode: bool, speedup: int) -> dict:
     control_msg = unit_cooler.controller.engine.gen_control_msg(config, dummy_mode, speedup)
-    my_lib.footprint.update(pathlib.Path(config["controller"]["liveness"]["file"]))
+    my_lib.footprint.update(pathlib.Path(config.controller.liveness.file))
 
     return control_msg
 
 
-def control_server_start(config, real_port, dummy_mode, speedup, msg_count):
+def control_server_start(
+    config: Config, real_port: int, dummy_mode: bool, speedup: int, msg_count: int
+) -> threading.Thread:
     thread = threading.Thread(
         target=unit_cooler.pubsub.publish.start_server,
         args=(
             real_port,
             lambda: gen_control_msg(config, dummy_mode, speedup),
-            config["controller"]["interval_sec"] / speedup,
+            config.controller.interval_sec / speedup,
             msg_count,
         ),
     )
@@ -75,7 +78,7 @@ def control_server_start(config, real_port, dummy_mode, speedup, msg_count):
     return thread
 
 
-def start(config, arg):
+def start(config: Config, arg: dict) -> tuple[threading.Thread | None, threading.Thread | None]:
     setting = {
         "server_host": "localhost",
         "server_port": 2222,
@@ -134,7 +137,6 @@ if __name__ == "__main__":
     import sys
 
     import docopt
-    import my_lib.config
     import my_lib.logger
 
     args = docopt.docopt(__doc__)
@@ -150,7 +152,7 @@ if __name__ == "__main__":
 
     my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
+    config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
 
     sys.exit(
         wait_and_term(

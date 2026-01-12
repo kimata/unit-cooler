@@ -12,12 +12,12 @@ Options:
 
 import copy
 import logging
-
-import my_lib.notify.slack
+from typing import Any
 
 import unit_cooler.controller.message
 import unit_cooler.controller.sensor
 import unit_cooler.util
+from unit_cooler.config import Config
 
 # 最低でもこの時間は ON にする (テスト時含む)
 ON_SEC_MIN = 5
@@ -62,7 +62,7 @@ def dummy_cooling_mode():
 dummy_cooling_mode.prev_mode = 0
 
 
-def judge_cooling_mode(config, sense_data):
+def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> dict[str, Any]:
     logging.info("Judge cooling mode")
 
     try:
@@ -98,7 +98,7 @@ def judge_cooling_mode(config, sense_data):
     }
 
 
-def gen_control_msg(config, dummy_mode=False, speedup=1):
+def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) -> dict[str, Any]:
     if dummy_mode:
         sense_data = {}
         mode = dummy_cooling_mode()
@@ -127,7 +127,6 @@ def gen_control_msg(config, dummy_mode=False, speedup=1):
 if __name__ == "__main__":
     # TEST Code
     import docopt
-    import my_lib.config
     import my_lib.logger
     import my_lib.pretty
 
@@ -138,6 +137,6 @@ if __name__ == "__main__":
 
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file)
+    config = Config.load(config_file)
 
     logging.info(my_lib.pretty.format(gen_control_msg(config)))

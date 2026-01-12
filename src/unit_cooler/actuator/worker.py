@@ -14,6 +14,8 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+from __future__ import annotations
+
 import concurrent.futures
 import logging
 import os
@@ -21,14 +23,21 @@ import pathlib
 import threading
 import time
 import traceback
+from typing import TYPE_CHECKING, Any
 
 import my_lib.footprint
 
 import unit_cooler.actuator.control
 import unit_cooler.actuator.monitor
+import unit_cooler.actuator.work_log
 import unit_cooler.const
 import unit_cooler.pubsub.subscribe
 import unit_cooler.util
+
+if TYPE_CHECKING:
+    from multiprocessing import Queue
+
+    from unit_cooler.config import Config
 
 # グローバル辞書（pytestワーカー毎に独立）
 _control_messages = {}
@@ -70,12 +79,12 @@ def init_should_terminate():
         should_terminate.clear()
 
 
-def collect_environmental_metrics(config, current_message):
+def collect_environmental_metrics(config: Config, current_message: dict[str, Any]) -> None:
     """環境データのメトリクス収集"""
     from unit_cooler.metrics import get_metrics_collector
 
     try:
-        metrics_db_path = config["actuator"]["metrics"]["data"]
+        metrics_db_path = config.actuator.metrics.data
         metrics_collector = get_metrics_collector(metrics_db_path)
 
         # current_messageのsense_dataからセンサーデータを取得
@@ -133,7 +142,14 @@ def sleep_until_next_iter(start_time, interval_sec):
 
 
 # NOTE: コントローラから制御指示を受け取ってキューに積むワーカ
-def subscribe_worker(config, control_host, pub_port, message_queue, liveness_file, msg_count=0):  # noqa: PLR0913
+def subscribe_worker(  # noqa: PLR0913
+    config: Config,
+    control_host: str,
+    pub_port: int,
+    message_queue: Queue[Any],
+    liveness_file: pathlib.Path,
+    msg_count: int = 0,
+) -> int:
     logging.info("Start actuator subscribe worker (%s:%d)", control_host, pub_port)
     ret = 0
     try:
@@ -153,10 +169,16 @@ def subscribe_worker(config, control_host, pub_port, message_queue, liveness_fil
 
 
 # NOTE: バルブの状態をモニタするワーカ
-def monitor_worker(config, liveness_file, dummy_mode=False, speedup=1, msg_count=0):
+def monitor_worker(
+    config: Config,
+    liveness_file: pathlib.Path,
+    dummy_mode: bool = False,
+    speedup: int = 1,
+    msg_count: int = 0,
+) -> int:
     logging.info("Start monitor worker")
 
-    interval_sec = config["actuator"]["monitor"]["interval_sec"] / speedup
+    interval_sec = config.actuator.monitor.interval_sec / speedup
     try:
         handle = unit_cooler.actuator.monitor.gen_handle(config, interval_sec)
     except Exception:
@@ -207,13 +229,20 @@ def monitor_worker(config, liveness_file, dummy_mode=False, speedup=1, msg_count
 
 
 # NOTE: バルブを制御するワーカ
-def control_worker(config, message_queue, liveness_file, dummy_mode=False, speedup=1, msg_count=0):  # noqa: PLR0913
+def control_worker(  # noqa: PLR0913
+    config: Config,
+    message_queue: Queue[Any],
+    liveness_file: pathlib.Path,
+    dummy_mode: bool = False,
+    speedup: int = 1,
+    msg_count: int = 0,
+) -> int:
     logging.info("Start control worker")
 
     if dummy_mode:
         logging.warning("DUMMY mode")
 
-    interval_sec = config["actuator"]["control"]["interval_sec"] / speedup
+    interval_sec = config.actuator.control.interval_sec / speedup
     handle = unit_cooler.actuator.control.gen_handle(config, message_queue)
 
     ret = 0
@@ -261,7 +290,9 @@ def control_worker(config, message_queue, liveness_file, dummy_mode=False, speed
     return ret
 
 
-def get_worker_def(config, message_queue, setting):
+def get_worker_def(
+    config: Config, message_queue: Queue[Any], setting: dict[str, Any]
+) -> list[dict[str, Any]]:
     return [
         {
             "name": "subscribe_worker",
@@ -271,7 +302,7 @@ def get_worker_def(config, message_queue, setting):
                 setting["control_host"],
                 setting["pub_port"],
                 message_queue,
-                pathlib.Path(config["actuator"]["subscribe"]["liveness"]["file"]),
+                pathlib.Path(config.actuator.subscribe.liveness.file),
                 setting["msg_count"],
             ],
         },
@@ -280,7 +311,7 @@ def get_worker_def(config, message_queue, setting):
             "param": [
                 monitor_worker,
                 config,
-                pathlib.Path(config["actuator"]["monitor"]["liveness"]["file"]),
+                pathlib.Path(config.actuator.monitor.liveness.file),
                 setting["dummy_mode"],
                 setting["speedup"],
                 setting["msg_count"],
@@ -292,7 +323,7 @@ def get_worker_def(config, message_queue, setting):
                 control_worker,
                 config,
                 message_queue,
-                pathlib.Path(config["actuator"]["control"]["liveness"]["file"]),
+                pathlib.Path(config.actuator.control.liveness.file),
                 setting["dummy_mode"],
                 setting["speedup"],
                 setting["msg_count"],
@@ -320,16 +351,14 @@ def term():
 if __name__ == "__main__":
     # TEST Code
     import multiprocessing
-    import os
-    import pathlib
 
     import docopt
-    import my_lib.config
     import my_lib.logger
-    import my_lib.pretty
     import my_lib.webapp.config
+    import my_lib.webapp.log
 
     import unit_cooler.actuator.valve
+    from unit_cooler.config import Config
 
     args = docopt.docopt(__doc__)
 
@@ -342,18 +371,18 @@ if __name__ == "__main__":
 
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file)
+    config = Config.load(config_file)
     message_queue = multiprocessing.Queue()
     event_queue = multiprocessing.Queue()
 
     os.environ["DUMMY_MODE"] = "true"
 
-    my_lib.webapp.config.init(config["actuator"])
-    my_lib.webapp.log.init(config)
+    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())
     unit_cooler.actuator.work_log.init(config, event_queue)
 
-    unit_cooler.actuator.valve.init(config["actuator"]["control"]["valve"]["pin_no"], config)
-    unit_cooler.actuator.monitor.init(config["actuator"]["control"]["valve"]["pin_no"])
+    unit_cooler.actuator.valve.init(config.actuator.control.valve.pin_no, config)
+    unit_cooler.actuator.monitor.init(config.actuator.control.valve.pin_no)
 
     # NOTE: テストしやすいように、threading.Thread ではなく multiprocessing.pool.ThreadPool を使う
     executor = concurrent.futures.ThreadPoolExecutor()
