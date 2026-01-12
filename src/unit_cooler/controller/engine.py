@@ -10,7 +10,7 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
-import copy
+import dataclasses
 import logging
 from typing import Any
 
@@ -18,6 +18,7 @@ import unit_cooler.controller.message
 import unit_cooler.controller.sensor
 import unit_cooler.util
 from unit_cooler.config import Config
+from unit_cooler.messages import ControlMessage, DutyConfig
 
 # 最低でもこの時間は ON にする (テスト時含む)
 ON_SEC_MIN = 5
@@ -65,8 +66,11 @@ dummy_cooling_mode.prev_mode = 0
 def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> dict[str, Any]:
     logging.info("Judge cooling mode")
 
+    # 閾値を config から取得
+    thresholds = dataclasses.asdict(config.controller.decision.thresholds)
+
     try:
-        cooler_activity = unit_cooler.controller.sensor.get_cooler_activity(sense_data)
+        cooler_activity = unit_cooler.controller.sensor.get_cooler_activity(sense_data, thresholds)
     except RuntimeError as e:
         unit_cooler.util.notify_error(config, e.args[0])
         cooler_activity = {"status": 0, "message": None}
@@ -75,7 +79,7 @@ def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> dict[str, 
         outdoor_status = {"status": None, "message": None}
         cooling_mode = 0
     else:
-        outdoor_status = unit_cooler.controller.sensor.get_outdoor_status(sense_data)
+        outdoor_status = unit_cooler.controller.sensor.get_outdoor_status(sense_data, thresholds)
         cooling_mode = max(cooler_activity["status"] + outdoor_status["status"], 0)
 
     if cooler_activity["message"] is not None:
@@ -108,20 +112,36 @@ def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) 
 
     mode_index = min(mode["cooling_mode"], len(unit_cooler.controller.message.CONTROL_MESSAGE_LIST) - 1)
 
-    control_msg = copy.deepcopy(unit_cooler.controller.message.CONTROL_MESSAGE_LIST[mode_index])
+    # 既存のメッセージリストから基本設定を取得
+    base_msg = unit_cooler.controller.message.CONTROL_MESSAGE_LIST[mode_index]
+    base_duty = base_msg["duty"]
 
-    # NOTE: 参考として、どのモードかも通知する
-    control_msg["mode_index"] = mode_index
-    # NOTE: メトリクス用に、センサーデータも送る
-    control_msg["sense_data"] = sense_data
-
+    # DutyConfig を構築（speedup 対応）
     if dummy_mode:
-        control_msg["duty"]["on_sec"] = max(control_msg["duty"]["on_sec"] / speedup, ON_SEC_MIN)
-        control_msg["duty"]["off_sec"] = max(control_msg["duty"]["off_sec"] / speedup, OFF_SEC_MIN)
+        duty = DutyConfig(
+            enable=base_duty["enable"],
+            on_sec=int(max(base_duty["on_sec"] / speedup, ON_SEC_MIN)),
+            off_sec=int(max(base_duty["off_sec"] / speedup, OFF_SEC_MIN)),
+        )
+    else:
+        duty = DutyConfig(
+            enable=base_duty["enable"],
+            on_sec=base_duty["on_sec"],
+            off_sec=base_duty["off_sec"],
+        )
 
-    logging.info(control_msg)
+    # ControlMessage を構築
+    control_msg = ControlMessage(
+        state=base_msg["state"],
+        duty=duty,
+        mode_index=mode_index,
+        sense_data=sense_data,
+    )
 
-    return control_msg
+    logging.info(control_msg.to_dict())
+
+    # 後方互換性のため dict で返す
+    return control_msg.to_dict()
 
 
 if __name__ == "__main__":

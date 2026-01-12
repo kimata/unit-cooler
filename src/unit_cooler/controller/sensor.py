@@ -93,7 +93,7 @@ COOLER_ACTIVITY_LIST = [
         "status": 1,
     },
     {
-        "judge": lambda mode_map: True,  # noqa: ARG005
+        "judge": lambda mode_map: True,
         "message": "エアコンは稼働していません。(cooler_status: 0)",
         "status": 0,
     },
@@ -196,7 +196,42 @@ OUTDOOR_CONDITION_LIST = [
 
 # NOTE: 外部環境の状況を評価する。
 # (数字が大きいほど冷却を強める)
-def get_outdoor_status(sense_data):
+def get_outdoor_status(
+    sense_data: dict[str, list[dict[str, Any]]],
+    thresholds: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """外部環境の状況を評価する
+
+    Args:
+        sense_data: センサーデータ
+        thresholds: 閾値（指定しない場合はデフォルト値を使用）
+
+    Returns:
+        外部環境の状況（status と message を含む dict）
+    """
+    # 閾値を取得（指定がない場合はデフォルト値）
+    rain_max = thresholds.get("rain_max", RAIN_THRESHOLD_MID) if thresholds else RAIN_THRESHOLD_MID
+    humi_max = thresholds.get("humi_max", HUMI_THRESHOLD) if thresholds else HUMI_THRESHOLD
+    temp_high_h = (
+        thresholds.get("temp_high_h", TEMP_THRESHOLD_HIGH_H) if thresholds else TEMP_THRESHOLD_HIGH_H
+    )
+    temp_high_l = (
+        thresholds.get("temp_high_l", TEMP_THRESHOLD_HIGH_L) if thresholds else TEMP_THRESHOLD_HIGH_L
+    )
+    temp_mid = thresholds.get("temp_mid", TEMP_THRESHOLD_MID) if thresholds else TEMP_THRESHOLD_MID
+    solar_rad_daytime = (
+        thresholds.get("solar_rad_daytime", SOLAR_RAD_THRESHOLD_DAYTIME)
+        if thresholds
+        else SOLAR_RAD_THRESHOLD_DAYTIME
+    )
+    solar_rad_high = (
+        thresholds.get("solar_rad_high", SOLAR_RAD_THRESHOLD_HIGH) if thresholds else SOLAR_RAD_THRESHOLD_HIGH
+    )
+    solar_rad_low = (
+        thresholds.get("solar_rad_low", SOLAR_RAD_THRESHOLD_LOW) if thresholds else SOLAR_RAD_THRESHOLD_LOW
+    )
+    lux = thresholds.get("lux", LUX_THRESHOLD) if thresholds else LUX_THRESHOLD
+
     temp_str = (
         f"{sense_data['temp'][0]['value']:.1f}" if sense_data["temp"][0]["value"] is not None else "？",
     )
@@ -223,27 +258,111 @@ def get_outdoor_status(sense_data):
     if not is_senser_valid:
         return {"status": -10, "message": "センサーデータが欠落していますので、冷却を停止します。"}
 
-    for condition in OUTDOOR_CONDITION_LIST:
-        if condition["judge"](sense_data):
-            return {
-                "status": condition["status"],
-                "message": condition["message"](sense_data),
-            }
+    # 各条件をチェック（閾値を使用）
+    rain_val = sense_data["rain"][0]["value"]
+    humi_val = sense_data["humi"][0]["value"]
+    temp_val = sense_data["temp"][0]["value"]
+    solar_rad_val = sense_data["solar_rad"][0]["value"]
+    lux_val = sense_data["lux"][0]["value"]
+
+    if rain_val > rain_max:
+        return {
+            "status": -4,
+            "message": f"雨が降っているので ({rain_val:.1f} mm/h) 冷却を停止します。(outdoor_status: -4)",
+        }
+
+    if humi_val > humi_max:
+        return {
+            "status": -4,
+            "message": (
+                f"湿度 ({humi_val:.1f} %) が {humi_max:.1f} % より高いので"
+                "冷却を停止します。(outdoor_status: -4)"
+            ),
+        }
+
+    if temp_val > temp_high_h and solar_rad_val > solar_rad_daytime:
+        return {
+            "status": 3,
+            "message": (
+                f"日射量 ({solar_rad_val:,.0f} W/m^2) が {solar_rad_daytime:,.0f} W/m^2 より大きく、"
+                f"外気温 ({temp_val:.1f} ℃) が {temp_high_h:.1f} ℃ より高いので"
+                "冷却を大きく強化します。(outdoor_status: 3)"
+            ),
+        }
+
+    if temp_val > temp_high_l and solar_rad_val > solar_rad_daytime:
+        return {
+            "status": 2,
+            "message": (
+                f"日射量 ({solar_rad_val:,.0f} W/m^2) が {solar_rad_daytime:,.0f} W/m^2 より大きく、"
+                f"外気温 ({temp_val:.1f} ℃) が {temp_high_l:.1f} ℃ より高いので"
+                "冷却を強化します。(outdoor_status: 2)"
+            ),
+        }
+
+    if solar_rad_val > solar_rad_high:
+        return {
+            "status": 1,
+            "message": (
+                f"日射量 ({solar_rad_val:,.0f} W/m^2) が {solar_rad_high:,.0f} W/m^2 より大きいので"
+                "冷却を少し強化します。(outdoor_status: 1)"
+            ),
+        }
+
+    if temp_val > temp_mid and lux_val < lux:
+        return {
+            "status": -1,
+            "message": (
+                f"外気温 ({temp_val:.1f} ℃) が {temp_mid:.1f} ℃ より高いものの、"
+                f"照度 ({lux_val:,.0f} LUX) が {lux:,.0f} LUX より小さいので、"
+                "冷却を少し弱めます。(outdoor_status: -1)"
+            ),
+        }
+
+    if lux_val < lux:
+        return {
+            "status": -2,
+            "message": (
+                f"照度 ({lux_val:,.0f} LUX) が {lux:,.0f} LUX より小さいので"
+                "冷却を弱めます。(outdoor_status: -2)"
+            ),
+        }
+
+    if solar_rad_val < solar_rad_low:
+        return {
+            "status": -1,
+            "message": (
+                f"日射量 ({solar_rad_val:,.0f} W/m^2) が {solar_rad_low:,.0f} W/m^2 より小さいので"
+                "冷却を少し弱めます。(outdoor_status: -1)"
+            ),
+        }
 
     return {"status": 0, "message": None}
 
 
 # NOTE: クーラーの稼働状況を評価する。
 # (数字が大きいほど稼働状況が活発)
-def get_cooler_activity(sense_data):
-    mode_map = {}
+def get_cooler_activity(
+    sense_data: dict[str, list[dict[str, Any]]],
+    thresholds: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """クーラーの稼働状況を評価する
+
+    Args:
+        sense_data: センサーデータ
+        thresholds: 閾値（指定しない場合はデフォルト値を使用）
+
+    Returns:
+        稼働状況（status と message を含む dict）
+    """
+    mode_map: dict[unit_cooler.const.AIRCON_MODE, int] = {}
 
     for mode in unit_cooler.const.AIRCON_MODE:
         mode_map[mode] = 0
 
     temp = sense_data["temp"][0]["value"]
     for aircon_power in sense_data["power"]:
-        mode = get_cooler_state(aircon_power, temp)
+        mode = get_cooler_state(aircon_power, temp, thresholds)
         mode_map[mode] += 1
 
     logging.info(mode_map)
@@ -254,14 +373,48 @@ def get_cooler_activity(sense_data):
                 "status": condition["status"],
                 "message": condition["message"],
             }
-    raise AssertionError("This should never be reached.")  # pragma: no cover # noqa: TRY003, EM101
+    raise AssertionError("This should never be reached.")  # pragma: no cover
 
 
-def get_cooler_state(aircon_power, temp):
+def get_cooler_state(
+    aircon_power: dict[str, Any],
+    temp: float | None,
+    thresholds: dict[str, Any] | None = None,
+) -> unit_cooler.const.AIRCON_MODE:
+    """エアコンの動作モードを判定する
+
+    Args:
+        aircon_power: エアコンの消費電力データ
+        temp: 外気温
+        thresholds: 閾値（指定しない場合はデフォルト値を使用）
+
+    Returns:
+        エアコンの動作モード
+    """
+    # 閾値を取得（指定がない場合はデフォルト値）
+    temp_cooling = (
+        thresholds.get("temp_cooling", AIRCON_TEMP_THRESHOLD) if thresholds else AIRCON_TEMP_THRESHOLD
+    )
+    power_full = (
+        thresholds.get("power_full", AIRCON_POWER_THRESHOLD_FULL)
+        if thresholds
+        else AIRCON_POWER_THRESHOLD_FULL
+    )
+    power_normal = (
+        thresholds.get("power_normal", AIRCON_POWER_THRESHOLD_NORMAL)
+        if thresholds
+        else AIRCON_POWER_THRESHOLD_NORMAL
+    )
+    power_work = (
+        thresholds.get("power_work", AIRCON_POWER_THRESHOLD_WORK)
+        if thresholds
+        else AIRCON_POWER_THRESHOLD_WORK
+    )
+
     mode = unit_cooler.const.AIRCON_MODE.OFF
     if temp is None:
         # NOTE: 外気温がわからないと暖房と冷房の区別がつかないので、致命的エラー扱いにする
-        raise RuntimeError("外気温が不明のため、エアコン動作モードを判断できません。")  # noqa: EM101
+        raise RuntimeError("外気温が不明のため、エアコン動作モードを判断できません。")
 
     if aircon_power["value"] is None:
         logging.warning(
@@ -269,12 +422,12 @@ def get_cooler_state(aircon_power, temp):
         )
         return unit_cooler.const.AIRCON_MODE.OFF
 
-    if temp >= AIRCON_TEMP_THRESHOLD:
-        if aircon_power["value"] > AIRCON_POWER_THRESHOLD_FULL:
+    if temp >= temp_cooling:
+        if aircon_power["value"] > power_full:
             mode = unit_cooler.const.AIRCON_MODE.FULL
-        elif aircon_power["value"] > AIRCON_POWER_THRESHOLD_NORMAL:
+        elif aircon_power["value"] > power_normal:
             mode = unit_cooler.const.AIRCON_MODE.NORMAL
-        elif aircon_power["value"] > AIRCON_POWER_THRESHOLD_WORK:
+        elif aircon_power["value"] > power_work:
             mode = unit_cooler.const.AIRCON_MODE.IDLE
 
     logging.info(

@@ -115,21 +115,111 @@ class WateringConfig:
 
 
 @dataclass(frozen=True)
+class DecisionThresholdsConfig:
+    """判定閾値設定"""
+
+    # 屋外の照度がこの値未満の場合、冷却の強度を弱める
+    lux: int
+    # 太陽の日射量がこの値未満の場合、冷却の強度を弱める
+    solar_rad_low: int
+    # 太陽の日射量がこの値を超える場合、冷却の強度を強める
+    solar_rad_high: int
+    # 太陽の日射量がこの値より大きい場合、昼間とする
+    solar_rad_daytime: int
+    # 屋外の湿度がこの値を超えていたら、冷却を停止する
+    humi_max: int
+    # 屋外の温度がこの値を超えていたら、冷却の強度を大きく強める
+    temp_high_h: int
+    # 屋外の温度がこの値を超えていたら、冷却の強度を強める
+    temp_high_l: int
+    # 屋外の温度がこの値を超えていたら、冷却の強度を少し強める
+    temp_mid: int
+    # エアコンの冷房動作と判定する温度閾値
+    temp_cooling: int
+    # 降雨量〔mm/h〕がこの値を超えていたら、冷却を停止する
+    rain_max: float
+    # クーラー動作中と判定する電力閾値(W)
+    power_work: int
+    # クーラー平常運転中と判定する電力閾値(W)
+    power_normal: int
+    # クーラーフル稼働中と判定する電力閾値(W)
+    power_full: int
+
+    @classmethod
+    def parse(cls, data: dict[str, Any]) -> Self:
+        return cls(
+            lux=data["lux"],
+            solar_rad_low=data["solar_rad_low"],
+            solar_rad_high=data["solar_rad_high"],
+            solar_rad_daytime=data["solar_rad_daytime"],
+            humi_max=data["humi_max"],
+            temp_high_h=data["temp_high_h"],
+            temp_high_l=data["temp_high_l"],
+            temp_mid=data["temp_mid"],
+            temp_cooling=data["temp_cooling"],
+            rain_max=data["rain_max"],
+            power_work=data["power_work"],
+            power_normal=data["power_normal"],
+            power_full=data["power_full"],
+        )
+
+    @classmethod
+    def default(cls) -> Self:
+        """デフォルト値を返す（既存動作との互換性のため）"""
+        return cls(
+            lux=300,
+            solar_rad_low=200,
+            solar_rad_high=700,
+            solar_rad_daytime=50,
+            humi_max=96,
+            temp_high_h=35,
+            temp_high_l=32,
+            temp_mid=29,
+            temp_cooling=20,
+            rain_max=0.01,
+            power_work=20,
+            power_normal=500,
+            power_full=900,
+        )
+
+
+@dataclass(frozen=True)
+class DecisionConfig:
+    """判定設定"""
+
+    thresholds: DecisionThresholdsConfig
+
+    @classmethod
+    def parse(cls, data: dict[str, Any]) -> Self:
+        return cls(thresholds=DecisionThresholdsConfig.parse(data["thresholds"]))
+
+    @classmethod
+    def default(cls) -> Self:
+        """デフォルト値を返す（既存動作との互換性のため）"""
+        return cls(thresholds=DecisionThresholdsConfig.default())
+
+
+@dataclass(frozen=True)
 class ControllerConfig:
     """Controller 設定"""
 
     influxdb: InfluxDBConfig
     sensor: SensorConfig
     watering: WateringConfig
+    decision: DecisionConfig
     interval_sec: int
     liveness: LivenessConfig
 
     @classmethod
     def parse(cls, data: dict[str, Any]) -> Self:
+        # decision は省略可能（後方互換性のため）
+        decision = DecisionConfig.parse(data["decision"]) if "decision" in data else DecisionConfig.default()
+
         return cls(
             influxdb=InfluxDBConfig.parse(data["influxdb"]),
             sensor=SensorConfig.parse(data["sensor"]),
             watering=WateringConfig.parse(data["watering"]),
+            decision=decision,
             interval_sec=data["interval_sec"],
             liveness=LivenessConfig.parse(data["liveness"]),
         )

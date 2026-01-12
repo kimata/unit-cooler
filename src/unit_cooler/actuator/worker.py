@@ -29,6 +29,7 @@ import my_lib.footprint
 
 import unit_cooler.actuator.control
 import unit_cooler.actuator.monitor
+import unit_cooler.actuator.status_publisher
 import unit_cooler.actuator.work_log
 import unit_cooler.const
 import unit_cooler.pubsub.subscribe
@@ -37,17 +38,33 @@ import unit_cooler.util
 if TYPE_CHECKING:
     from multiprocessing import Queue
 
+    from my_lib.lifecycle import LifecycleManager
+
     from unit_cooler.config import Config
 
 # グローバル辞書（pytestワーカー毎に独立）
-_control_messages = {}
-_should_terminate = {}
+_control_messages: dict[str, dict[str, Any]] = {}
+_should_terminate: dict[str, threading.Event] = {}
+
+# LifecycleManager インスタンス（オプション）
+_lifecycle_manager: LifecycleManager | None = None
 
 # メッセージの初期値
 MESSAGE_INIT = {"mode_index": 0, "state": unit_cooler.const.COOLING_STATE.IDLE}
 
 
-def get_worker_id():
+def set_lifecycle_manager(manager: LifecycleManager | None) -> None:
+    """LifecycleManager を設定する"""
+    global _lifecycle_manager
+    _lifecycle_manager = manager
+
+
+def get_lifecycle_manager() -> LifecycleManager | None:
+    """LifecycleManager を取得する"""
+    return _lifecycle_manager
+
+
+def get_worker_id() -> str:
     return os.environ.get("PYTEST_XDIST_WORKER", "")
 
 
@@ -65,16 +82,31 @@ def set_last_control_message(message):
     _control_messages[get_worker_id()] = message
 
 
-def get_should_terminate():
+def get_should_terminate() -> threading.Event | None:
+    """終了イベントを取得する
+
+    LifecycleManager が設定されている場合はその termination_event を返し、
+    そうでない場合はグローバル辞書から取得する。
+    """
+    if _lifecycle_manager is not None:
+        return _lifecycle_manager.termination_event
     return _should_terminate.get(get_worker_id(), None)
 
 
-def init_should_terminate():
-    should_terminate = get_should_terminate()
+def init_should_terminate() -> None:
+    """終了イベントを初期化する
+
+    LifecycleManager が設定されている場合は reset() を呼び、
+    そうでない場合はグローバル辞書に新しいイベントを作成する。
+    """
+    if _lifecycle_manager is not None:
+        _lifecycle_manager.reset()
+        return
+
+    should_terminate = _should_terminate.get(get_worker_id())
 
     if should_terminate is None:
         _should_terminate[get_worker_id()] = threading.Event()
-
     else:
         should_terminate.clear()
 
@@ -142,7 +174,7 @@ def sleep_until_next_iter(start_time, interval_sec):
 
 
 # NOTE: コントローラから制御指示を受け取ってキューに積むワーカ
-def subscribe_worker(  # noqa: PLR0913
+def subscribe_worker(
     config: Config,
     control_host: str,
     pub_port: int,
@@ -175,6 +207,7 @@ def monitor_worker(
     dummy_mode: bool = False,
     speedup: int = 1,
     msg_count: int = 0,
+    status_pub_port: int = 0,
 ) -> int:
     logging.info("Start monitor worker")
 
@@ -188,6 +221,14 @@ def monitor_worker(
             "流量のロギングを開始できません。", unit_cooler.const.LOG_LEVEL.ERROR
         )
         return -1
+
+    # ActuatorStatus 配信用の ZeroMQ パブリッシャを作成
+    status_socket = None
+    if status_pub_port > 0:
+        try:
+            status_socket = unit_cooler.actuator.status_publisher.create_publisher("*", status_pub_port)
+        except Exception:
+            logging.exception("Failed to create status publisher")
 
     i = 0
     ret = 0
@@ -203,6 +244,16 @@ def monitor_worker(
             unit_cooler.actuator.monitor.send_mist_condition(
                 handle, mist_condition, get_last_control_message(), dummy_mode
             )
+
+            # ActuatorStatus を ZeroMQ で配信
+            if status_socket is not None:
+                try:
+                    status = unit_cooler.actuator.status_publisher.create_status(
+                        mist_condition, get_last_control_message()
+                    )
+                    unit_cooler.actuator.status_publisher.publish_status(status_socket, status)
+                except Exception:
+                    logging.debug("Failed to publish ActuatorStatus")
 
             my_lib.footprint.update(liveness_file)
 
@@ -223,13 +274,20 @@ def monitor_worker(
     except Exception:
         unit_cooler.util.notify_error(config, traceback.format_exc())
         ret = -1
+    finally:
+        # ソケットをクローズ
+        if status_socket is not None:
+            try:
+                unit_cooler.actuator.status_publisher.close_publisher(status_socket)
+            except Exception:
+                logging.debug("Failed to close status publisher")
 
     logging.warning("Stop monitor worker")
     return ret
 
 
 # NOTE: バルブを制御するワーカ
-def control_worker(  # noqa: PLR0913
+def control_worker(
     config: Config,
     message_queue: Queue[Any],
     liveness_file: pathlib.Path,
@@ -315,6 +373,7 @@ def get_worker_def(
                 setting["dummy_mode"],
                 setting["speedup"],
                 setting["msg_count"],
+                setting.get("status_pub_port", 0),
             ],
         },
         {
@@ -340,12 +399,26 @@ def start(executor, worker_def):
         future = executor.submit(*worker_info["param"])
         thread_list.append({"name": worker_info["name"], "future": future})
 
+        # LifecycleManager が設定されている場合はワーカーを登録
+        if _lifecycle_manager is not None:
+            _lifecycle_manager.register_worker(worker_info["name"], future)
+
     return thread_list
 
 
-def term():
+def term() -> None:
+    """終了をリクエストする
+
+    LifecycleManager が設定されている場合は request_termination() を呼び、
+    そうでない場合はグローバルイベントを set する。
+    """
     logging.info("Terminate actuator worker")
-    get_should_terminate().set()
+    if _lifecycle_manager is not None:
+        _lifecycle_manager.request_termination()
+    else:
+        event = get_should_terminate()
+        if event is not None:
+            event.set()
 
 
 if __name__ == "__main__":

@@ -3,7 +3,8 @@
 エアコン室外機冷却システムの Web UI です。
 
 Usage:
-  webui.py [-c CONFIG] [-s CONTROL_HOST] [-p PUB_PORT] [-a ACTUATOR_HOST] [-l LOG_PORT] [-n COUNT] [-D] [-d]
+  webui.py [-c CONFIG] [-s CONTROL_HOST] [-p PUB_PORT] [-a ACTUATOR_HOST] [-l LOG_PORT]
+           [-S STATUS_PORT] [-n COUNT] [-D] [-d]
 
 Options:
   -c CONFIG         : CONFIG を設定ファイルとして読み込んで実行します。 [default: config.yaml]
@@ -11,6 +12,7 @@ Options:
   -p PUB_PORT       : ZeroMQ の Pub サーバーを動作させるポートを指定します。 [default: 2222]
   -a ACTUATOR_HOST  : アクチュエータのホスト名を指定します。 [default: localhost]
   -l LOG_PORT       : 動作ログを提供するアクチュエータの WEB サーバーのポートを指定します。 [default: 5001]
+  -S STATUS_PORT    : ActuatorStatus を配信するポートを指定します。0 で無効。 [default: 0]
   -n COUNT          : n 回制御メッセージを受信したら終了します。0 は制限なし。 [default: 0]
   -d                : ダミーモードで実行します。
   -D                : デバッグモードで動作します。
@@ -38,7 +40,7 @@ if TYPE_CHECKING:
 SCHEMA_CONFIG = "config.schema"
 
 # グローバル変数でワーカースレッドを管理
-worker_thread = None
+worker_threads: list[threading.Thread] = []
 
 
 def term():
@@ -48,11 +50,12 @@ def term():
     unit_cooler.webui.worker.term()
 
     # ワーカースレッドの終了を待つ
-    if worker_thread and worker_thread.is_alive():
-        logging.info("Waiting for worker thread to finish...")
-        worker_thread.join(timeout=5)
-        if worker_thread.is_alive():
-            logging.warning("Worker thread did not finish in time")
+    for thread in worker_threads:
+        if thread and thread.is_alive():
+            logging.info("Waiting for worker thread to finish...")
+            thread.join(timeout=5)
+            if thread.is_alive():
+                logging.warning("Worker thread did not finish in time")
 
     # 子プロセスを終了
     my_lib.proc_util.kill_child()
@@ -75,6 +78,7 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
         "pub_port": 2222,
         "actuator_host": "localhost",
         "log_port": 5001,
+        "status_pub_port": 0,
         "dummy_mode": False,
         "msg_count": 0,
     }
@@ -96,8 +100,10 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
     import unit_cooler.webui.worker
 
     message_queue = multiprocessing.Manager().Queue(10)
-    global worker_thread  # noqa: PLW0603
-    worker_thread = threading.Thread(
+    global worker_threads
+
+    # 制御メッセージ購読ワーカ
+    subscribe_thread = threading.Thread(
         target=unit_cooler.webui.worker.subscribe_worker,
         args=(
             config,
@@ -108,7 +114,21 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
             setting["msg_count"],
         ),
     )
-    worker_thread.start()
+    subscribe_thread.start()
+    worker_threads.append(subscribe_thread)
+
+    # ActuatorStatus 購読ワーカ（status_pub_port が指定されている場合）
+    if setting["status_pub_port"] > 0:
+        status_thread = threading.Thread(
+            target=unit_cooler.webui.worker.actuator_status_worker,
+            args=(
+                config,
+                setting["actuator_host"],
+                setting["status_pub_port"],
+            ),
+        )
+        status_thread.start()
+        worker_threads.append(status_thread)
 
     # NOTE: アクセスログは無効にする
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -176,6 +196,7 @@ if __name__ == "__main__":
     pub_port = int(os.environ.get("HEMS_PUB_PORT", args["-p"]))
     actuator_host = os.environ.get("HEMS_ACTUATOR_HOST", args["-a"])
     log_port = int(os.environ.get("HEMS_LOG_PORT", args["-l"]))
+    status_pub_port = int(os.environ.get("HEMS_STATUS_PUB_PORT", args["-S"]))
     dummy_mode = args["-d"]
     msg_count = int(args["-n"])
     debug_mode = args["-D"]
@@ -191,6 +212,7 @@ if __name__ == "__main__":
             "pub_port": pub_port,
             "actuator_host": actuator_host,
             "log_port": log_port,
+            "status_pub_port": status_pub_port,
             "dummy_mode": dummy_mode,
             "msg_count": msg_count,
         },

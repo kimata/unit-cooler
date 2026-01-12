@@ -149,7 +149,7 @@ def _release_port(port):
 
 def wait_for_set_cooling_working(timeout: float = 30.0) -> None:
     """
-    Wait for unit_cooler.actuator.valve.set_cooling_working to be called.
+    Wait for ValveController.set_cooling_working to be called.
 
     This function uses a mock to detect when set_cooling_working is called and
     waits up to the specified timeout for it to happen.
@@ -161,28 +161,28 @@ def wait_for_set_cooling_working(timeout: float = 30.0) -> None:
         pytest.fail: If set_cooling_working is not called within the timeout
 
     """
-    import unit_cooler.actuator.valve
+    from unit_cooler.actuator.valve_controller import ValveController
 
     set_cooling_working_called = threading.Event()
-    # 元の関数を保存
-    original_set_cooling_working = unit_cooler.actuator.valve.set_cooling_working
+    # 元のメソッドを保存
+    original_set_cooling_working = ValveController.set_cooling_working
 
-    def mock_set_cooling_working(*args, **kwargs):
+    def mock_set_cooling_working(self, *args, **kwargs):
         # イベントをセット
         set_cooling_working_called.set()
-        logging.info("set_cooling_working was called")
-        # 元の関数を呼び出す
-        return original_set_cooling_working(*args, **kwargs)
+        logging.info("ValveController.set_cooling_working was called")
+        # 元のメソッドを呼び出す
+        return original_set_cooling_working(self, *args, **kwargs)
 
-    # valve.set_cooling_working をモックして待つ
-    with mock.patch("unit_cooler.actuator.valve.set_cooling_working", side_effect=mock_set_cooling_working):
+    # ValveController.set_cooling_working をモックして待つ
+    with mock.patch.object(ValveController, "set_cooling_working", mock_set_cooling_working):
         # set_cooling_working が呼ばれるまで最大 timeout 秒待つ
         if not set_cooling_working_called.wait(timeout=timeout):
             pytest.fail(f"set_cooling_working was not called within {timeout} seconds")
 
 
 class ComponentManager:
-    """Manages component startup and teardown for tests."""  # noqa: D203
+    """Manages component startup and teardown for tests."""
 
     def __init__(self):
         """Initialize ComponentManager with empty handles."""
@@ -378,17 +378,17 @@ def create_fetch_data_mock(field_mappings: dict[str, Any]) -> Callable:
     """Create a fetch_data mock with custom field mappings."""
     from tests.test_basic import gen_sense_data
 
-    def fetch_data_mock(  # noqa: PLR0913
-        db_config,  # noqa: ARG001
-        measure,  # noqa: ARG001
-        hostname,  # noqa: ARG001
+    def fetch_data_mock(
+        db_config,
+        measure,
+        hostname,
         field,
-        start="-30h",  # noqa: ARG001
-        stop="now()",  # noqa: ARG001
-        every_min=1,  # noqa: ARG001
-        window_min=3,  # noqa: ARG001
-        create_empty=True,  # noqa: ARG001
-        last=False,  # noqa: ARG001
+        start="-30h",
+        stop="now()",
+        every_min=1,
+        window_min=3,
+        create_empty=True,
+        last=False,
     ):
         return field_mappings.get(field, gen_sense_data())
 
@@ -523,3 +523,25 @@ def mock_react_index_html(mocker):
         return flask.helpers.send_from_directory(directory, filename, **kwargs)
 
     mocker.patch("flask.send_from_directory", side_effect=mock_send_from_directory)
+
+
+def create_config_with_giveup(config, giveup: int):
+    """
+    Create a modified Config with a custom giveup value.
+
+    Since Config is a frozen dataclass, we need to use dataclasses.replace
+    at each level to modify nested values.
+    """
+    import dataclasses
+
+    # Create new SenseConfig with custom giveup
+    new_sense = dataclasses.replace(config.actuator.monitor.sense, giveup=giveup)
+
+    # Create new MonitorConfig with new SenseConfig
+    new_monitor = dataclasses.replace(config.actuator.monitor, sense=new_sense)
+
+    # Create new ActuatorConfig with new MonitorConfig
+    new_actuator = dataclasses.replace(config.actuator, monitor=new_monitor)
+
+    # Create new Config with new ActuatorConfig
+    return dataclasses.replace(config, actuator=new_actuator)

@@ -23,6 +23,7 @@ import my_lib.webapp.config
 
 import unit_cooler.controller.engine
 import unit_cooler.controller.sensor
+import unit_cooler.webui.worker
 
 if TYPE_CHECKING:
     from multiprocessing import Queue
@@ -35,7 +36,7 @@ api_base_url = None
 
 
 def init(api_base_url_):
-    global api_base_url  # noqa: PLW0603
+    global api_base_url
 
     api_base_url = api_base_url_
 
@@ -78,12 +79,17 @@ def get_stats(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
     sense_data = unit_cooler.controller.sensor.get_sense_data(config)
     mode = unit_cooler.controller.engine.judge_cooling_mode(config, sense_data)
 
+    # ActuatorStatus を取得（ZeroMQ 経由で受信した最新のステータス）
+    actuator_status = unit_cooler.webui.worker.get_last_actuator_status()
+    actuator_status_dict = actuator_status.to_dict() if actuator_status else None
+
     return {
         "watering": watering_list(config),
         "sensor": mode["sense_data"],
         "mode": get_last_message(message_queue),
         "cooler_status": mode["cooler_status"],
         "outdoor_status": mode["outdoor_status"],
+        "actuator_status": actuator_status_dict,
     }
 
 

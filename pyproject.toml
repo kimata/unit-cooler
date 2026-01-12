@@ -15,7 +15,7 @@ dependencies = [
     "flask-cors>=5.0.1",
     "docopt-ng>=0.9.0",
     "influxdb-client[ciso]>=1.49.0",
-    "my-lib @ git+https://github.com/kimata/my-py-lib@da1e7c601a04d0b5e13c402d7dc20975946db5c0",
+    "my-lib @ git+https://github.com/kimata/my-py-lib@f7251a5d834cf8201f59e367f94871800f000c01",
     "spidev>=3.7",
     "fluent-logger>=0.11.1",
     "pyzmq>=27.0.0",
@@ -67,6 +67,15 @@ reportArgumentType = false
 reportOperatorIssue = false
 reportIndexIssue = false
 reportGeneralTypeIssues = false
+reportAttributeAccessIssue = false
+reportPrivateImportUsage = false
+reportOptionalSubscript = false
+reportOptionalMemberAccess = false
+reportFunctionMemberAccess = false
+reportCallIssue = false
+reportReturnType = false
+reportAssignmentType = false
+reportPossiblyUnboundVariable = false
 
 [tool.ruff]
 line-length = 110

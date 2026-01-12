@@ -50,6 +50,34 @@ controller:
         hostname: rasp-cooler-1
         # 水道料金の単価 1m^2 あたり
         unit_price: 251.9
+    decision:
+        thresholds:
+            # 屋外の照度がこの値未満の場合、冷却の強度を弱める
+            lux: 300
+            # 太陽の日射量がこの値未満の場合、冷却の強度を弱める
+            solar_rad_low: 200
+            # 太陽の日射量がこの値を超える場合、冷却の強度を強める
+            solar_rad_high: 700
+            # 太陽の日射量がこの値より大きい場合、昼間とする
+            solar_rad_daytime: 50
+            # 屋外の湿度がこの値を超えていたら、冷却を停止する
+            humi_max: 96
+            # 屋外の温度がこの値を超えていたら、冷却の強度を大きく強める
+            temp_high_h: 35
+            # 屋外の温度がこの値を超えていたら、冷却の強度を強める
+            temp_high_l: 32
+            # 屋外の温度がこの値を超えていたら、冷却の強度を少し強める
+            temp_mid: 29
+            # エアコンの冷房動作と判定する温度閾値
+            temp_cooling: 20
+            # 降雨量〔mm/h〕がこの値を超えていたら、冷却を停止する
+            rain_max: 0.01
+            # クーラー動作中と判定する電力閾値(W)
+            power_work: 20
+            # クーラー平常運転中と判定する電力閾値(W)
+            power_normal: 500
+            # クーラーフル稼働中と判定する電力閾値(W)
+            power_full: 900
     interval_sec: 60
     liveness:
         file: /dev/shm/healthz.controller
