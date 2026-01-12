@@ -54,10 +54,19 @@ def slack_mock():
 
 
 @pytest.fixture(scope="session")
-def config():
+def raw_config():
+    """辞書形式の設定（互換性用）"""
     import my_lib.config
 
     return my_lib.config.load(CONFIG_FILE, pathlib.Path(SCHEMA_CONFIG))
+
+
+@pytest.fixture(scope="session")
+def config(raw_config):
+    """Config クラス形式の設定"""
+    from unit_cooler.config import Config
+
+    return Config.load(CONFIG_FILE, pathlib.Path(SCHEMA_CONFIG))
 
 
 @pytest.fixture
@@ -83,7 +92,6 @@ def log_port():
 
 @pytest.fixture(autouse=True)
 def _clear(config):
-    import my_lib.config
     import my_lib.footprint
     import my_lib.webapp.log
 
@@ -92,16 +100,16 @@ def _clear(config):
         import unit_cooler.actuator.valve
         import unit_cooler.actuator.work_log
 
-    liveness_conf_path_list = [
-        ["controller"],
-        ["actuator", "subscribe"],
-        ["actuator", "control"],
-        ["actuator", "monitor"],
-        ["webui", "subscribe"],
+    liveness_files = [
+        config.controller.liveness.file,
+        config.actuator.subscribe.liveness.file,
+        config.actuator.control.liveness.file,
+        config.actuator.monitor.liveness.file,
+        config.webui.subscribe.liveness.file,
     ]
 
-    for conf_path in liveness_conf_path_list:
-        my_lib.footprint.clear(my_lib.config.get_path(config, conf_path, ["liveness", "file"]))
+    for liveness_file in liveness_files:
+        my_lib.footprint.clear(liveness_file)
 
     unit_cooler.actuator.control.hazard_clear(config)
     unit_cooler.actuator.valve.clear_stat()
@@ -109,8 +117,8 @@ def _clear(config):
 
     my_lib.webapp.log.term()
 
-    my_lib.notify.slack.interval_clear()
-    my_lib.notify.slack.hist_clear()
+    my_lib.notify.slack._interval_clear()
+    my_lib.notify.slack._hist_clear()
 
     if "my_lib.sensor.fd_q10c" in sys.modules:
         logging.debug("unload my_lib.sensor.fd_q10c")
@@ -193,12 +201,19 @@ def gen_fd_q10c_ser_trans_ping():
     ]
 
 
+def get_liveness_file_from_config(config, conf_path):
+    """Config オブジェクトから liveness ファイルパスを取得する"""
+    obj = config
+    for key in conf_path:
+        obj = getattr(obj, key)
+    return obj.liveness.file
+
+
 def check_liveness(config, conf_path, is_healthy, threshold_sec=120):
-    import my_lib.config
     import my_lib.footprint
 
     name = " - ".join(conf_path)
-    liveness_file = my_lib.config.get_path(config, conf_path, ["liveness", "file"])
+    liveness_file = get_liveness_file_from_config(config, conf_path)
 
     assert (my_lib.footprint.elapsed(liveness_file) < threshold_sec) == is_healthy, (
         f"{name} の healthz が更新されていま{'せん' if is_healthy else 'す'}。"
@@ -208,7 +223,7 @@ def check_liveness(config, conf_path, is_healthy, threshold_sec=120):
 def check_notify_slack(message, index=-1):
     import my_lib.notify.slack
 
-    notify_hist = my_lib.notify.slack.hist_get(False)
+    notify_hist = my_lib.notify.slack._hist_get(False)
     logging.debug(notify_hist)
 
     if message is None:
@@ -1453,11 +1468,11 @@ def test_actuator_leak(  # noqa: PLR0913
     check_liveness(config, ["actuator", "monitor"], True, 1000)
     check_liveness(config, ["webui", "subscribe"], False)
 
-    logging.info(my_lib.notify.slack.hist_get(False))
+    logging.info(my_lib.notify.slack._hist_get(False))
 
     assert (
-        my_lib.notify.slack.hist_get(False)[-1].find("水漏れしています。") == 0
-        or my_lib.notify.slack.hist_get(False)[-2].find("水漏れしています。") == 0
+        my_lib.notify.slack._hist_get(False)[-1].find("水漏れしています。") == 0
+        or my_lib.notify.slack._hist_get(False)[-2].find("水漏れしています。") == 0
     )
 
 
