@@ -10,6 +10,7 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+import dataclasses
 import logging
 import os
 from typing import Any
@@ -19,41 +20,10 @@ import my_lib.time
 
 import unit_cooler.const
 import unit_cooler.util
-from unit_cooler.config import Config, SensorItemConfig
+from unit_cooler.config import Config, DecisionThresholdsConfig, SensorItemConfig
 
-############################################################
-# 屋外の状況を判断する際に参照する閾値 (判定対象は過去一時間の平均)
-#
-# 屋外の照度がこの値未満の場合、冷却の強度を弱める
-LUX_THRESHOLD = 300
-# 太陽の日射量がこの値未満の場合、冷却の強度を弱める
-SOLAR_RAD_THRESHOLD_LOW = 200
-# 太陽の日射量がこの値未満の場合、冷却の強度を強める
-SOLAR_RAD_THRESHOLD_HIGH = 700
-# 太陽の日射量がこの値より大きい場合、昼間とする
-SOLAR_RAD_THRESHOLD_DAYTIME = 50
-# 屋外の湿度がこの値を超えていたら、冷却を停止する
-HUMI_THRESHOLD = 96
-# 屋外の温度がこの値を超えていたら、冷却の強度を大きく強める
-TEMP_THRESHOLD_HIGH_H = 35
-# 屋外の温度がこの値を超えていたら、冷却の強度を強める
-TEMP_THRESHOLD_HIGH_L = 32
-# 屋外の温度がこの値を超えていたら、冷却の強度を少し強める
-TEMP_THRESHOLD_MID = 29
-# 降雨量〔mm/h〕がこの値を超えていたら、冷却を停止する
-RAIN_THRESHOLD_MID = 0.01
-
-
-# クーラーの状況を判断する際に参照する閾値
-#
-# クーラー動作中と判定する電力閾値(min)
-AIRCON_POWER_THRESHOLD_WORK = 20
-# クーラー平常運転中と判定する電力閾値(min)
-AIRCON_POWER_THRESHOLD_NORMAL = 500
-# クーラーフル稼働中と判定する電力閾値(min)
-AIRCON_POWER_THRESHOLD_FULL = 900
-# エアコンの冷房動作と判定する温度閾値(min)
-AIRCON_TEMP_THRESHOLD = 20
+# デフォルト閾値（config.yaml で指定がない場合に使用）
+_DEFAULT_THRESHOLDS: dict[str, Any] = dataclasses.asdict(DecisionThresholdsConfig.default())
 
 COOLER_ACTIVITY_LIST = [
     {
@@ -102,22 +72,22 @@ COOLER_ACTIVITY_LIST = [
 
 OUTDOOR_CONDITION_LIST = [
     {
-        "judge": lambda sense_data: sense_data["rain"][0]["value"] > RAIN_THRESHOLD_MID,
+        "judge": lambda sense_data: sense_data["rain"][0]["value"] > _DEFAULT_THRESHOLDS["rain_max"],
         "message": lambda sense_data: (
             "雨が降っているので ({rain:.1f} mm/h) 冷却を停止します。(outdoor_status: -4)"
         ).format(rain=sense_data["rain"][0]["value"]),
         "status": -4,
     },
     {
-        "judge": lambda sense_data: sense_data["humi"][0]["value"] > HUMI_THRESHOLD,
+        "judge": lambda sense_data: sense_data["humi"][0]["value"] > _DEFAULT_THRESHOLDS["humi_max"],
         "message": lambda sense_data: (
-            "湿度 ({humi:.1f} %) が " + "{threshold:.1f} % より高いので冷却を停止します。(outdoor_status: -4)"
-        ).format(humi=sense_data["humi"][0]["value"], threshold=HUMI_THRESHOLD),
+            "湿度 ({humi:.1f} %) が {threshold:.1f} % より高いので冷却を停止します。(outdoor_status: -4)"
+        ).format(humi=sense_data["humi"][0]["value"], threshold=_DEFAULT_THRESHOLDS["humi_max"]),
         "status": -4,
     },
     {
-        "judge": lambda sense_data: (sense_data["temp"][0]["value"] > TEMP_THRESHOLD_HIGH_H)
-        and (sense_data["solar_rad"][0]["value"] > SOLAR_RAD_THRESHOLD_DAYTIME),
+        "judge": lambda sense_data: (sense_data["temp"][0]["value"] > _DEFAULT_THRESHOLDS["temp_high_h"])
+        and (sense_data["solar_rad"][0]["value"] > _DEFAULT_THRESHOLDS["solar_rad_daytime"]),
         "message": lambda sense_data: (
             "日射量 ({solar_rad:,.0f} W/m^2) が "
             "{solar_rad_threshold:,.0f} W/m^2 より大きく、"
@@ -125,15 +95,15 @@ OUTDOOR_CONDITION_LIST = [
             "{threshold:.1f} ℃ より高いので冷却を大きく強化します。(outdoor_status: 3)"
         ).format(
             solar_rad=sense_data["solar_rad"][0]["value"],
-            solar_rad_threshold=SOLAR_RAD_THRESHOLD_DAYTIME,
+            solar_rad_threshold=_DEFAULT_THRESHOLDS["solar_rad_daytime"],
             temp=sense_data["temp"][0]["value"],
-            threshold=TEMP_THRESHOLD_HIGH_H,
+            threshold=_DEFAULT_THRESHOLDS["temp_high_h"],
         ),
         "status": 3,
     },
     {
-        "judge": lambda sense_data: (sense_data["temp"][0]["value"] > TEMP_THRESHOLD_HIGH_L)
-        and (sense_data["solar_rad"][0]["value"] > SOLAR_RAD_THRESHOLD_DAYTIME),
+        "judge": lambda sense_data: (sense_data["temp"][0]["value"] > _DEFAULT_THRESHOLDS["temp_high_l"])
+        and (sense_data["solar_rad"][0]["value"] > _DEFAULT_THRESHOLDS["solar_rad_daytime"]),
         "message": lambda sense_data: (
             "日射量 ({solar_rad:,.0f} W/m^2) が "
             "{solar_rad_threshold:,.0f} W/m^2 より大きく、"
@@ -141,53 +111,57 @@ OUTDOOR_CONDITION_LIST = [
             "{threshold:.1f} ℃ より高いので冷却を強化します。(outdoor_status: 2)"
         ).format(
             solar_rad=sense_data["solar_rad"][0]["value"],
-            solar_rad_threshold=SOLAR_RAD_THRESHOLD_DAYTIME,
+            solar_rad_threshold=_DEFAULT_THRESHOLDS["solar_rad_daytime"],
             temp=sense_data["temp"][0]["value"],
-            threshold=TEMP_THRESHOLD_HIGH_L,
+            threshold=_DEFAULT_THRESHOLDS["temp_high_l"],
         ),
         "status": 2,
     },
     {
-        "judge": lambda sense_data: sense_data["solar_rad"][0]["value"] > SOLAR_RAD_THRESHOLD_HIGH,
+        "judge": lambda sense_data: (
+            sense_data["solar_rad"][0]["value"] > _DEFAULT_THRESHOLDS["solar_rad_high"]
+        ),
         "message": lambda sense_data: (
             "日射量 ({solar_rad:,.0f} W/m^2) が "
             "{threshold:,.0f} W/m^2 より大きいので冷却を少し強化します。(outdoor_status: 1)"
         ).format(
             solar_rad=sense_data["solar_rad"][0]["value"],
-            threshold=SOLAR_RAD_THRESHOLD_HIGH,
+            threshold=_DEFAULT_THRESHOLDS["solar_rad_high"],
         ),
         "status": 1,
     },
     {
-        "judge": lambda sense_data: (sense_data["temp"][0]["value"] > TEMP_THRESHOLD_MID)
-        and (sense_data["lux"][0]["value"] < LUX_THRESHOLD),
+        "judge": lambda sense_data: (sense_data["temp"][0]["value"] > _DEFAULT_THRESHOLDS["temp_mid"])
+        and (sense_data["lux"][0]["value"] < _DEFAULT_THRESHOLDS["lux"]),
         "message": lambda sense_data: (
             " 外気温 ({temp:.1f} ℃) が {temp_threshold:.1f} ℃ より高いものの、"
             "照度 ({lux:,.0f} LUX) が {lux_threshold:,.0f} LUX より小さいので、"
             "冷却を少し弱めます。(outdoor_status: -1)"
         ).format(
             temp=sense_data["temp"][0]["value"],
-            temp_threshold=TEMP_THRESHOLD_MID,
+            temp_threshold=_DEFAULT_THRESHOLDS["temp_mid"],
             lux=sense_data["lux"][0]["value"],
-            lux_threshold=LUX_THRESHOLD,
+            lux_threshold=_DEFAULT_THRESHOLDS["lux"],
         ),
         "status": -1,
     },
     {
-        "judge": lambda sense_data: sense_data["lux"][0]["value"] < LUX_THRESHOLD,
+        "judge": lambda sense_data: sense_data["lux"][0]["value"] < _DEFAULT_THRESHOLDS["lux"],
         "message": lambda sense_data: (
             "照度 ({lux:,.0f} LUX) が {threshold:,.0f} LUX より小さいので冷却を弱めます。(outdoor_status: -2)"
-        ).format(lux=sense_data["lux"][0]["value"], threshold=LUX_THRESHOLD),
+        ).format(lux=sense_data["lux"][0]["value"], threshold=_DEFAULT_THRESHOLDS["lux"]),
         "status": -2,
     },
     {
-        "judge": lambda sense_data: sense_data["solar_rad"][0]["value"] < SOLAR_RAD_THRESHOLD_LOW,
+        "judge": lambda sense_data: (
+            sense_data["solar_rad"][0]["value"] < _DEFAULT_THRESHOLDS["solar_rad_low"]
+        ),
         "message": lambda sense_data: (
             "日射量 ({solar_rad:,.0f} W/m^2) が "
             "{threshold:,.0f} W/m^2 より小さいので冷却を少し弱めます。(outdoor_status: -1)"
         ).format(
             solar_rad=sense_data["solar_rad"][0]["value"],
-            threshold=SOLAR_RAD_THRESHOLD_LOW,
+            threshold=_DEFAULT_THRESHOLDS["solar_rad_low"],
         ),
         "status": -1,
     },
@@ -210,27 +184,16 @@ def get_outdoor_status(
         外部環境の状況（status と message を含む dict）
     """
     # 閾値を取得（指定がない場合はデフォルト値）
-    rain_max = thresholds.get("rain_max", RAIN_THRESHOLD_MID) if thresholds else RAIN_THRESHOLD_MID
-    humi_max = thresholds.get("humi_max", HUMI_THRESHOLD) if thresholds else HUMI_THRESHOLD
-    temp_high_h = (
-        thresholds.get("temp_high_h", TEMP_THRESHOLD_HIGH_H) if thresholds else TEMP_THRESHOLD_HIGH_H
-    )
-    temp_high_l = (
-        thresholds.get("temp_high_l", TEMP_THRESHOLD_HIGH_L) if thresholds else TEMP_THRESHOLD_HIGH_L
-    )
-    temp_mid = thresholds.get("temp_mid", TEMP_THRESHOLD_MID) if thresholds else TEMP_THRESHOLD_MID
-    solar_rad_daytime = (
-        thresholds.get("solar_rad_daytime", SOLAR_RAD_THRESHOLD_DAYTIME)
-        if thresholds
-        else SOLAR_RAD_THRESHOLD_DAYTIME
-    )
-    solar_rad_high = (
-        thresholds.get("solar_rad_high", SOLAR_RAD_THRESHOLD_HIGH) if thresholds else SOLAR_RAD_THRESHOLD_HIGH
-    )
-    solar_rad_low = (
-        thresholds.get("solar_rad_low", SOLAR_RAD_THRESHOLD_LOW) if thresholds else SOLAR_RAD_THRESHOLD_LOW
-    )
-    lux = thresholds.get("lux", LUX_THRESHOLD) if thresholds else LUX_THRESHOLD
+    th = thresholds if thresholds else _DEFAULT_THRESHOLDS
+    rain_max = th["rain_max"]
+    humi_max = th["humi_max"]
+    temp_high_h = th["temp_high_h"]
+    temp_high_l = th["temp_high_l"]
+    temp_mid = th["temp_mid"]
+    solar_rad_daytime = th["solar_rad_daytime"]
+    solar_rad_high = th["solar_rad_high"]
+    solar_rad_low = th["solar_rad_low"]
+    lux = th["lux"]
 
     temp_str = (
         f"{sense_data['temp'][0]['value']:.1f}" if sense_data["temp"][0]["value"] is not None else "？",
@@ -392,24 +355,11 @@ def get_cooler_state(
         エアコンの動作モード
     """
     # 閾値を取得（指定がない場合はデフォルト値）
-    temp_cooling = (
-        thresholds.get("temp_cooling", AIRCON_TEMP_THRESHOLD) if thresholds else AIRCON_TEMP_THRESHOLD
-    )
-    power_full = (
-        thresholds.get("power_full", AIRCON_POWER_THRESHOLD_FULL)
-        if thresholds
-        else AIRCON_POWER_THRESHOLD_FULL
-    )
-    power_normal = (
-        thresholds.get("power_normal", AIRCON_POWER_THRESHOLD_NORMAL)
-        if thresholds
-        else AIRCON_POWER_THRESHOLD_NORMAL
-    )
-    power_work = (
-        thresholds.get("power_work", AIRCON_POWER_THRESHOLD_WORK)
-        if thresholds
-        else AIRCON_POWER_THRESHOLD_WORK
-    )
+    th = thresholds if thresholds else _DEFAULT_THRESHOLDS
+    temp_cooling = th["temp_cooling"]
+    power_full = th["power_full"]
+    power_normal = th["power_normal"]
+    power_work = th["power_work"]
 
     mode = unit_cooler.const.AIRCON_MODE.OFF
     if temp is None:
