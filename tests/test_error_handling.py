@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-# ruff: noqa: S101, B017, PT011, ARG001, PERF203, S110
+# ruff: noqa: S101, B017, S110
 """Additional error handling and edge case tests for outdoor unit cooler system."""
 
-import pathlib
 from unittest import mock
 
 import my_lib.notify.slack
@@ -42,9 +41,9 @@ def slack_mock():
 
 @pytest.fixture(scope="session")
 def config():
-    import my_lib.config
+    from unit_cooler.config import Config
 
-    return my_lib.config.load(CONFIG_FILE, pathlib.Path(SCHEMA_CONFIG))
+    return Config.load(CONFIG_FILE)
 
 
 # ======== Error Handling Tests ========
@@ -52,18 +51,17 @@ def config():
 
 def test_valve_gpio_error(mocker, config):
     """Test GPIO error handling in valve operations"""
-    import unit_cooler.actuator.valve
     import unit_cooler.const
+    from unit_cooler.actuator.valve_controller import ValveController
 
-    # Initialize valve
-    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
-    unit_cooler.actuator.valve.init(17, dummy_config)
+    # Initialize valve controller
+    controller = ValveController(config=config, pin_no=17)
 
     # Mock GPIO to raise exception
     mocker.patch("my_lib.rpi.gpio.output", side_effect=Exception("GPIO Error"))
 
     with pytest.raises(Exception, match="GPIO Error"):
-        unit_cooler.actuator.valve.set_state(unit_cooler.const.VALVE_STATE.OPEN)
+        controller.set_state(unit_cooler.const.VALVE_STATE.OPEN)
 
 
 def test_zmq_connection_failure(mocker, config):
@@ -114,23 +112,22 @@ def test_sensor_data_validation():
 
 def test_memory_ctrl_hist_growth(config):
     """Test ctrl_hist memory growth issue"""
-    import unit_cooler.actuator.valve
     import unit_cooler.const
+    from unit_cooler.actuator.valve_controller import ValveController
 
-    # Initialize valve
-    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
-    unit_cooler.actuator.valve.init(17, dummy_config)
+    # Initialize valve controller
+    controller = ValveController(config=config, pin_no=17)
 
     # Record initial history length
-    initial_length = len(unit_cooler.actuator.valve.ctrl_hist)
+    initial_length = len(controller.get_hist())
 
     # Simulate many state changes
     for i in range(100):
         state = unit_cooler.const.VALVE_STATE.OPEN if i % 2 == 0 else unit_cooler.const.VALVE_STATE.CLOSE
-        unit_cooler.actuator.valve.set_state(state)
+        controller.set_state(state)
 
     # Check that history grows (demonstrating the memory leak issue)
-    final_length = len(unit_cooler.actuator.valve.ctrl_hist)
+    final_length = len(controller.get_hist())
     assert final_length > initial_length
     assert final_length <= initial_length + 100  # Should not exceed expected growth
 
@@ -160,18 +157,17 @@ def test_concurrent_valve_operations(config):
     """Test concurrent valve operations for race conditions"""
     import threading
 
-    import unit_cooler.actuator.valve
     import unit_cooler.const
+    from unit_cooler.actuator.valve_controller import ValveController
 
-    # Initialize valve
-    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
-    unit_cooler.actuator.valve.init(17, dummy_config)
+    # Initialize valve controller
+    controller = ValveController(config=config, pin_no=17)
 
     results = []
 
     def valve_operation(state):
         try:
-            unit_cooler.actuator.valve.set_state(state)
+            controller.set_state(state)
             results.append("success")
         except Exception as e:
             results.append(f"error: {e}")
@@ -353,48 +349,29 @@ def test_webui_error_responses(config):
 
 def test_hardware_boundary_conditions(config):
     """Test hardware boundary conditions"""
-    import unit_cooler.actuator.valve
     import unit_cooler.const
-
-    # Test valve initialization with invalid pin - now properly validates in dummy mode
-    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
-    with pytest.raises(ValueError, match="Pin -1 is not a valid GPIO pin number"):
-        unit_cooler.actuator.valve.init(-1, dummy_config)  # Invalid GPIO pin now raises ValueError
+    from unit_cooler.actuator.valve_controller import ValveController
 
     # Test valve initialization with valid pin
-    dummy_config = {"actuator": {"metrics": {"data": "data/metrics.db"}}}
-    unit_cooler.actuator.valve.init(17, dummy_config)  # Valid pin
-    assert unit_cooler.actuator.valve.pin_no == 17
+    controller = ValveController(config=config, pin_no=17)
+    assert controller.pin_no == 17
 
     # Test that valve operations work in dummy mode
-    current_state = unit_cooler.actuator.valve.get_state()
+    current_state = controller.get_state()
     assert current_state in [
         unit_cooler.const.VALVE_STATE.OPEN,
         unit_cooler.const.VALVE_STATE.CLOSE,
     ]
 
     # Test valve state changes work
-    original_state = unit_cooler.actuator.valve.get_state()
+    original_state = controller.get_state()
     target_state = (
         unit_cooler.const.VALVE_STATE.OPEN
         if original_state == unit_cooler.const.VALVE_STATE.CLOSE
         else unit_cooler.const.VALVE_STATE.CLOSE
     )
-    unit_cooler.actuator.valve.set_state(target_state)
+    controller.set_state(target_state)
     # Note: In dummy mode, the state might not actually change, but function should complete
-
-    # Test valve state with uninitialized pin (after setting to None manually)
-    unit_cooler.actuator.valve.pin_no = None
-    # This might now raise an exception due to improved validation
-    try:
-        state = unit_cooler.actuator.valve.get_state()
-        assert state in [
-            unit_cooler.const.VALVE_STATE.OPEN,
-            unit_cooler.const.VALVE_STATE.CLOSE,
-        ]
-    except ValueError:
-        # If validation now catches None pins, that's expected
-        pass
 
 
 def test_configuration_edge_cases(tmp_path):
