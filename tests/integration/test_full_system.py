@@ -41,6 +41,7 @@ class TestFullSystemStartup:
                 "msg_count": 10,
                 "server_port": server_port,
                 "real_port": real_port,
+                "idle_timeout_sec": 3,  # 3秒アイドルでタイムアウト
             }
         )
         control_thread, proxy_thread = controller.start(config, controller_settings)
@@ -112,6 +113,7 @@ class TestFullSystemDataFlow:
                 "msg_count": 10,
                 "server_port": server_port,
                 "real_port": real_port,
+                "idle_timeout_sec": 3,  # 3秒アイドルでタイムアウト
             }
         )
         control_thread, proxy_thread = controller.start(config, controller_settings)
@@ -250,6 +252,7 @@ class TestFullSystemScenarios:
                 "msg_count": 10,
                 "server_port": server_port,
                 "real_port": real_port,
+                "idle_timeout_sec": 3,  # 3秒アイドルでタイムアウト
             }
         )
         control_thread, proxy_thread = controller.start(config, controller_settings)
@@ -295,6 +298,7 @@ class TestFullSystemScenarios:
                 "msg_count": 10,
                 "server_port": server_port,
                 "real_port": real_port,
+                "idle_timeout_sec": 3,  # 3秒アイドルでタイムアウト
             }
         )
         control_thread, proxy_thread = controller.start(config, controller_settings)

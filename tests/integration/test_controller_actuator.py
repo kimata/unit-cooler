@@ -38,6 +38,7 @@ class TestControllerActuatorFlow:
                 "msg_count": 10,
                 "server_port": server_port,
                 "real_port": real_port,
+                "idle_timeout_sec": 3,  # 3秒アイドルでタイムアウト
             }
         )
 
@@ -73,6 +74,7 @@ class TestControllerActuatorFlow:
         """Actuator が複数の制御メッセージを受信できる"""
         import actuator
         import controller
+        import unit_cooler.actuator.worker
 
         server_port = port_manager.find_unused_port()
         real_port = port_manager.find_unused_port()
@@ -80,11 +82,13 @@ class TestControllerActuatorFlow:
 
         mocker.patch("my_lib.footprint.update")
 
-        # 受信メッセージを追跡
+        # 受信メッセージを追跡（元の関数も呼び出す）
         received_count = {"count": 0}
+        original_queue_put = unit_cooler.actuator.worker.queue_put
 
         def track_queue_put(queue, message, liveness_file):
             received_count["count"] += 1
+            original_queue_put(queue, message, liveness_file)
 
         mocker.patch(
             "unit_cooler.actuator.worker.queue_put",
@@ -99,6 +103,7 @@ class TestControllerActuatorFlow:
                 "msg_count": 10,
                 "server_port": server_port,
                 "real_port": real_port,
+                "idle_timeout_sec": 3,  # 3秒アイドルでタイムアウト
             }
         )
 
@@ -157,6 +162,7 @@ class TestControllerActuatorCachingProxy:
                 "msg_count": 5,
                 "server_port": server_port,
                 "real_port": real_port,
+                "idle_timeout_sec": 5,  # 5秒アイドルでタイムアウト
             }
         )
 
@@ -237,6 +243,7 @@ class TestControllerActuatorErrorHandling:
                 "msg_count": 2,
                 "server_port": server_port,
                 "real_port": real_port,
+                "idle_timeout_sec": 3,  # 3秒アイドルでタイムアウト
             }
         )
 
