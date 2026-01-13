@@ -415,6 +415,8 @@ test-webui-docker:
             --junit-xml=reports/e2e-junit.xml
 
     after_script:
+        # after_script は別シェルで実行されるため変数を再定義
+        - DOCKER_NETWORK=${CI_PROJECT_NAME}-${CI_JOB_NAME}-${CI_JOB_ID}-network
         # テスト成功・失敗に関わらず必ずログを取得
         - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt 2>&1 || true
         - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt 2>&1 || true
