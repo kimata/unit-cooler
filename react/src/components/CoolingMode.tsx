@@ -4,6 +4,7 @@ import { ApiResponse } from "../lib/ApiResponse";
 import { useApi } from "../hooks/useApi";
 import { Loading } from "./common/Loading";
 import { AnimatedNumber } from "./common/AnimatedNumber";
+import { SnowflakeIcon } from "./icons";
 
 type Props = {
     isReady: boolean;
@@ -225,11 +226,14 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     };
 
     return (
-        <div className="col-span-1">
-            <div className="mb-3 text-center">
-                <div className="card mb-4 shadow-sm">
+        <div>
+            <div className="text-center h-full">
+                <div className="card shadow-sm h-full">
                     <div className="card-header">
-                        <h4 className="my-0 font-normal">現在の冷却モード</h4>
+                        <h4 className="my-0 font-normal">
+                            <SnowflakeIcon className="size-5 text-cyan-500" />
+                            現在の冷却モード
+                        </h4>
                     </div>
                     <div className="card-body">{isReady || stat.mode.mode_index !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}</div>
                 </div>

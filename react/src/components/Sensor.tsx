@@ -10,6 +10,7 @@ import reactStringReplace from "react-string-replace";
 import { dateText } from "../lib/Util";
 import { ApiResponse } from "../lib/ApiResponse";
 import { AnimatedNumber } from "./common/AnimatedNumber";
+import { ThermometerIcon } from "./icons";
 
 type Props = {
     isReady: boolean;
@@ -107,11 +108,14 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
     };
 
     return (
-        <div className="col-span-1">
-            <div className="mb-3 text-center">
-                <div className="card mb-4 shadow-sm">
+        <div>
+            <div className="text-center h-full">
+                <div className="card shadow-sm h-full">
                     <div className="card-header">
-                        <h4 className="my-0 font-normal">センサー値</h4>
+                        <h4 className="my-0 font-normal">
+                            <ThermometerIcon className="size-5 text-red-500" />
+                            センサー値
+                        </h4>
                     </div>
                     <div className="card-body">{isReady || stat.sensor.temp.length > 0 ? sensorInfo(stat) : loading()}</div>
                 </div>

@@ -5,6 +5,7 @@ import { Bar } from "react-chartjs-2";
 Chart.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 import { ApiResponse } from "../lib/ApiResponse";
+import { CalendarDaysIcon } from "./icons";
 
 type Props = {
     isReady: boolean;
@@ -93,11 +94,14 @@ const History = React.memo(({ isReady, stat }: Props) => {
     };
 
     return (
-        <div className="col-span-1">
-            <div className="mb-3 text-center">
-                <div className="card mb-4 shadow-sm">
+        <div>
+            <div className="text-center h-full">
+                <div className="card shadow-sm h-full">
                     <div className="card-header">
-                        <h4 className="my-0 font-normal">散水履歴</h4>
+                        <h4 className="my-0 font-normal">
+                            <CalendarDaysIcon className="size-5 text-gray-600" />
+                            散水履歴
+                        </h4>
                     </div>
                     {isReady || stat.watering.length > 0 ? history() : loading()}
                 </div>

@@ -56,15 +56,19 @@
 
     /* カード共通スタイル */
     .card {
-        @apply bg-white rounded-lg shadow-sm border border-gray-200 h-full;
+        @apply bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col;
     }
 
     .card-header {
-        @apply px-4 py-3 border-b border-gray-200 bg-gray-50;
+        @apply px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg;
+    }
+
+    .card-header h4 {
+        @apply flex items-center justify-center gap-2;
     }
 
     .card-body {
-        @apply p-4;
+        @apply p-4 flex-1;
     }
 
     /* プログレスバー */
@@ -87,6 +91,15 @@
 
     /* 破線 */
     .dashed-hr {
-        @apply border-t-2 border-dashed border-gray-400;
+        @apply border-t-2 border-dashed border-gray-300 my-3;
+    }
+
+    /* グリッドアイテム - 同じ行のカードの高さを揃える */
+    .grid > div {
+        @apply flex flex-col;
+    }
+
+    .grid > div > div {
+        @apply flex-1 flex flex-col;
     }
 }

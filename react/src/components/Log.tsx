@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Pagination } from "./common/Pagination";
-import { XCircleIcon, SunIcon, AdjustmentsHorizontalIcon, ToggleOnIcon, ToggleOffIcon } from "./icons";
+import { XCircleIcon, SunIcon, AdjustmentsHorizontalIcon, ToggleOnIcon, ToggleOffIcon, ClipboardDocumentListIcon } from "./icons";
 
 import "dayjs/locale/ja";
 import dayjs, { locale, extend } from "dayjs";
@@ -93,13 +93,14 @@ const Log = React.memo(({ isReady, log }: Props) => {
         }
 
         return (
-            <div>
-                <div className="text-left mb-3" data-testid="log">
+            <div className="flex flex-col h-full">
+                <div className="text-left flex-1 mb-4" data-testid="log">
                     <AnimatePresence initial={false}>
-                        {log.slice((page - 1) * size, page * size).map((entry: ApiResponse.LogEntry) => {
+                        {log.slice((page - 1) * size, page * size).map((entry: ApiResponse.LogEntry, index: number) => {
                             let date = dayjs(entry.date);
                             let log_date = date.format("M月D日(ddd) HH:mm");
                             let log_fromNow = date.fromNow();
+                            const isLast = index === Math.min(size, log.length - (page - 1) * size) - 1;
 
                             return (
                                 <motion.div
@@ -116,17 +117,17 @@ const Log = React.memo(({ isReady, log }: Props) => {
                                 >
                                     <div className="w-full font-bold">
                                         {log_date}
-                                        <small className="text-gray-500">({log_fromNow})</small>
+                                        <small className="text-gray-500 ml-2">({log_fromNow})</small>
                                     </div>
-                                    <div className="w-full log-message mb-1">{formatMessage(entry.message)}</div>
-                                    <hr className="dashed-hr" />
+                                    <div className="w-full log-message mb-2">{formatMessage(entry.message)}</div>
+                                    {!isLast && <hr className="dashed-hr" />}
                                 </motion.div>
                             );
                         })}
                     </AnimatePresence>
                 </div>
 
-                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 pb-4">
+                <div className="mt-auto pt-3 border-t border-gray-100">
                     <Pagination
                         page={page}
                         between={3}
@@ -140,13 +141,16 @@ const Log = React.memo(({ isReady, log }: Props) => {
     };
 
     return (
-        <div className="col-span-1">
-            <div className="mb-3 text-center">
-                <div className="card mb-4 shadow-sm">
+        <div>
+            <div className="text-center h-full">
+                <div className="card shadow-sm h-full">
                     <div className="card-header">
-                        <h4 className="my-0 font-normal">作動ログ</h4>
+                        <h4 className="my-0 font-normal">
+                            <ClipboardDocumentListIcon className="size-5 text-gray-600" />
+                            作動ログ
+                        </h4>
                     </div>
-                    <div className="card-body relative">{isReady ? logData(log.data) : loading()}</div>
+                    <div className="card-body flex flex-col">{isReady ? logData(log.data) : loading()}</div>
                 </div>
             </div>
         </div>

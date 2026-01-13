@@ -159,8 +159,10 @@ function App() {
     return (
         <>
             <div className="App">
-                <div className="flex flex-col md:flex-row items-center p-3 md:px-4 mb-3 bg-white border-b shadow-sm">
-                    <h1 className="text-3xl font-light my-0 mr-auto">室外機自動冷却システム</h1>
+                <div className="flex flex-col md:flex-row items-center p-3 px-4 md:px-5 mb-4 bg-white border-b shadow-sm">
+                    <h1 className="text-2xl md:text-3xl font-normal my-0 mr-auto tracking-wide text-gray-800">
+                        室外機自動冷却システム
+                    </h1>
                 </div>
                 {hasError && (
                     <ErrorMessage
@@ -168,9 +170,9 @@ function App() {
                         onRetry={handleRetry}
                     />
                 )}
-                <div>
+                <div className="mt-2">
                     <div className="container mx-auto px-4">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
                             <Watering isReady={isReady} stat={stat} />
                             <History isReady={isReady} stat={stat} />
                             <CoolingMode isReady={isReady} stat={stat} logUpdateTrigger={logUpdateTrigger} />
@@ -210,18 +212,18 @@ function App() {
                                 React バージョン: {reactVersion}
                             </small>
                         </p>
-                        <p className="text-3xl font-light">
+                        <p className="text-3xl font-light mt-2">
                             <a
                                 href={`${API_ENDPOINT}/proxy/html/api/metrics`}
-                                className="text-gray-500 mr-3"
+                                className="text-gray-500 hover:text-gray-700 mr-3"
                             >
-                                <ChartBarIcon className="size-6 inline" />
+                                <ChartBarIcon className="size-7 inline" />
                             </a>
                             <a
                                 href="https://github.com/kimata/unit-cooler"
-                                className="text-gray-500"
+                                className="text-gray-500 hover:text-gray-700"
                             >
-                                <GitHubIcon className="size-6 inline" />
+                                <GitHubIcon className="size-7 inline" />
                             </a>
                         </p>
                     </small>

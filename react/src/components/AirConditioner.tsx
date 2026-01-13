@@ -10,6 +10,7 @@ import { dateText } from "../lib/Util";
 import { ApiResponse } from "../lib/ApiResponse";
 import { Loading } from "./common/Loading";
 import { AnimatedNumber } from "./common/AnimatedNumber";
+import { BoltIcon } from "./icons";
 
 type Props = {
     isReady: boolean;
@@ -44,8 +45,8 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
 
         return (
             <tr key="{index}" className="flex">
-                <td className="text-left w-3/12 whitespace-nowrap py-2">{props.airconData.name}</td>
-                <td className="text-right w-4/12 py-2">
+                <td className="text-left w-2/12 whitespace-nowrap py-2">{props.airconData.name}</td>
+                <td className="text-right w-5/12 py-2 pr-3">
                     <div className="progress-label-container">
                         <div className="progress" style={{ height: "2em" }}>
                             <motion.div
@@ -71,7 +72,7 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                         </div>
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-2">{date.fromNow()}</td>
+                <td className="text-left w-2/12 py-2 pl-2">{date.fromNow()}</td>
                 <td className="text-left w-3/12 whitespace-nowrap py-2">
                     <small>{dateText(date)}</small>
                 </td>
@@ -90,9 +91,9 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                 <table className="w-full">
                     <thead>
                         <tr className="flex border-b border-gray-200">
-                            <th className="w-3/12 text-left py-2">エアコン</th>
-                            <th className="w-4/12 text-left py-2">値</th>
-                            <th colSpan={2} className="w-5/12 text-left py-2">
+                            <th className="w-2/12 text-left py-2">エアコン</th>
+                            <th className="w-5/12 text-left py-2 pr-3">値</th>
+                            <th colSpan={2} className="w-5/12 text-left py-2 pl-2">
                                 最新更新日時
                             </th>
                         </tr>
@@ -109,11 +110,14 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
     };
 
     return (
-        <div className="col-span-1">
-            <div className="mb-3 text-center">
-                <div className="card mb-4 shadow-sm">
+        <div>
+            <div className="text-center h-full">
+                <div className="card shadow-sm h-full">
                     <div className="card-header">
-                        <h4 className="my-0 font-normal">エアコン稼働状況</h4>
+                        <h4 className="my-0 font-normal">
+                            <BoltIcon className="size-5 text-yellow-500" />
+                            エアコン稼働状況
+                        </h4>
                     </div>
                     <div className="card-body">{isReady || stat.sensor.power.length > 0 ? sensorInfo(stat) : <Loading size="large" />}</div>
                 </div>
