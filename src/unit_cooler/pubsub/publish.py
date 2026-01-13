@@ -102,7 +102,18 @@ def start_server(server_port, func, interval_sec, msg_count=0):
 
 # NOTE: Last Value Caching Proxy
 # see https://zguide.zeromq.org/docs/chapter5/
-def start_proxy(server_host, server_port, proxy_port, msg_count=0):
+def start_proxy(server_host, server_port, proxy_port, msg_count=0, idle_timeout_sec=0):
+    """
+    Last Value Caching Proxy を開始する。
+
+    Args:
+        server_host: サーバーホスト名
+        server_port: サーバーポート（frontend）
+        proxy_port: プロキシポート（backend）
+        msg_count: 送信メッセージ数で終了（0=無制限）
+        idle_timeout_sec: アイドルタイムアウト秒数（0=無制限）
+                          subscribed=True になってからメッセージがない場合のタイムアウト
+    """
     logging.info("Start ZMQ proxy server (front: %s:%d, port: %d)...", server_host, server_port, proxy_port)
 
     context = zmq.Context()
@@ -123,12 +134,14 @@ def start_proxy(server_host, server_port, proxy_port, msg_count=0):
 
     subscribed = False  # NOTE: テスト用
     proxy_count = 0
+    idle_start_time = None  # アイドルタイムアウト計測用
     while True:
         try:
             events = dict(poller.poll(100))
         except KeyboardInterrupt:  # pragma: no cover
             break
 
+        frontend_message_received = False
         if frontend in events:
             recv_data = frontend.recv_string()
             ch, json_str = recv_data.split(" ", 1)
@@ -140,6 +153,7 @@ def start_proxy(server_host, server_port, proxy_port, msg_count=0):
 
             if subscribed:
                 proxy_count += 1
+            frontend_message_received = True
 
         if backend in events:
             logging.debug("Backend event")
@@ -158,6 +172,17 @@ def start_proxy(server_host, server_port, proxy_port, msg_count=0):
                     logging.warning("Cache is empty")
             else:  # pragma: no cover
                 pass
+
+        # アイドルタイムアウト処理（frontend からメッセージがない場合）
+        # NOTE: subscribed がなくても、キャッシュがあれば（メッセージを受信済み）タイムアウトを有効にする
+        if idle_timeout_sec > 0 and len(cache) > 0:
+            if frontend_message_received:
+                idle_start_time = None
+            elif idle_start_time is None:
+                idle_start_time = time.time()
+            elif time.time() - idle_start_time > idle_timeout_sec:
+                logging.info("Terminate due to idle timeout (%d sec).", idle_timeout_sec)
+                break
 
         if msg_count != 0:
             logging.debug("(proxy_count, msg_count) = (%d, %d)", proxy_count, msg_count)
