@@ -44,10 +44,10 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
         let date = dayjs(props.airconData.time);
 
         return (
-            <tr key="{index}" className="flex">
-                <td className="text-left w-2/12 whitespace-nowrap py-2">{props.airconData.name}</td>
-                <td className="text-right w-5/12 py-2 pr-3">
-                    <div className="progress-label-container">
+            <tr key="{index}" className="flex items-center">
+                <td className="text-left w-2/12 whitespace-nowrap py-2 flex items-center h-10">{props.airconData.name}</td>
+                <td className="text-right w-5/12 py-2 pr-3 flex items-center">
+                    <div className="progress-label-container w-full">
                         <div className="progress" style={{ height: "2em" }}>
                             <motion.div
                                 className="progress-bar bg-gray-500"
@@ -72,8 +72,8 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                         </div>
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-2 pl-2">{date.fromNow()}</td>
-                <td className="text-left w-3/12 whitespace-nowrap py-2">
+                <td className="text-left w-2/12 py-2 pl-2 flex items-center h-10">{date.fromNow()}</td>
+                <td className="text-left w-3/12 whitespace-nowrap py-2 flex items-center h-10">
                     <small>{dateText(date)}</small>
                 </td>
             </tr>

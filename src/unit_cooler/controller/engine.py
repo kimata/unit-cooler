@@ -18,7 +18,7 @@ import unit_cooler.controller.message
 import unit_cooler.controller.sensor
 import unit_cooler.util
 from unit_cooler.config import Config
-from unit_cooler.messages import ControlMessage, DutyConfig
+from unit_cooler.messages import ControlMessage, DutyConfig, StatusInfo
 
 # 最低でもこの時間は ON にする (テスト時含む)
 ON_SEC_MIN = 5
@@ -106,9 +106,21 @@ def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) 
     if dummy_mode:
         sense_data = {}
         mode = dummy_cooling_mode()
+        # ダミーモード用のデフォルト値
+        cooler_status = StatusInfo(status=0, message=None)
+        outdoor_status = StatusInfo(status=0, message=None)
     else:
         sense_data = unit_cooler.controller.sensor.get_sense_data(config)
         mode = judge_cooling_mode(config, sense_data)
+        # judge_cooling_mode から取得した値を StatusInfo に変換
+        cooler_status = StatusInfo(
+            status=mode["cooler_status"]["status"],
+            message=mode["cooler_status"]["message"],
+        )
+        outdoor_status = StatusInfo(
+            status=mode["outdoor_status"]["status"],
+            message=mode["outdoor_status"]["message"],
+        )
 
     mode_index = min(mode["cooling_mode"], len(unit_cooler.controller.message.CONTROL_MESSAGE_LIST) - 1)
 
@@ -136,6 +148,8 @@ def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) 
         duty=duty,
         mode_index=mode_index,
         sense_data=sense_data,
+        cooler_status=cooler_status,
+        outdoor_status=outdoor_status,
     )
 
     logging.info(control_msg.to_dict())

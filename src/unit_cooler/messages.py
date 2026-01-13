@@ -39,6 +39,27 @@ class DutyConfig:
 
 
 @dataclass(frozen=True)
+class StatusInfo:
+    """ステータス情報（cooler_status と outdoor_status の共通構造）"""
+
+    status: int
+    message: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "message": self.message,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> StatusInfo:
+        return cls(
+            status=data["status"],
+            message=data.get("message"),
+        )
+
+
+@dataclass(frozen=True)
 class ControlMessage:
     """Controller から Actuator への制御メッセージ"""
 
@@ -46,6 +67,8 @@ class ControlMessage:
     duty: DutyConfig
     mode_index: int
     sense_data: dict[str, Any] = field(default_factory=dict)
+    cooler_status: StatusInfo | None = None
+    outdoor_status: StatusInfo | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -53,6 +76,8 @@ class ControlMessage:
             "duty": self.duty.to_dict(),
             "mode_index": self.mode_index,
             "sense_data": self.sense_data,
+            "cooler_status": self.cooler_status.to_dict() if self.cooler_status else None,
+            "outdoor_status": self.outdoor_status.to_dict() if self.outdoor_status else None,
         }
 
     def to_json(self) -> str:
@@ -60,11 +85,15 @@ class ControlMessage:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ControlMessage:
+        cooler_status_data = data.get("cooler_status")
+        outdoor_status_data = data.get("outdoor_status")
         return cls(
             state=unit_cooler.const.COOLING_STATE(data["state"]),
             duty=DutyConfig.from_dict(data["duty"]),
             mode_index=data["mode_index"],
             sense_data=data.get("sense_data", {}),
+            cooler_status=StatusInfo.from_dict(cooler_status_data) if cooler_status_data else None,
+            outdoor_status=StatusInfo.from_dict(outdoor_status_data) if outdoor_status_data else None,
         )
 
     @classmethod

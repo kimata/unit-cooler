@@ -21,8 +21,6 @@ import my_lib.flask_util
 import my_lib.sensor_data
 import my_lib.webapp.config
 
-import unit_cooler.controller.engine
-import unit_cooler.controller.sensor
 import unit_cooler.webui.worker
 
 if TYPE_CHECKING:
@@ -75,9 +73,8 @@ get_last_message.last_message = None  # type: ignore[attr-defined]
 
 
 def get_stats(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
-    # NOTE: データを受け渡すのは面倒なので、直接計算してしまう
-    sense_data = unit_cooler.controller.sensor.get_sense_data(config)
-    mode = unit_cooler.controller.engine.judge_cooling_mode(config, sense_data)
+    # ZMQ 経由で Controller から受信したメッセージを使用
+    control_message = get_last_message(message_queue)
 
     # ActuatorStatus を取得（ZeroMQ 経由で受信した最新のステータス）
     actuator_status = unit_cooler.webui.worker.get_last_actuator_status()
@@ -85,10 +82,10 @@ def get_stats(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
 
     return {
         "watering": watering_list(config),
-        "sensor": mode["sense_data"],
-        "mode": get_last_message(message_queue),
-        "cooler_status": mode["cooler_status"],
-        "outdoor_status": mode["outdoor_status"],
+        "sensor": control_message.get("sense_data", {}) if control_message else {},
+        "mode": control_message,
+        "cooler_status": control_message.get("cooler_status") if control_message else None,
+        "outdoor_status": control_message.get("outdoor_status") if control_message else None,
         "actuator_status": actuator_status_dict,
     }
 

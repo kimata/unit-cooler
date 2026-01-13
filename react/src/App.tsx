@@ -159,9 +159,11 @@ function App() {
     return (
         <>
             <div className="App">
-                <div className="py-4 px-4 mb-4 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-b shadow-sm">
-                    <h1 className="text-2xl md:text-3xl font-light my-0 text-center tracking-widest text-gray-700">
-                        室外機自動冷却システム
+                <div className="py-5 px-4 mb-4 bg-gradient-to-r from-blue-50 via-white to-blue-50 border-b border-blue-100 shadow-md">
+                    <h1 className="text-2xl md:text-3xl font-bold my-0 text-center tracking-widest text-gray-800">
+                        <span className="inline-block border-b-4 border-blue-400 pb-1">
+                            室外機自動冷却システム
+                        </span>
                     </h1>
                 </div>
                 {hasError && (

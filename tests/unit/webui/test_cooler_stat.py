@@ -135,22 +135,16 @@ class TestGetStats:
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
-        mocker.patch(
-            "unit_cooler.controller.sensor.get_sense_data",
-            return_value={"outdoor": {"temp": 30}},
-        )
-        mocker.patch(
-            "unit_cooler.controller.engine.judge_cooling_mode",
-            return_value={
-                "sense_data": {"outdoor": {"temp": 30}},
-                "cooler_status": {"active": True},
-                "outdoor_status": {"hot": True},
-            },
-        )
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
 
         queue = multiprocessing.Queue()
-        cooler_stat.get_last_message.last_message = {"mode_index": 3}  # pyright: ignore[reportFunctionMemberAccess]
+        # ZMQ メッセージをシミュレート
+        cooler_stat.get_last_message.last_message = {  # pyright: ignore[reportFunctionMemberAccess]
+            "mode_index": 3,
+            "sense_data": {"outdoor": {"temp": 30}},
+            "cooler_status": {"status": 1, "message": None},
+            "outdoor_status": {"status": 0, "message": None},
+        }
 
         result = cooler_stat.get_stats(config, queue)
 
@@ -161,6 +155,23 @@ class TestGetStats:
         assert "outdoor_status" in result
         assert "actuator_status" in result
 
+    def test_returns_empty_data_when_no_message(self, config, mocker):
+        """ZMQ メッセージがない場合は空データを返す"""
+        import unit_cooler.webui.webapi.cooler_stat as cooler_stat
+
+        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
+        mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
+
+        queue = multiprocessing.Queue()
+        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
+
+        result = cooler_stat.get_stats(config, queue)
+
+        assert result["sensor"] == {}
+        assert result["mode"] is None
+        assert result["cooler_status"] is None
+        assert result["outdoor_status"] is None
+
     def test_includes_actuator_status_when_available(self, config, mocker):
         """ActuatorStatus が利用可能時に含める"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
@@ -168,18 +179,6 @@ class TestGetStats:
         from unit_cooler.messages import ActuatorStatus, ValveStatus
 
         mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
-        mocker.patch(
-            "unit_cooler.controller.sensor.get_sense_data",
-            return_value={"outdoor": {"temp": 30}},
-        )
-        mocker.patch(
-            "unit_cooler.controller.engine.judge_cooling_mode",
-            return_value={
-                "sense_data": {},
-                "cooler_status": {},
-                "outdoor_status": {},
-            },
-        )
 
         valve_status = ValveStatus(
             state=VALVE_STATE.OPEN,
@@ -198,7 +197,12 @@ class TestGetStats:
         )
 
         queue = multiprocessing.Queue()
-        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat.get_last_message.last_message = {  # pyright: ignore[reportFunctionMemberAccess]
+            "mode_index": 3,
+            "sense_data": {},
+            "cooler_status": {"status": 0, "message": None},
+            "outdoor_status": {"status": 0, "message": None},
+        }
 
         result = cooler_stat.get_stats(config, queue)
 
@@ -223,20 +227,13 @@ class TestApiGetStats:
         app.config["MESSAGE_QUEUE"] = queue
 
         mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
-        mocker.patch(
-            "unit_cooler.controller.sensor.get_sense_data",
-            return_value={"outdoor": {"temp": 30}},
-        )
-        mocker.patch(
-            "unit_cooler.controller.engine.judge_cooling_mode",
-            return_value={
-                "sense_data": {},
-                "cooler_status": {},
-                "outdoor_status": {},
-            },
-        )
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
-        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat.get_last_message.last_message = {  # pyright: ignore[reportFunctionMemberAccess]
+            "mode_index": 3,
+            "sense_data": {},
+            "cooler_status": {"status": 0, "message": None},
+            "outdoor_status": {"status": 0, "message": None},
+        }
 
         with app.test_client() as client:
             response = client.get("/api/stat")
@@ -258,8 +255,9 @@ class TestApiGetStats:
         app.config["CONFIG"] = config
         app.config["MESSAGE_QUEUE"] = queue
 
+        # watering_list で例外を発生させる
         mocker.patch(
-            "unit_cooler.controller.sensor.get_sense_data",
+            "unit_cooler.webui.webapi.cooler_stat.watering_list",
             side_effect=Exception("test error"),
         )
 
