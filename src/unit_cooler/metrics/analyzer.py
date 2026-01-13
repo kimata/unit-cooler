@@ -206,6 +206,9 @@ class MetricsAnalyzer:
 
     def get_summary_statistics(self, days: int = 7) -> dict:
         """Get summary statistics for the dashboard."""
+        if not _ANALYSIS_AVAILABLE:
+            return {"error": "Analysis libraries not available"}
+
         end_time = datetime.datetime.now(TIMEZONE)
         start_time = end_time - datetime.timedelta(days=days)
 

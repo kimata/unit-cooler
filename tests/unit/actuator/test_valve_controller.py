@@ -295,6 +295,144 @@ class TestValveControllerSetCoolingWorking:
 
         assert isinstance(status, ValveStatus)
 
+    def test_duty_disabled_keeps_valve_open(self, config, mocker):
+        """Duty制御が無効の場合、バルブを開いたまま維持"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        # 初期化: CLOSE, set_cooling_working: OPEN (既に WORKING 状態)
+        mock_gpio.input.side_effect = [0, 0, 0, 1, 1, 1, 1, 1, 1]
+        fp_mock = create_footprint_mock(mocker)
+        mocker.patch("unit_cooler.actuator.work_log.add")
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        # __post_init__ 後に state/working を True に設定
+        fp_mock["state"]["state/working"] = True
+        duty = DutyConfig(enable=False, on_sec=100, off_sec=60)
+        status = controller.set_cooling_working(duty)
+
+        assert status.state == VALVE_STATE.OPEN
+
+    def test_on_duty_exceeds_threshold_closes_valve(self, config, mocker):
+        """ONデューティが閾値を超えるとバルブを閉じる"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        # 初期化: CLOSE(2x input), get_status: OPEN(1x), set_state: CLOSE(2x)
+        mock_gpio.input.side_effect = [0, 0, 1, 0, 0]
+        fp_mock = create_footprint_mock(mocker)
+        fp_mock["elapsed"].return_value = 110.0  # on_sec(100)を超過
+        mocker.patch("unit_cooler.actuator.work_log.add")
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        # __post_init__ 後に状態を設定
+        fp_mock["state"]["state/working"] = True
+        fp_mock["state"]["valve/open"] = True
+        duty = DutyConfig(enable=True, on_sec=100, off_sec=60)
+        status = controller.set_cooling_working(duty)
+
+        assert status.state == VALVE_STATE.CLOSE
+
+    def test_on_duty_within_threshold_keeps_valve_open(self, config, mocker):
+        """ONデューティが閾値内ならバルブを開いたまま維持"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        # 初期化: CLOSE(2x), set_cooling_working: get_status->OPEN, set_state->OPEN(2x)
+        mock_gpio.input.side_effect = [0, 0, 1, 1, 1]
+        fp_mock = create_footprint_mock(mocker)
+        fp_mock["elapsed"].return_value = 50.0  # on_sec(100)未満
+        mocker.patch("unit_cooler.actuator.work_log.add")
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        # __post_init__ 後に状態を設定
+        fp_mock["state"]["state/working"] = True
+        fp_mock["state"]["valve/open"] = True
+        duty = DutyConfig(enable=True, on_sec=100, off_sec=60)
+        status = controller.set_cooling_working(duty)
+
+        assert status.state == VALVE_STATE.OPEN
+
+    def test_off_duty_exceeds_threshold_opens_valve(self, config, mocker):
+        """OFFデューティが閾値を超えるとバルブを開く"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        # 初期化: CLOSE(2x), get_status: CLOSE(1x), set_state: OPEN(2x)
+        mock_gpio.input.side_effect = [0, 0, 0, 1, 1]
+        fp_mock = create_footprint_mock(mocker)
+        fp_mock["elapsed"].return_value = 70.0  # off_sec(60)を超過
+        mocker.patch("unit_cooler.actuator.work_log.add")
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        # __post_init__ 後に状態を設定
+        fp_mock["state"]["state/working"] = True
+        fp_mock["state"]["valve/close"] = True
+        duty = DutyConfig(enable=True, on_sec=100, off_sec=60)
+        status = controller.set_cooling_working(duty)
+
+        assert status.state == VALVE_STATE.OPEN
+
+    def test_off_duty_within_threshold_keeps_valve_closed(self, config, mocker):
+        """OFFデューティが閾値内ならバルブを閉じたまま維持"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        # 初期化: CLOSE, get_status: CLOSE, set_state: CLOSE
+        mock_gpio.input.side_effect = [0, 0, 0, 0, 0, 0]
+        fp_mock = create_footprint_mock(mocker)
+        fp_mock["elapsed"].return_value = 30.0  # off_sec(60)未満
+        mocker.patch("unit_cooler.actuator.work_log.add")
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        # __post_init__ 後に状態を設定
+        fp_mock["state"]["state/working"] = True
+        fp_mock["state"]["valve/close"] = True
+        duty = DutyConfig(enable=True, on_sec=100, off_sec=60)
+        status = controller.set_cooling_working(duty)
+
+        assert status.state == VALVE_STATE.CLOSE
+
+
+class TestValveControllerNotifyStateManager:
+    """_notify_state_manager のテスト"""
+
+    def test_notifies_state_manager(self, config, mocker):
+        """StateManager に通知"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        mock_gpio.input.return_value = 0
+        create_footprint_mock(mocker)
+
+        mock_state_manager = mocker.MagicMock()
+        mocker.patch(
+            "unit_cooler.state_manager.get_state_manager",
+            return_value=mock_state_manager,
+        )
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        controller._notify_state_manager(VALVE_STATE.OPEN)
+
+        mock_state_manager.notify_valve_state_changed.assert_called_once_with(VALVE_STATE.OPEN)
+
+    def test_handles_exception_gracefully(self, config, mocker):
+        """例外を適切に処理"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        mock_gpio.input.return_value = 0
+        create_footprint_mock(mocker)
+
+        mocker.patch(
+            "unit_cooler.state_manager.get_state_manager",
+            side_effect=Exception("StateManager not available"),
+        )
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        # 例外が発生しても関数はエラーを投げない
+        controller._notify_state_manager(VALVE_STATE.OPEN)
+
 
 class TestValveControllerSetCoolingIdle:
     """set_cooling_idle のテスト"""
@@ -453,3 +591,46 @@ class TestValveControllerClearStat:
 
         controller.clear_stat()
         assert len(controller.get_hist()) == 0
+
+
+class TestValveControllerRecordMetrics:
+    """_record_metrics のテスト"""
+
+    def test_records_metrics_on_valve_operation(self, config, mocker):
+        """バルブ操作時にメトリクスを記録"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        mock_gpio.input.side_effect = [0, 0, 0, 1, 1]
+        create_footprint_mock(mocker)
+
+        mock_collector = mocker.MagicMock()
+        mock_get_collector = mocker.patch(
+            "unit_cooler.metrics.get_metrics_collector",
+            return_value=mock_collector,
+        )
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        controller.set_state(VALVE_STATE.OPEN)
+
+        # メトリクス収集が呼ばれることを確認
+        mock_get_collector.assert_called()
+        mock_collector.record_valve_operation.assert_called()
+
+    def test_handles_metrics_exception_gracefully(self, config, mocker):
+        """メトリクス記録の例外を適切に処理"""
+        mock_gpio = mocker.patch("my_lib.rpi.gpio")
+        mock_gpio.input.side_effect = [0, 0, 0, 1, 1]
+        create_footprint_mock(mocker)
+
+        mocker.patch(
+            "unit_cooler.metrics.get_metrics_collector",
+            side_effect=Exception("Metrics DB not available"),
+        )
+
+        from unit_cooler.actuator.valve_controller import ValveController
+
+        controller = ValveController(config=config, pin_no=17)
+        # 例外が発生しても set_state は正常に完了
+        status = controller.set_state(VALVE_STATE.OPEN)
+        assert status.state == VALVE_STATE.OPEN

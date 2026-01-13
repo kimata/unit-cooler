@@ -23,6 +23,7 @@ dependencies = [
     "scikit-learn>=1.3.0",
     "scipy>=1.10.0",
     "pillow>=11.2.1",
+    "pandas>=2.0.0",
 ]
 
 [dependency-groups]
@@ -120,12 +121,19 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
+omit = [
+    "src/actuator.py",
+    "src/webui.py",
+    "src/controller.py",
+]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+    "raise AssertionError",
+    "raise NotImplementedError",
 ]
 
 [tool.coverage.html]

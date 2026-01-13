@@ -110,6 +110,62 @@ class TestQueuePut:
         assert result["state"] == COOLING_STATE.WORKING
         assert isinstance(result["state"], COOLING_STATE)
 
+    def test_removes_old_message_when_queue_full(self, mocker):
+        """キューが満杯の場合、古いメッセージを削除"""
+        import unit_cooler.webui.worker
+
+        mocker.patch("my_lib.footprint.update")
+        mocker.patch.object(unit_cooler.webui.worker, "_notify_state_manager_subscribe_processed")
+
+        # maxsize=1 で満杯になるキューを作成
+        queue = multiprocessing.Queue(maxsize=1)
+        liveness_file = pathlib.Path("/tmp/test_liveness")
+
+        # 最初のメッセージを追加 (state=1: WORKING)
+        first_message = {"state": 1, "mode_index": 1}
+        unit_cooler.webui.worker.queue_put(queue, first_message, liveness_file)
+
+        # 2番目のメッセージを追加（最初のメッセージは削除される）(state=0: IDLE)
+        second_message = {"state": 0, "mode_index": 2}
+        unit_cooler.webui.worker.queue_put(queue, second_message, liveness_file)
+
+        # 2番目のメッセージが取得される
+        result = queue.get(timeout=1)
+        assert result["state"] == COOLING_STATE.IDLE
+        assert result["mode_index"] == 2
+
+
+class TestNotifyStateManagerSubscribeProcessed:
+    """_notify_state_manager_subscribe_processed のテスト"""
+
+    def test_notifies_state_manager(self, mocker):
+        """StateManager に通知"""
+        import unit_cooler.webui.worker
+
+        mock_state_manager = mocker.MagicMock()
+        # 動的インポートされるので state_manager モジュール側をパッチ
+        mocker.patch(
+            "unit_cooler.state_manager.get_state_manager",
+            return_value=mock_state_manager,
+        )
+
+        unit_cooler.webui.worker._notify_state_manager_subscribe_processed()
+
+        mock_state_manager.notify_subscribe_processed.assert_called_once()
+
+    def test_handles_exception_gracefully(self, mocker):
+        """例外を適切に処理"""
+        import unit_cooler.webui.worker
+
+        # 動的インポートされるので state_manager モジュール側をパッチ
+        mocker.patch(
+            "unit_cooler.state_manager.get_state_manager",
+            side_effect=Exception("StateManager not available"),
+        )
+
+        # 例外が発生しても関数はエラーを投げない
+        unit_cooler.webui.worker._notify_state_manager_subscribe_processed()
+
 
 class TestSubscribeWorker:
     """subscribe_worker のテスト"""
@@ -186,3 +242,143 @@ class TestActuatorStatusWorker:
         )
 
         assert result == 0
+
+    def test_receives_actuator_status(self, config, mocker):
+        """ActuatorStatus を受信してキャッシュ"""
+        import json
+
+        import zmq
+
+        import unit_cooler.webui.worker
+        from unit_cooler.const import VALVE_STATE
+        from unit_cooler.messages import ActuatorStatus, ValveStatus
+
+        # 終了フラグをリセット
+        unit_cooler.webui.worker.should_terminate.clear()
+        unit_cooler.webui.worker._last_actuator_status = None
+
+        # テスト用のActuatorStatus
+        valve_status = ValveStatus(state=VALVE_STATE.OPEN, duration_sec=5.0)
+        test_status = ActuatorStatus(
+            timestamp="2024-01-01T12:00:00",
+            valve=valve_status,
+            flow_lpm=2.5,
+            cooling_mode_index=4,
+            hazard_detected=False,
+        )
+
+        # モックソケットを作成
+        mock_socket = mocker.MagicMock()
+        mock_context = mocker.MagicMock()
+        mock_context.socket.return_value = mock_socket
+
+        # recv_string の動作をシミュレート
+        # 1回目: メッセージ受信, 2回目: タイムアウト
+        call_count = [0]
+
+        def recv_side_effect():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return f"actuator_status {json.dumps(test_status.to_dict())}"
+            else:
+                # 2回目以降は終了フラグを設定してタイムアウト
+                unit_cooler.webui.worker.should_terminate.set()
+                raise zmq.Again()
+
+        mock_socket.recv_string.side_effect = recv_side_effect
+        mocker.patch("zmq.Context", return_value=mock_context)
+
+        result = unit_cooler.webui.worker.actuator_status_worker(
+            config=config,
+            actuator_host="localhost",
+            status_pub_port=5560,
+        )
+
+        assert result == 0
+        # ステータスがキャッシュされている
+        cached = unit_cooler.webui.worker.get_last_actuator_status()
+        assert cached is not None
+        assert cached.flow_lpm == 2.5
+        assert cached.cooling_mode_index == 4
+
+    def test_handles_zmq_timeout(self, config, mocker):
+        """ZMQ タイムアウトを処理"""
+        import zmq
+
+        import unit_cooler.webui.worker
+
+        # 終了フラグをリセット
+        unit_cooler.webui.worker.should_terminate.clear()
+
+        mock_socket = mocker.MagicMock()
+        mock_context = mocker.MagicMock()
+        mock_context.socket.return_value = mock_socket
+
+        # 最初のタイムアウト後に終了フラグを設定
+        def recv_side_effect():
+            unit_cooler.webui.worker.should_terminate.set()
+            raise zmq.Again()
+
+        mock_socket.recv_string.side_effect = recv_side_effect
+        mocker.patch("zmq.Context", return_value=mock_context)
+
+        result = unit_cooler.webui.worker.actuator_status_worker(
+            config=config,
+            actuator_host="localhost",
+            status_pub_port=5560,
+        )
+
+        assert result == 0
+
+    def test_handles_invalid_message_format(self, config, mocker):
+        """無効なメッセージ形式を処理"""
+        import zmq
+
+        import unit_cooler.webui.worker
+
+        unit_cooler.webui.worker.should_terminate.clear()
+
+        mock_socket = mocker.MagicMock()
+        mock_context = mocker.MagicMock()
+        mock_context.socket.return_value = mock_socket
+
+        call_count = [0]
+
+        def recv_side_effect():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # 無効なプレフィックス
+                return "invalid_prefix {}"
+            elif call_count[0] == 2:
+                # 不正な JSON
+                return "actuator_status not_valid_json"
+            else:
+                unit_cooler.webui.worker.should_terminate.set()
+                raise zmq.Again()
+
+        mock_socket.recv_string.side_effect = recv_side_effect
+        mocker.patch("zmq.Context", return_value=mock_context)
+
+        result = unit_cooler.webui.worker.actuator_status_worker(
+            config=config,
+            actuator_host="localhost",
+            status_pub_port=5560,
+        )
+
+        # エラーが発生しても正常終了
+        assert result == 0
+
+    def test_handles_connection_error(self, config, mocker):
+        """接続エラーを処理"""
+        import unit_cooler.webui.worker
+
+        mocker.patch("zmq.Context", side_effect=Exception("Connection failed"))
+        mocker.patch("unit_cooler.util.notify_error")
+
+        result = unit_cooler.webui.worker.actuator_status_worker(
+            config=config,
+            actuator_host="localhost",
+            status_pub_port=5560,
+        )
+
+        assert result == -1

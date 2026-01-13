@@ -16,6 +16,7 @@ import pathlib
 import sqlite3
 import threading
 import zoneinfo
+from collections.abc import Callable
 from contextlib import contextmanager
 
 import my_lib.sqlite_util
@@ -29,18 +30,30 @@ logger = logging.getLogger(__name__)
 class MetricsCollector:
     """Metrics collection system focused on cooling mode analysis."""
 
-    def __init__(self, db_path: str | pathlib.Path = DEFAULT_DB_PATH):
-        """Initialize MetricsCollector with database path."""
+    def __init__(
+        self,
+        db_path: str | pathlib.Path = DEFAULT_DB_PATH,
+        time_func: Callable[[], datetime.datetime] | None = None,
+    ):
+        """Initialize MetricsCollector with database path.
+
+        Args:
+            db_path: Path to the SQLite database file.
+            time_func: Optional function that returns current datetime.
+                       Defaults to datetime.datetime.now(TIMEZONE).
+                       Used for testing time-dependent behavior.
+        """
         self.db_path = pathlib.Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
         self._lock = threading.Lock()
+        self._time_func = time_func or (lambda: datetime.datetime.now(TIMEZONE))
 
         # Current state tracking
-        self._current_minute_data = {}
-        self._current_hour_data = {"valve_operations": 0}
-        self._last_minute = None
-        self._last_hour = None
+        self._current_minute_data: dict = {}
+        self._current_hour_data: dict = {"valve_operations": 0}
+        self._last_minute: datetime.datetime | None = None
+        self._last_hour: datetime.datetime | None = None
 
     def _init_database(self):
         """Initialize database tables for new metrics schema."""
@@ -156,7 +169,7 @@ class MetricsCollector:
 
     def record_error(self, error_type: str, error_message: str | None = None):
         """Record an error event."""
-        now = datetime.datetime.now(TIMEZONE)
+        now = self._time_func()
 
         try:
             with self._get_db_connection() as conn:
@@ -173,7 +186,7 @@ class MetricsCollector:
 
     def _check_minute_boundary(self):
         """Check if we crossed a minute boundary and save data."""
-        now = datetime.datetime.now(TIMEZONE)
+        now = self._time_func()
         current_minute = now.replace(second=0, microsecond=0)
 
         if self._last_minute is None:
@@ -187,7 +200,7 @@ class MetricsCollector:
 
     def _check_hour_boundary(self):
         """Check if we crossed an hour boundary and save data."""
-        now = datetime.datetime.now(TIMEZONE)
+        now = self._time_func()
         current_hour = now.replace(minute=0, second=0, microsecond=0)
 
         if self._last_hour is None:
@@ -340,7 +353,7 @@ class MetricsCollector:
         """Clean shutdown of metrics collector."""
         with self._lock:
             # 最後のデータを保存
-            now = datetime.datetime.now(TIMEZONE)
+            now = self._time_func()
             current_minute = now.replace(second=0, microsecond=0)
             if self._current_minute_data:
                 self._save_minute_data(current_minute)
