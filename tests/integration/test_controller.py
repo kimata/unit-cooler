@@ -36,7 +36,7 @@ class TestControllerStartup:
             sock = ctx.socket(zmq.SUB)
             sock.connect(f"tcp://localhost:{server_port}")
             sock.setsockopt_string(zmq.SUBSCRIBE, "unit_cooler")
-            sock.setsockopt(zmq.RCVTIMEO, 5000)  # 5秒タイムアウト
+            sock.setsockopt(zmq.RCVTIMEO, 500)  # 500msタイムアウト
             subscriber_ready.set()
 
             try:
@@ -54,8 +54,8 @@ class TestControllerStartup:
 
         sub_thread = threading.Thread(target=subscriber, daemon=True)
         sub_thread.start()
-        subscriber_ready.wait(timeout=5)
-        time.sleep(0.2)  # サブスクライバーが完全に準備されるまで待機
+        subscriber_ready.wait(timeout=2)
+        time.sleep(0.05)  # サブスクライバーが完全に準備されるまで待機
 
         # Controller を起動
         options = {
@@ -109,7 +109,7 @@ class TestControllerMessageContent:
             sock = ctx.socket(zmq.SUB)
             sock.connect(f"tcp://localhost:{server_port}")
             sock.setsockopt_string(zmq.SUBSCRIBE, "unit_cooler")
-            sock.setsockopt(zmq.RCVTIMEO, 1000)
+            sock.setsockopt(zmq.RCVTIMEO, 500)  # 500msタイムアウト
             subscriber_ready.set()
 
             try:
@@ -125,8 +125,8 @@ class TestControllerMessageContent:
 
         sub_thread = threading.Thread(target=subscriber, daemon=True)
         sub_thread.start()
-        subscriber_ready.wait(timeout=5)
-        time.sleep(0.5)  # プロキシが起動するまで待機
+        subscriber_ready.wait(timeout=2)
+        time.sleep(0.05)  # プロキシが起動するまで待機
 
         options = {
             "speedup": 100,
@@ -182,7 +182,7 @@ class TestControllerDummyMode:
             sock = ctx.socket(zmq.SUB)
             sock.connect(f"tcp://localhost:{server_port}")
             sock.setsockopt_string(zmq.SUBSCRIBE, "unit_cooler")
-            sock.setsockopt(zmq.RCVTIMEO, 1000)
+            sock.setsockopt(zmq.RCVTIMEO, 500)  # 500msタイムアウト
             subscriber_ready.set()
 
             try:
@@ -198,8 +198,8 @@ class TestControllerDummyMode:
 
         sub_thread = threading.Thread(target=subscriber, daemon=True)
         sub_thread.start()
-        subscriber_ready.wait(timeout=5)
-        time.sleep(0.2)
+        subscriber_ready.wait(timeout=2)
+        time.sleep(0.05)
 
         options = {
             "speedup": 1000,  # 高速化

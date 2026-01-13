@@ -94,7 +94,7 @@ class TestGetLastMessage:
         queue.put({"mode_index": 2})
         queue.put({"mode_index": 3})
         # キューにデータが入るのを待つ
-        time.sleep(0.1)
+        time.sleep(0.01)
 
         result = cooler_stat.get_last_message(queue)
 
@@ -109,7 +109,7 @@ class TestGetLastMessage:
         queue = multiprocessing.Queue()
         queue.put({"mode_index": 5})
         # キューにデータが入るのを待つ
-        time.sleep(0.1)
+        time.sleep(0.01)
 
         cooler_stat.get_last_message(queue)
 

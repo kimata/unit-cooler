@@ -41,6 +41,8 @@ class TestStartServer:
         mock_context.socket.return_value = mock_socket
         mocker.patch("zmq.Context", return_value=mock_context)
         mocker.patch.object(unit_cooler.pubsub.publish, "wait_first_client")
+        # ループ内のsleepをスキップして高速化
+        mocker.patch("unit_cooler.pubsub.publish.time.sleep")
 
         # recv でエラーを発生させて早期終了
         mock_socket.recv.side_effect = zmq.Again()

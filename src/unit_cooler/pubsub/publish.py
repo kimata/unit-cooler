@@ -25,15 +25,18 @@ import zmq
 import unit_cooler.const
 
 
-def wait_first_client(socket, timeout=10):
+def wait_first_client(socket, timeout=1):
     start_time = time.time()
 
     logging.info("Waiting for first client connection...")
     poller = zmq.Poller()
     poller.register(socket, zmq.POLLIN)
 
+    # タイムアウトに応じてポーリング間隔を調整
+    poll_interval = min(100, int(timeout * 100))
+
     while True:
-        events = dict(poller.poll(100))
+        events = dict(poller.poll(poll_interval))
         if socket in events:
             event = socket.recv()
             if event[0] == 1:  # 購読開始
