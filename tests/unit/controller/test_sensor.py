@@ -256,74 +256,6 @@ class TestGetCoolerActivity:
             get_cooler_activity(sense_data, DEFAULT_THRESHOLDS)
 
 
-class TestFetchSensorData:
-    """_fetch_sensor_data のテスト"""
-
-    def test_fetches_valid_data(self, config, mocker):
-        """有効なデータを取得"""
-        import datetime
-        import zoneinfo
-
-        from unit_cooler.controller.sensor import _fetch_sensor_data
-
-        tz = zoneinfo.ZoneInfo("Asia/Tokyo")
-        mock_time = datetime.datetime(2024, 1, 1, 12, 0, 0)
-
-        # センサーデータのモック
-        mock_data = mocker.MagicMock()
-        mock_data.valid = True
-        mock_data.value = [25.5]
-        mock_data.time = [mock_time]
-
-        mocker.patch("my_lib.sensor_data.fetch_data", return_value=mock_data)
-        mocker.patch("my_lib.time.get_zoneinfo", return_value=tz)
-
-        sensor = config.controller.sensor.temp[0]
-        result = _fetch_sensor_data(config, sensor, "temp", "-1h", "now()")
-
-        assert result["value"] == 25.5
-        assert result["name"] == sensor.name
-
-    def test_fetches_rain_data_with_conversion(self, config, mocker):
-        """雨量データは1時間換算される"""
-        import datetime
-        import zoneinfo
-
-        from unit_cooler.controller.sensor import _fetch_sensor_data
-
-        tz = zoneinfo.ZoneInfo("Asia/Tokyo")
-        mock_time = datetime.datetime(2024, 1, 1, 12, 0, 0)
-
-        # 1分間の降水量 0.5mm -> 1時間換算 30mm
-        mock_data = mocker.MagicMock()
-        mock_data.valid = True
-        mock_data.value = [0.5]
-        mock_data.time = [mock_time]
-
-        mocker.patch("my_lib.sensor_data.fetch_data", return_value=mock_data)
-        mocker.patch("my_lib.time.get_zoneinfo", return_value=tz)
-
-        sensor = config.controller.sensor.rain[0]
-        result = _fetch_sensor_data(config, sensor, "rain", "-1h", "now()")
-
-        assert result["value"] == 30.0  # 0.5 * 60 = 30
-
-    def test_returns_none_when_data_invalid(self, config, mocker):
-        """無効なデータの場合はNoneを返す"""
-        from unit_cooler.controller.sensor import _fetch_sensor_data
-
-        mock_data = mocker.MagicMock()
-        mock_data.valid = False
-
-        mocker.patch("my_lib.sensor_data.fetch_data", return_value=mock_data)
-
-        sensor = config.controller.sensor.temp[0]
-        result = _fetch_sensor_data(config, sensor, "temp", "-1h", "now()")
-
-        assert result["value"] is None
-        assert result["name"] == sensor.name
-
-
 class TestGetSenseData:
     """get_sense_data のテスト"""
 
@@ -343,7 +275,10 @@ class TestGetSenseData:
         mock_data.value = [25.0]
         mock_data.time = [mock_time]
 
-        mocker.patch("my_lib.sensor_data.fetch_data", return_value=mock_data)
+        async def mock_fetch_parallel(db_config, requests):
+            return [mock_data] * len(requests)
+
+        mocker.patch("my_lib.sensor_data.fetch_data_parallel", side_effect=mock_fetch_parallel)
         mocker.patch("my_lib.time.get_zoneinfo", return_value=tz)
 
         result = get_sense_data(config)
@@ -364,7 +299,10 @@ class TestGetSenseData:
         mock_data = mocker.MagicMock()
         mock_data.valid = False
 
-        mocker.patch("my_lib.sensor_data.fetch_data", return_value=mock_data)
+        async def mock_fetch_parallel(db_config, requests):
+            return [mock_data] * len(requests)
+
+        mocker.patch("my_lib.sensor_data.fetch_data_parallel", side_effect=mock_fetch_parallel)
         mock_notify = mocker.patch("unit_cooler.util.notify_error")
 
         get_sense_data(config)
@@ -391,14 +329,20 @@ class TestGetSenseData:
         mock_data.value = [25.0]
         mock_data.time = [mock_time]
 
-        fetch_mock = mocker.patch("my_lib.sensor_data.fetch_data", return_value=mock_data)
+        captured_requests = []
+
+        async def mock_fetch_parallel(db_config, requests):
+            captured_requests.extend(requests)
+            return [mock_data] * len(requests)
+
+        mocker.patch("my_lib.sensor_data.fetch_data_parallel", side_effect=mock_fetch_parallel)
         mocker.patch("my_lib.time.get_zoneinfo", return_value=tz)
         mocker.patch.dict(os.environ, {"DUMMY_MODE": "true"})
 
         get_sense_data(config)
 
-        # fetch_data が呼ばれた時の引数を確認
-        call_args = fetch_mock.call_args_list[0]
-        # 5番目と6番目の引数が start と stop (0-indexed: [4], [5])
-        assert call_args[0][4] == "-169h"  # start
-        assert call_args[0][5] == "-168h"  # stop
+        # 最初のリクエストの start/stop を確認
+        assert len(captured_requests) > 0
+        first_request = captured_requests[0]
+        assert first_request.start == "-169h"
+        assert first_request.stop == "-168h"

@@ -10,6 +10,7 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+import asyncio
 import dataclasses
 import logging
 import os
@@ -17,6 +18,7 @@ from typing import Any
 
 import my_lib.sensor_data
 import my_lib.time
+from my_lib.sensor_data import DataRequest
 
 import unit_cooler.const
 import unit_cooler.util
@@ -391,41 +393,6 @@ def get_cooler_state(
     return mode
 
 
-def _fetch_sensor_data(
-    config: Config, sensor: SensorItemConfig, kind: str, start: str, stop: str
-) -> dict[str, Any]:
-    """単一のセンサーからデータを取得する"""
-    zoneinfo = my_lib.time.get_zoneinfo()
-    influxdb_config = {
-        "url": config.controller.influxdb.url,
-        "token": config.controller.influxdb.token,
-        "org": config.controller.influxdb.org,
-        "bucket": config.controller.influxdb.bucket,
-    }
-
-    data = my_lib.sensor_data.fetch_data(
-        influxdb_config,  # type: ignore[arg-type]
-        sensor.measure,
-        sensor.hostname,
-        kind,
-        start,
-        stop,
-        last=True,
-    )
-    if data.valid:
-        value = data.value[0]
-        if kind == "rain":
-            # NOTE: 観測している雨量は1分間の降水量なので、1時間雨量に換算
-            value *= 60
-
-        return {
-            "name": sensor.name,
-            "time": data.time[0].replace(tzinfo=zoneinfo),
-            "value": value,
-        }
-    return {"name": sensor.name, "value": None}
-
-
 def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
     if os.environ.get("DUMMY_MODE", "false") == "true":
         start = "-169h"
@@ -434,8 +401,13 @@ def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
         start = "-1h"
         stop = "now()"
 
-    sense_data: dict[str, list[dict[str, Any]]] = {}
-    failed_sensors: list[str] = []  # データ取得に失敗したセンサー名を記録
+    zoneinfo = my_lib.time.get_zoneinfo()
+    influxdb_config = {
+        "url": config.controller.influxdb.url,
+        "token": config.controller.influxdb.token,
+        "org": config.controller.influxdb.org,
+        "bucket": config.controller.influxdb.bucket,
+    }
 
     # センサー種別とセンサーリストのマッピング
     sensor_kinds = {
@@ -447,15 +419,53 @@ def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
         "power": config.controller.sensor.power,
     }
 
-    for kind, sensors in sensor_kinds.items():
-        kind_data = []
-        for sensor in sensors:
-            result = _fetch_sensor_data(config, sensor, kind, start, stop)
-            kind_data.append(result)
-            if result["value"] is None:
-                failed_sensors.append(sensor.name)
+    # 全センサーの DataRequest を作成
+    requests: list[DataRequest] = []
+    request_info: list[tuple[str, SensorItemConfig]] = []  # (kind, sensor) のペア
 
-        sense_data[kind] = kind_data
+    for kind, sensors in sensor_kinds.items():
+        for sensor in sensors:
+            requests.append(
+                DataRequest(
+                    measure=sensor.measure,
+                    hostname=sensor.hostname,
+                    field=kind,
+                    start=start,
+                    stop=stop,
+                    last=True,
+                )
+            )
+            request_info.append((kind, sensor))
+
+    # 並列でデータ取得
+    results = asyncio.run(
+        my_lib.sensor_data.fetch_data_parallel(influxdb_config, requests)  # type: ignore[arg-type]
+    )
+
+    # 結果を元の構造に再構築
+    sense_data: dict[str, list[dict[str, Any]]] = {kind: [] for kind in sensor_kinds}
+    failed_sensors: list[str] = []
+
+    for (kind, sensor), result in zip(request_info, results, strict=True):
+        if isinstance(result, BaseException):
+            logging.warning("Failed to fetch %s data for %s: %s", kind, sensor.name, result)
+            sense_data[kind].append({"name": sensor.name, "value": None})
+            failed_sensors.append(sensor.name)
+        elif result.valid:
+            value = result.value[0]
+            if kind == "rain":
+                # NOTE: 観測している雨量は1分間の降水量なので、1時間雨量に換算
+                value *= 60
+            sense_data[kind].append(
+                {
+                    "name": sensor.name,
+                    "time": result.time[0].replace(tzinfo=zoneinfo),
+                    "value": value,
+                }
+            )
+        else:
+            sense_data[kind].append({"name": sensor.name, "value": None})
+            failed_sensors.append(sensor.name)
 
     # まとめてエラー通知
     if failed_sensors:
