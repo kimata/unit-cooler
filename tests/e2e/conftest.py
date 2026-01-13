@@ -8,32 +8,19 @@ import pathlib
 
 import pytest
 
-
-def pytest_addoption(parser):
-    """コマンドラインオプションを追加"""
-    parser.addoption(
-        "--host",
-        action="store",
-        default="localhost",
-        help="Target host for E2E tests",
-    )
-    parser.addoption(
-        "--port",
-        action="store",
-        default="5000",
-        help="Target port for E2E tests",
-    )
+# NOTE: --host and --port options are defined in tests/conftest.py
+# E2E tests inherit those options from the parent conftest
 
 
 @pytest.fixture(scope="session")
 def host(request):
-    """テスト対象のホスト"""
+    """テスト対象のホスト (session scope for E2E tests)"""
     return request.config.getoption("--host")
 
 
 @pytest.fixture(scope="session")
 def port(request):
-    """テスト対象のポート"""
+    """テスト対象のポート (session scope for E2E tests)"""
     return request.config.getoption("--port")
 
 
