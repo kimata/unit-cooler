@@ -2,7 +2,9 @@
 
 Raspberry Pi を使ったエアコン室外機自動冷却システム
 
-[![Regression](https://github.com/kimata/unit-cooler/actions/workflows/regression.yaml/badge.svg)](https://github.com/kimata/unit-cooler/actions/workflows/regression.yaml)
+[![Test Status](https://github.com/kimata/unit-cooler/actions/workflows/regression.yaml/badge.svg)](https://github.com/kimata/unit-cooler/actions/workflows/regression.yaml)
+[![Test Report](https://img.shields.io/badge/Test_Report-pytest.html-blue)](https://kimata.github.io/unit-cooler/pytest.html)
+[![Coverage Status](https://coveralls.io/repos/github/kimata/unit-cooler/badge.svg?branch=master)](https://coveralls.io/github/kimata/unit-cooler?branch=master)
 
 ## 📑 目次
 
@@ -542,10 +544,7 @@ docker-compose logs -f webui
 
 ## 📊 CI/CD
 
-GitHub Actions によるCI/CDパイプライン：
-
-- テスト結果: https://kimata.github.io/unit-cooler/
-- カバレッジレポート: https://kimata.github.io/unit-cooler/coverage/
+GitHub Actions によるCI/CDパイプラインを構築しています。テスト結果とカバレッジは上部のバッジからアクセスできます。
 
 ## 📝 ライセンス
 
