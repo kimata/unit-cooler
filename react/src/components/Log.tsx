@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PaginationControl } from "react-bootstrap-pagination-control";
-import { XCircleFill, ToggleOff, ToggleOn, Speedometer, SunriseFill, SunsetFill } from "react-bootstrap-icons";
+import { Pagination } from "./common/Pagination";
+import { XCircleIcon, SunIcon, AdjustmentsHorizontalIcon, ToggleOnIcon, ToggleOffIcon } from "./icons";
 
 import "dayjs/locale/ja";
 import dayjs, { locale, extend } from "dayjs";
@@ -26,8 +26,8 @@ const Log = React.memo(({ isReady, log }: Props) => {
 
     const loading = () => {
         return (
-            <span className="display-1 align-middle ms-4">
-                <span className="display-5">Loading...</span>
+            <span className="text-6xl font-light align-middle ml-4">
+                <span className="text-4xl font-light">Loading...</span>
             </span>
         );
     };
@@ -35,38 +35,38 @@ const Log = React.memo(({ isReady, log }: Props) => {
     const messageIcon = (message: string) => {
         if (message.match(/故障/)) {
             return (
-                <span className="me-2 text-danger">
-                    <XCircleFill />
+                <span className="mr-2 text-red-500">
+                    <XCircleIcon className="size-5 inline" />
                 </span>
             );
         } else if (message.match(/開始/)) {
             return (
-                <span className="me-2 text-danger">
-                    <SunriseFill />
+                <span className="mr-2 text-red-500">
+                    <SunIcon className="size-5 inline" />
                 </span>
             );
         } else if (message.match(/停止/)) {
             return (
-                <span className="me-2 text-warning">
-                    <SunsetFill />
+                <span className="mr-2 text-yellow-500">
+                    <SunIcon className="size-5 inline" />
                 </span>
             );
         } else if (message.match(/ON Duty/)) {
             return (
-                <span className="me-2 text-success">
-                    <ToggleOn />
+                <span className="mr-2 text-green-500">
+                    <ToggleOnIcon className="size-5 inline" />
                 </span>
             );
         } else if (message.match(/OFF Duty/)) {
             return (
-                <span className="me-2 text-secondary">
-                    <ToggleOff />
+                <span className="mr-2 text-gray-500">
+                    <ToggleOffIcon className="size-5 inline" />
                 </span>
             );
         } else if (message.match(/変更/)) {
             return (
-                <span className="me-2 text-success">
-                    <Speedometer />
+                <span className="mr-2 text-green-500">
+                    <AdjustmentsHorizontalIcon className="size-5 inline" />
                 </span>
             );
         }
@@ -85,8 +85,8 @@ const Log = React.memo(({ isReady, log }: Props) => {
         if (log.length === 0) {
             return (
                 <div>
-                    <div className="container text-start mb-3" data-testid="log">
-                        <div className="row">ログがありません．</div>
+                    <div className="text-left mb-3" data-testid="log">
+                        <div className="flex">ログがありません．</div>
                     </div>
                 </div>
             );
@@ -94,7 +94,7 @@ const Log = React.memo(({ isReady, log }: Props) => {
 
         return (
             <div>
-                <div className="container text-start mb-3" data-testid="log">
+                <div className="text-left mb-3" data-testid="log">
                     <AnimatePresence initial={false}>
                         {log.slice((page - 1) * size, page * size).map((entry: ApiResponse.LogEntry) => {
                             let date = dayjs(entry.date);
@@ -103,7 +103,7 @@ const Log = React.memo(({ isReady, log }: Props) => {
 
                             return (
                                 <motion.div
-                                    className="row"
+                                    className="flex flex-col"
                                     key={entry.id}
                                     initial={{ opacity: 0, height: 0, y: -20 }}
                                     animate={{ opacity: 1, height: "auto", y: 0 }}
@@ -114,26 +114,25 @@ const Log = React.memo(({ isReady, log }: Props) => {
                                     }}
                                     layout
                                 >
-                                    <div className="col-12 font-weight-bold">
+                                    <div className="w-full font-bold">
                                         {log_date}
-                                        <small className="text-muted">({log_fromNow})</small>
+                                        <small className="text-gray-500">({log_fromNow})</small>
                                     </div>
-                                    <div className="col-12 log-message mb-1">{formatMessage(entry.message)}</div>
-                                    <hr className="dashed" />
+                                    <div className="w-full log-message mb-1">{formatMessage(entry.message)}</div>
+                                    <hr className="dashed-hr" />
                                 </motion.div>
                             );
                         })}
                     </AnimatePresence>
                 </div>
 
-                <div className="position-absolute bottom-0 start-50 translate-middle-x">
-                    <PaginationControl
+                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 pb-4">
+                    <Pagination
                         page={page}
                         between={3}
                         total={log.length}
                         limit={size}
-                        changePage={handlePageChange}
-                        ellipsis={1}
+                        onChange={handlePageChange}
                     />
                 </div>
             </div>
@@ -141,13 +140,13 @@ const Log = React.memo(({ isReady, log }: Props) => {
     };
 
     return (
-        <div className="col">
-            <div className="card-deck mb-3 text-center">
+        <div className="col-span-1">
+            <div className="mb-3 text-center">
                 <div className="card mb-4 shadow-sm">
                     <div className="card-header">
-                        <h4 className="my-0 font-weight-normal">作動ログ</h4>
+                        <h4 className="my-0 font-normal">作動ログ</h4>
                     </div>
-                    <div className="card-body">{isReady ? logData(log.data) : loading()}</div>
+                    <div className="card-body relative">{isReady ? logData(log.data) : loading()}</div>
                 </div>
             </div>
         </div>

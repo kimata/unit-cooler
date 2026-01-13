@@ -105,25 +105,25 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
 
     const dutyInfo = (mode: ApiResponse.Mode) => {
         return (
-            <div className="container">
-                <div className="row">
-                    <div className="col-6">
-                        <span className="me-1">Open:</span>
+            <div className="w-full">
+                <div className="flex">
+                    <div className="w-1/2">
+                        <span className="mr-1">Open:</span>
                         <AnimatedNumber
                             value={Math.round((mode.duty?.on_sec ?? 0) / 60)}
                             decimals={0}
-                            className="display-6 digit"
+                            className="text-3xl font-light digit"
                         />
-                        <span className="ms-1">min</span>
+                        <span className="ml-1">min</span>
                     </div>
-                    <div className="col-6">
-                        <span className="me-1">Close:</span>
+                    <div className="w-1/2">
+                        <span className="mr-1">Close:</span>
                         <AnimatedNumber
                             value={Math.round((mode.duty?.off_sec ?? 0) / 60)}
                             decimals={0}
-                            className="display-6 digit"
+                            className="text-3xl font-light digit"
                         />
-                        <span className="ms-1">min</span>
+                        <span className="ml-1">min</span>
                     </div>
                 </div>
             </div>
@@ -142,10 +142,10 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
         return (
             <div className="mt-3">
                 {/* Valve Status */}
-                <div className="row align-items-center mb-2">
-                    <div className="col-12 text-center">
+                <div className="flex items-center mb-2">
+                    <div className="w-full text-center">
                         <span
-                            className="badge fs-6 d-flex align-items-center justify-content-center gap-2"
+                            className="inline-flex items-center justify-center gap-2 px-3 py-1 rounded text-sm"
                             style={{
                                 backgroundColor: isOpen ? '#5e7e9b' : '#adb5bd',
                                 color: '#ffffff'
@@ -153,14 +153,14 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                         >
                             <span>{valveStatus.state}</span>
                             {(isOpen || currentFlow > 0) && (
-                                <span className="fw-normal" style={{ fontSize: '0.875rem' }}>
+                                <span className="font-normal text-sm">
                                     <AnimatedNumber
                                         value={currentFlow}
                                         decimals={2}
                                         duration={0.9}
                                         className=""
                                     />
-                                    <span className="ms-1">L/min</span>
+                                    <span className="ml-1">L/min</span>
                                 </span>
                             )}
                         </span>
@@ -168,13 +168,13 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                 </div>
 
                 {/* Progress Bar */}
-                <div className="row align-items-center mb-1">
-                    <div className="col-12">
+                <div className="flex items-center mb-1">
+                    <div className="w-full">
                         <div className="progress-label-container">
                             <div className="progress" style={{ height: "2em" }}>
                                 <motion.div
                                     key={`${valveStatus.state}-${maxDuration}-${valveStatus.duration}`}
-                                    className="progress-bar bg-secondary"
+                                    className="progress-bar bg-gray-500"
                                     role="progressbar"
                                     initial={{ width: "0%" }}
                                     animate={{ width: `${Math.max(0, progress)}%` }}
@@ -185,7 +185,7 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                                 />
                             </div>
                             <div className="progress-label digit">
-                                <small style={{ color: '#adb5bd' }} className="me-2">残り</small>
+                                <small style={{ color: '#adb5bd' }} className="mr-2">残り</small>
                                 <b style={{ color: '#adb5bd' }}>
                                     {formatTime(remainingTime)}
                                 </b>
@@ -197,7 +197,7 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                 {/* Warning Message */}
                 {remainingTime <= 5 && remainingTime > 0 && (
                     <div className="text-center mt-1">
-                        <small className="text-warning">まもなく切り替え</small>
+                        <small className="text-yellow-500">まもなく切り替え</small>
                     </div>
                 )}
             </div>
@@ -211,11 +211,11 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
 
         return (
             <div data-testid="cooling-info">
-                <div className="display-1 align-middle ms-1">
+                <div className="text-6xl font-light align-middle ml-1">
                     <AnimatedNumber
                         value={mode.mode_index}
                         decimals={0}
-                        className="fw-bold digit"
+                        className="font-bold digit"
                     />
                 </div>
                 {dutyInfo(mode)}
@@ -225,11 +225,11 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     };
 
     return (
-        <div className="col">
-            <div className="card-deck mb-3 text-center">
+        <div className="col-span-1">
+            <div className="mb-3 text-center">
                 <div className="card mb-4 shadow-sm">
                     <div className="card-header">
-                        <h4 className="my-0 font-weight-normal">現在の冷却モード</h4>
+                        <h4 className="my-0 font-normal">現在の冷却モード</h4>
                     </div>
                     <div className="card-body">{isReady || stat.mode.mode_index !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}</div>
                 </div>

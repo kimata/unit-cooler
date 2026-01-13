@@ -1,32 +1,7 @@
-.row.display-flex {
-    display: flex;
-    flex-wrap: wrap;
-}
-.row.display-flex > [class*="col-"] {
-    display: flex;
-    flex-direction: column;
-}
-
-.card,
-.card-deck {
-    height: 100% !important;
-}
-
+/* 背景画像 */
 .outdoor_unit {
     background-image: url(../public/wall.png);
     background-position: bottom 5px right 5px;
     background-repeat: no-repeat;
     background-size: 200px;
-}
-hr.dashed {
-    border-top: 2px dashed #999;
-}
-
-.page-link {
-    color: #6c757d !important;
-}
-.page-item.active .page-link {
-    background-color: #6c757d !important;
-    border-color: #6c757d !important;
-    color: #ffffff !important;
 }

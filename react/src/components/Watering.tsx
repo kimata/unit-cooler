@@ -10,43 +10,41 @@ const Watering = React.memo(({ isReady, stat }: StatComponentProps) => {
     const amount = (watering: ApiResponse.Watering) => {
         return (
             <div className="card-body outdoor_unit">
-                <div className="container">
-                    <div className="row">
-                        <div className="col-1">
-                            <img src={watering_icon} alt="🚰" width="120px" />
-                        </div>
-                        <div className="col-11">
-                            <div className="row">
-                                <div className="col-12">
-                                    <span
-                                        className="text-start display-1 ms-4"
-                                        data-testid="watering-amount-info"
-                                    >
-                                        <NumberFlow
-                                            value={watering.amount}
-                                            format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}
-                                            plugins={[continuous]}
-                                            trend={1}
-                                            className="fw-bold digit"
-                                        />
-                                        <span className="display-5 ms-2">L</span>
-                                    </span>
-                                </div>
-                                <div className="col-12 mt-3">
-                                    <span
-                                        className="text-start ms-4 text-muted"
-                                        data-testid="watering-price-info"
-                                    >
-                                        <NumberFlow
-                                            value={watering.price}
-                                            format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}
-                                            plugins={[continuous]}
-                                            trend={1}
-                                            className="fw-bold display-6 digit"
-                                        />
-                                        <span className="ms-2">円</span>
-                                    </span>
-                                </div>
+                <div className="flex">
+                    <div className="w-1/12">
+                        <img src={watering_icon} alt="🚰" width="120px" />
+                    </div>
+                    <div className="w-11/12">
+                        <div className="flex flex-col">
+                            <div className="w-full">
+                                <span
+                                    className="text-left text-6xl font-light ml-4"
+                                    data-testid="watering-amount-info"
+                                >
+                                    <NumberFlow
+                                        value={watering.amount}
+                                        format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}
+                                        plugins={[continuous]}
+                                        trend={1}
+                                        className="font-bold digit"
+                                    />
+                                    <span className="text-4xl font-light ml-2">L</span>
+                                </span>
+                            </div>
+                            <div className="w-full mt-3">
+                                <span
+                                    className="text-left ml-4 text-gray-500"
+                                    data-testid="watering-price-info"
+                                >
+                                    <NumberFlow
+                                        value={watering.price}
+                                        format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}
+                                        plugins={[continuous]}
+                                        trend={1}
+                                        className="font-bold text-3xl font-light digit"
+                                    />
+                                    <span className="ml-2">円</span>
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -56,11 +54,11 @@ const Watering = React.memo(({ isReady, stat }: StatComponentProps) => {
     };
 
     return (
-        <div className="col">
-            <div className="card-deck mb-3 text-center">
+        <div className="col-span-1">
+            <div className="mb-3 text-center">
                 <div className="card mb-4 shadow-sm">
                     <div className="card-header">
-                        <h4 className="my-0 font-weight-normal">本日の散水量</h4>
+                        <h4 className="my-0 font-normal">本日の散水量</h4>
                     </div>
                     {isReady || stat.watering.length > 0 ? amount(stat.watering[0]) : (
                         <div className="card-body outdoor_unit">

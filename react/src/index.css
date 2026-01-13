@@ -1,60 +1,92 @@
-/* @import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap'); */
 @import url("https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Inconsolata:wght@200;300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;700&display=swap");
+@import "tailwindcss";
 
-body {
-    margin: 0;
-    font-family:
-        "BIZ UDPGothic",
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        "Roboto",
-        "Oxygen",
-        "Ubuntu",
-        "Cantarell",
-        "Fira Sans",
-        "Droid Sans",
-        "Helvetica Neue",
-        sans-serif !important;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+@layer base {
+    body {
+        margin: 0;
+        font-family:
+            "BIZ UDPGothic",
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            "Roboto",
+            "Oxygen",
+            "Ubuntu",
+            "Cantarell",
+            "Fira Sans",
+            "Droid Sans",
+            "Helvetica Neue",
+            sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    code {
+        font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+    }
 }
 
-.digit {
-    font-family: "Roboto", "Inconsolata", monospace !important;
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum";
-}
+@layer components {
+    .digit {
+        font-family: "Roboto", "Inconsolata", monospace;
+        font-variant-numeric: tabular-nums;
+        font-feature-settings: "tnum";
+    }
 
-.sensor-value {
-    display: inline-flex;
-    justify-content: flex-end;
-    align-items: baseline;
-    width: 100%;
-}
+    .sensor-value {
+        @apply inline-flex justify-end items-baseline w-full;
+    }
 
-.sensor-number {
-    text-align: right;
-    min-width: 4.5em;
-}
+    .sensor-number {
+        @apply text-right min-w-[4.5em];
+    }
 
-.sensor-unit {
-    margin-left: 0.25rem;
-    min-width: 2.5em;
-    text-align: left;
-    font-size: 0.8em;
-}
+    .sensor-unit {
+        @apply ml-1 min-w-[2.5em] text-left text-sm;
+    }
 
-code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
-}
+    .progress-label-container {
+        @apply relative;
+    }
 
-.progress-label-container {
-    position: relative;
-}
+    .progress-label {
+        @apply absolute top-0;
+        right: 5%;
+    }
 
-.progress-label {
-    position: absolute;
-    right: 5%;
-    top: 0%;
+    /* カード共通スタイル */
+    .card {
+        @apply bg-white rounded-lg shadow-sm border border-gray-200 h-full;
+    }
+
+    .card-header {
+        @apply px-4 py-3 border-b border-gray-200 bg-gray-50;
+    }
+
+    .card-body {
+        @apply p-4;
+    }
+
+    /* プログレスバー */
+    .progress {
+        @apply w-full bg-gray-200 rounded overflow-hidden;
+    }
+
+    .progress-bar {
+        @apply h-full transition-all duration-500;
+    }
+
+    /* ページネーション */
+    .page-link {
+        @apply px-3 py-1 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 transition-colors;
+    }
+
+    .page-item.active .page-link {
+        @apply bg-gray-500 border-gray-500 text-white;
+    }
+
+    /* 破線 */
+    .dashed-hr {
+        @apply border-t-2 border-dashed border-gray-400;
+    }
 }

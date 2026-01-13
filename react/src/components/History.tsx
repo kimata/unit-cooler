@@ -72,7 +72,7 @@ const History = React.memo(({ isReady, stat }: Props) => {
     const history = () => {
         return (
             <div className="card-body">
-                <div className="w-100" data-testid="history-info" style={{ height: '250px', position: 'relative' }}>
+                <div className="w-full" data-testid="history-info" style={{ height: '250px', position: 'relative' }}>
                     <Bar
                         ref={chartRef}
                         options={chartOptions}
@@ -85,19 +85,19 @@ const History = React.memo(({ isReady, stat }: Props) => {
     const loading = () => {
         return (
             <div className="card-body">
-                <span className="display-1 align-middle ms-4">
-                    <span className="display-5">Loading...</span>
+                <span className="text-6xl font-light align-middle ml-4">
+                    <span className="text-4xl font-light">Loading...</span>
                 </span>
             </div>
         );
     };
 
     return (
-        <div className="col">
-            <div className="card-deck mb-3 text-center">
+        <div className="col-span-1">
+            <div className="mb-3 text-center">
                 <div className="card mb-4 shadow-sm">
                     <div className="card-header">
-                        <h4 className="my-0 font-weight-normal">散水履歴</h4>
+                        <h4 className="my-0 font-normal">散水履歴</h4>
                     </div>
                     {isReady || stat.watering.length > 0 ? history() : loading()}
                 </div>

@@ -19,8 +19,8 @@ type Props = {
 const Sensor = React.memo(({ isReady, stat }: Props) => {
     const loading = () => {
         return (
-            <span className="display-1 align-middle ms-4">
-                <span className="display-5">Loading...</span>
+            <span className="text-6xl font-light align-middle ml-4">
+                <span className="text-4xl font-light">Loading...</span>
             </span>
         );
     };
@@ -32,9 +32,9 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
         const decimals = (label === "lux" && sensorData.value >= 10) || (label === "solar_rad" && sensorData.value >= 10) ? 0 : 1;
 
         return (
-            <tr className="row" key={label}>
-                <td className="text-start col-4" style={{overflow: 'visible', whiteSpace: 'nowrap'}}>{sensorData.name}</td>
-                <td className="text-end col-3">
+            <tr className="flex" key={label}>
+                <td className="text-left w-4/12 py-2" style={{overflow: 'visible', whiteSpace: 'nowrap'}}>{sensorData.name}</td>
+                <td className="text-right w-3/12 py-2">
                     <div className="sensor-value" style={{whiteSpace: 'nowrap'}}>
                         <div className="sensor-number digit">
                             <b>
@@ -50,8 +50,8 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                         </div>
                     </div>
                 </td>
-                <td className="text-end col-2">{date.fromNow()}</td>
-                <td className="text-start col-3 text-nowrap">
+                <td className="text-right w-2/12 py-2">{date.fromNow()}</td>
+                <td className="text-left w-3/12 whitespace-nowrap py-2">
                     <small>{dateText(date)}</small>
                 </td>
             </tr>
@@ -75,14 +75,14 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
     const sensorInfo = (stat: ApiResponse.Stat) => {
         return (
             <div data-testid="sensor-info">
-                <table className="table">
+                <table className="w-full">
                     <thead>
-                        <tr className="row">
-                            <th className="col-4">センサー</th>
-                            <th className="col-3">
+                        <tr className="flex border-b border-gray-200">
+                            <th className="w-4/12 text-left py-2">センサー</th>
+                            <th className="w-3/12 text-left py-2">
                                 値
                             </th>
-                            <th colSpan={2} className="col-5">
+                            <th colSpan={2} className="w-5/12 text-left py-2">
                                 最新更新日時
                             </th>
                         </tr>
@@ -101,17 +101,17 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                         {sensorRow("rain", stat.sensor.rain[0], <span>mm/h</span>)}
                     </tbody>
                 </table>
-                <div className="text-start">{outdoorStatus(stat)}</div>
+                <div className="text-left">{outdoorStatus(stat)}</div>
             </div>
         );
     };
 
     return (
-        <div className="col">
-            <div className="card-deck mb-3 text-center">
+        <div className="col-span-1">
+            <div className="mb-3 text-center">
                 <div className="card mb-4 shadow-sm">
                     <div className="card-header">
-                        <h4 className="my-0 font-weight-normal">センサー値</h4>
+                        <h4 className="my-0 font-normal">センサー値</h4>
                     </div>
                     <div className="card-body">{isReady || stat.sensor.temp.length > 0 ? sensorInfo(stat) : loading()}</div>
                 </div>

@@ -1,10 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import tailwindcss from "@tailwindcss/vite";
 
 // https://vitejs.dev/config/
 export default defineConfig({
     base: "/unit-cooler/",
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     define: {
         "import.meta.env.VITE_BUILD_DATE": JSON.stringify(new Date().toISOString()),
     },
@@ -15,7 +16,6 @@ export default defineConfig({
                 // ベンダーチャンクを分離して効率的なキャッシュを実現
                 manualChunks: {
                     vendor: ["react", "react-dom"],
-                    bootstrap: ["bootstrap", "react-bootstrap"],
                     charts: ["chart.js", "react-chartjs-2"],
                     utils: ["dayjs", "framer-motion"],
                 },
@@ -30,7 +30,7 @@ export default defineConfig({
     },
     // 依存関係の事前バンドル最適化
     optimizeDeps: {
-        include: ["react", "react-dom", "bootstrap", "chart.js", "dayjs", "framer-motion"],
+        include: ["react", "react-dom", "chart.js", "dayjs", "framer-motion"],
     },
     // 開発サーバー最適化
     server: {

@@ -1,8 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import "./App.css";
 
-import "bootstrap/dist/css/bootstrap.min.css";
-import { Github, GraphUp } from "react-bootstrap-icons";
+import { GitHubIcon, ChartBarIcon } from "./components/icons";
 
 import "dayjs/locale/ja";
 import dayjs from "dayjs";
@@ -160,8 +159,8 @@ function App() {
     return (
         <>
             <div className="App">
-                <div className="d-flex flex-column flex-md-row align-items-center p-3 px-md-4 mb-3 bg-white border-bottom shadow-sm">
-                    <h1 className="display-6 my-0 mr-md-auto font-weight-normal">室外機自動冷却システム</h1>
+                <div className="flex flex-col md:flex-row items-center p-3 md:px-4 mb-3 bg-white border-b shadow-sm">
+                    <h1 className="text-3xl font-light my-0 mr-auto">室外機自動冷却システム</h1>
                 </div>
                 {hasError && (
                     <ErrorMessage
@@ -170,8 +169,8 @@ function App() {
                     />
                 )}
                 <div>
-                    <div className="container">
-                        <div className="row display-flex row-cols-1 row-cols-lg-2 row-cols-xl-2 row-cols-xxl-3 g-3">
+                    <div className="container mx-auto px-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
                             <Watering isReady={isReady} stat={stat} />
                             <History isReady={isReady} stat={stat} />
                             <CoolingMode isReady={isReady} stat={stat} logUpdateTrigger={logUpdateTrigger} />
@@ -181,48 +180,48 @@ function App() {
                         </div>
                     </div>
                 </div>
-                <div className="p-1 float-end text-end m-2 mt-4">
+                <div className="p-1 float-right text-right m-2 mt-4">
                     <small>
-                        <p className="text-muted m-0">
+                        <p className="text-gray-500 m-0">
                             <small>更新日時: {updateTime}</small>
                         </p>
-                        <p className="text-muted m-0">
+                        <p className="text-gray-500 m-0">
                             <small>
                                 アクチュエータ起動時刻: {systemInfoMemo.actuatorUptime} [{systemInfoMemo.actuatorUptimeFrom}]
                             </small>
                         </p>
-                        <p className="text-muted m-0">
+                        <p className="text-gray-500 m-0">
                             <small>
                                 アクチュエータ load average: {systemInfoMemo.actuatorLoadAverage}
                             </small>
                         </p>
-                        <p className="text-muted m-0">
+                        <p className="text-gray-500 m-0">
                             <small>
                                 イメージビルド: {systemInfoMemo.imageBuildDate} [{systemInfoMemo.imageBuildDateFrom}]
                             </small>
                         </p>
-                        <p className="text-muted m-0">
+                        <p className="text-gray-500 m-0">
                             <small>
                                 React ビルド: {buildInfo.buildDate} [{buildInfo.buildDateFrom}]
                             </small>
                         </p>
-                        <p className="text-muted m-0">
+                        <p className="text-gray-500 m-0">
                             <small>
                                 React バージョン: {reactVersion}
                             </small>
                         </p>
-                        <p className="display-6">
+                        <p className="text-3xl font-light">
                             <a
                                 href={`${API_ENDPOINT}/proxy/html/api/metrics`}
-                                className="text-secondary me-3"
+                                className="text-gray-500 mr-3"
                             >
-                                <GraphUp />
+                                <ChartBarIcon className="size-6 inline" />
                             </a>
                             <a
                                 href="https://github.com/kimata/unit-cooler"
-                                className="text-secondary"
+                                className="text-gray-500"
                             >
-                                <Github />
+                                <GitHubIcon className="size-6 inline" />
                             </a>
                         </p>
                     </small>

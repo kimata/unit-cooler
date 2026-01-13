@@ -43,13 +43,13 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
         let date = dayjs(props.airconData.time);
 
         return (
-            <tr key="{index}" className="row">
-                <td className="text-start col-3 text-nowrap">{props.airconData.name}</td>
-                <td className="text-end col-4">
+            <tr key="{index}" className="flex">
+                <td className="text-left w-3/12 whitespace-nowrap py-2">{props.airconData.name}</td>
+                <td className="text-right w-4/12 py-2">
                     <div className="progress-label-container">
                         <div className="progress" style={{ height: "2em" }}>
                             <motion.div
-                                className="progress-bar bg-secondary"
+                                className="progress-bar bg-gray-500"
                                 role="progressbar"
                                 aria-valuenow={valueInt(props.airconData.value)}
                                 aria-valuemin={0}
@@ -67,12 +67,12 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                                     useComma={true}
                                 />
                             </b>
-                            <small className="ms-2">W</small>
+                            <small className="ml-2">W</small>
                         </div>
                     </div>
                 </td>
-                <td className="text-start col-2">{date.fromNow()}</td>
-                <td className="text-start col-3 text-nowrap">
+                <td className="text-left w-2/12 py-2">{date.fromNow()}</td>
+                <td className="text-left w-3/12 whitespace-nowrap py-2">
                     <small>{dateText(date)}</small>
                 </td>
             </tr>
@@ -87,12 +87,12 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
     const sensorInfo = (stat: ApiResponse.Stat) => {
         return (
             <div data-testid="aircon-info">
-                <table className="table">
+                <table className="w-full">
                     <thead>
-                        <tr className="row">
-                            <th className="col-3">エアコン</th>
-                            <th className="col-4">値</th>
-                            <th colSpan={2} className="col-5">
+                        <tr className="flex border-b border-gray-200">
+                            <th className="w-3/12 text-left py-2">エアコン</th>
+                            <th className="w-4/12 text-left py-2">値</th>
+                            <th colSpan={2} className="w-5/12 text-left py-2">
                                 最新更新日時
                             </th>
                         </tr>
@@ -103,17 +103,17 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                         ))}
                     </tbody>
                 </table>
-                <div className="text-start">{coolerStatus(stat)}</div>
+                <div className="text-left">{coolerStatus(stat)}</div>
             </div>
         );
     };
 
     return (
-        <div className="col">
-            <div className="card-deck mb-3 text-center">
+        <div className="col-span-1">
+            <div className="mb-3 text-center">
                 <div className="card mb-4 shadow-sm">
                     <div className="card-header">
-                        <h4 className="my-0 font-weight-normal">エアコン稼働状況</h4>
+                        <h4 className="my-0 font-normal">エアコン稼働状況</h4>
                     </div>
                     <div className="card-body">{isReady || stat.sensor.power.length > 0 ? sensorInfo(stat) : <Loading size="large" />}</div>
                 </div>
