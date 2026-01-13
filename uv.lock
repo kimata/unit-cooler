@@ -1224,7 +1224,7 @@ wheels = [
 [[package]]
 name = "my-lib"
 version = "0.2.0"
-source = { git = "https://github.com/kimata/my-py-lib?rev=f7251a5d834cf8201f59e367f94871800f000c01#f7251a5d834cf8201f59e367f94871800f000c01" }
+source = { git = "https://github.com/kimata/my-py-lib?rev=7481d562fbb6f355525ec8b09d59977ed88e0c60#7481d562fbb6f355525ec8b09d59977ed88e0c60" }
 dependencies = [
     { name = "coloredlogs" },
     { name = "docopt-ng" },
@@ -2452,6 +2452,18 @@ wheels = [
 ]
 
 [[package]]
+name = "types-requests"
+version = "2.32.4.20260107"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0f/f3/a0663907082280664d745929205a89d41dffb29e89a50f753af7d57d0a96/types_requests-2.32.4.20260107.tar.gz", hash = "sha256:018a11ac158f801bfa84857ddec1650750e393df8a004a8a9ae2a9bec6fcb24f", size = 23165, upload-time = "2026-01-07T03:20:54.091Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/12/709ea261f2bf91ef0a26a9eed20f2623227a8ed85610c1e54c5805692ecb/types_requests-2.32.4.20260107-py3-none-any.whl", hash = "sha256:b703fe72f8ce5b31ef031264fe9395cac8f46a04661a79f7ed31a80fb308730d", size = 20676, upload-time = "2026-01-07T03:20:52.929Z" },
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2520,6 +2532,7 @@ dev = [
     { name = "types-paramiko" },
     { name = "types-pytz" },
     { name = "types-pyyaml" },
+    { name = "types-requests" },
 ]
 
 [package.metadata]
@@ -2529,7 +2542,7 @@ requires-dist = [
     { name = "flask-cors", specifier = ">=5.0.1" },
     { name = "fluent-logger", specifier = ">=0.11.1" },
     { name = "influxdb-client", extras = ["ciso"], specifier = ">=1.49.0" },
-    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=f7251a5d834cf8201f59e367f94871800f000c01" },
+    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=7481d562fbb6f355525ec8b09d59977ed88e0c60" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pillow", specifier = ">=11.2.1" },
@@ -2558,6 +2571,7 @@ dev = [
     { name = "types-paramiko", specifier = ">=4.0.0" },
     { name = "types-pytz", specifier = ">=2025.2.0" },
     { name = "types-pyyaml", specifier = ">=6.0.12" },
+    { name = "types-requests", specifier = ">=2.32.0" },
 ]
 
 [[package]]

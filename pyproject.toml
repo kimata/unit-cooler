@@ -15,7 +15,7 @@ dependencies = [
     "flask-cors>=5.0.1",
     "docopt-ng>=0.9.0",
     "influxdb-client[ciso]>=1.49.0",
-    "my-lib @ git+https://github.com/kimata/my-py-lib@f7251a5d834cf8201f59e367f94871800f000c01",
+    "my-lib @ git+https://github.com/kimata/my-py-lib@7481d562fbb6f355525ec8b09d59977ed88e0c60",
     "spidev>=3.7",
     "fluent-logger>=0.11.1",
     "pyzmq>=27.0.0",
@@ -44,6 +44,7 @@ dev = [
     "types-pytz>=2025.2.0",
     "types-paramiko>=4.0.0",
     "types-pyyaml>=6.0.12",
+    "types-requests>=2.32.0",
 ]
 
 [tool.uv]
@@ -121,19 +122,12 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
-omit = [
-    "src/actuator.py",
-    "src/webui.py",
-    "src/controller.py",
-]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
-    "raise AssertionError",
-    "raise NotImplementedError",
 ]
 
 [tool.coverage.html]
