@@ -158,7 +158,7 @@ test-walk-through:
     script:
         - >
             uv run pytest tests/unit/ tests/integration/
-            --numprocesses=auto --junit-xml=reports/junit-report.xml --maxfail=1 --dist=loadgroup
+            --junit-xml=reports/junit-report.xml --maxfail=1 --dist=loadgroup
 
     coverage: '/TOTAL.*\s+(\d+%)/'
 
