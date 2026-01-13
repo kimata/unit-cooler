@@ -331,7 +331,7 @@ def get_cooler_activity(
     logging.info(mode_map)
 
     for condition in COOLER_ACTIVITY_LIST:
-        if condition["judge"](mode_map):
+        if condition["judge"](mode_map):  # type: ignore[operator]
             return {
                 "status": condition["status"],
                 "message": condition["message"],
@@ -404,7 +404,7 @@ def _fetch_sensor_data(
     }
 
     data = my_lib.sensor_data.fetch_data(
-        influxdb_config,
+        influxdb_config,  # type: ignore[arg-type]
         sensor.measure,
         sensor.hostname,
         kind,

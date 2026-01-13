@@ -211,7 +211,7 @@ if __name__ == "__main__":
         target=start_server,
         args=(
             real_port,
-            lambda: unit_cooler.controller.engine.gen_control_msg(config, dummy_mode, speedup),
+            lambda: unit_cooler.controller.engine.gen_control_msg(config, dummy_mode, speedup),  # type: ignore[arg-type]
             config["controller"]["interval_sec"] / speedup,
             msg_count,
         ),

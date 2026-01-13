@@ -118,7 +118,7 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
     worker_threads.append(subscribe_thread)
 
     # ActuatorStatus 購読ワーカ（status_pub_port が指定されている場合）
-    if setting["status_pub_port"] > 0:
+    if int(str(setting["status_pub_port"])) > 0:
         status_thread = threading.Thread(
             target=unit_cooler.webui.worker.actuator_status_worker,
             args=(
@@ -160,7 +160,7 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
     app.config["CONFIG"] = config
     app.config["MESSAGE_QUEUE"] = message_queue
 
-    app.json.compat = True
+    app.json.compat = True  # type: ignore[attr-defined]
 
     # Initialize proxy before registering blueprint
     api_base_url = f"http://{setting['actuator_host']}:{setting['log_port']}/unit-cooler"

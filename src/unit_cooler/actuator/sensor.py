@@ -15,7 +15,7 @@ if os.environ.get("DUMMY_MODE", "false") != "true":  # pragma: no cover
     from my_lib.sensor.fd_q10c import FD_Q10C
 else:
 
-    class FD_Q10C:
+    class FD_Q10C:  # type: ignore[no-redef]
         # ワーカーごとの電源状態を管理する辞書（初期値はTrue）
         _power_states: ClassVar[dict[str, bool]] = {}
 

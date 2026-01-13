@@ -271,7 +271,7 @@ class MetricsCollector:
         """Get minute-level metrics data."""
         with self._get_db_connection() as conn:
             query = "SELECT * FROM minute_metrics"
-            params = []
+            params: list[datetime.datetime | int] = []
 
             if start_time or end_time:
                 query += " WHERE"
@@ -300,7 +300,7 @@ class MetricsCollector:
         """Get hourly-level metrics data."""
         with self._get_db_connection() as conn:
             query = "SELECT * FROM hourly_metrics"
-            params = []
+            params: list[datetime.datetime | int] = []
 
             if start_time or end_time:
                 query += " WHERE"
@@ -329,7 +329,7 @@ class MetricsCollector:
         """Get error events data."""
         with self._get_db_connection() as conn:
             query = "SELECT * FROM error_events"
-            params = []
+            params: list[datetime.datetime | int] = []
 
             if start_time or end_time:
                 query += " WHERE"

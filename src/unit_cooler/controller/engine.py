@@ -60,7 +60,7 @@ def dummy_cooling_mode():
     return {"cooling_mode": cooling_mode}
 
 
-dummy_cooling_mode.prev_mode = 0
+dummy_cooling_mode.prev_mode = 0  # type: ignore[attr-defined]
 
 
 def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> dict[str, Any]:

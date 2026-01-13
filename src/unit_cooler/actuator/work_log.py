@@ -66,7 +66,7 @@ def add(message: str, level: unit_cooler.const.LOG_LEVEL = unit_cooler.const.LOG
 
     if event_queue is not None:
         event_queue.put(my_lib.webapp.event.EVENT_TYPE.LOG)
-    my_lib.webapp.log.add(message, level)
+    my_lib.webapp.log.add(message, level)  # type: ignore[arg-type]
 
     log_hist.append(message)
 
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     event_queue = multiprocessing.Queue()
 
     my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())  # type: ignore[arg-type]
     init(config, event_queue)
 
     add("Test", unit_cooler.const.LOG_LEVEL.INFO)

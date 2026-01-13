@@ -30,6 +30,9 @@ from unit_cooler.config import Config
 
 SCHEMA_CONFIG = "config.schema"
 
+# Global variable for web server handle
+log_server_handle: Any = None
+
 
 def sig_handler(num, frame):
     import unit_cooler.actuator.worker
@@ -84,7 +87,7 @@ def start(config: Config, arg: dict[str, Any]) -> tuple[Any, list[Any], Any]:
     import unit_cooler.actuator.work_log
     import unit_cooler.actuator.worker
 
-    unit_cooler.actuator.work_log.init(config, event_queue)
+    unit_cooler.actuator.work_log.init(config, event_queue)  # type: ignore[arg-type]
 
     logging.info("Initialize valve")
     unit_cooler.actuator.valve.init(config.actuator.control.valve.pin_no, config)
@@ -95,7 +98,12 @@ def start(config: Config, arg: dict[str, Any]) -> tuple[Any, list[Any], Any]:
 
     try:
         logging.info("Starting web server on port %d", setting["log_port"])
-        log_server_handle = unit_cooler.actuator.web_server.start(config, event_queue, setting["log_port"])
+        log_port = int(str(setting["log_port"]))
+        log_server_handle = unit_cooler.actuator.web_server.start(
+            config,
+            event_queue,
+            log_port,  # type: ignore[arg-type]
+        )
         logging.info("Web server started successfully")
     except Exception:
         logging.exception("Failed to start web server")
@@ -104,7 +112,8 @@ def start(config: Config, arg: dict[str, Any]) -> tuple[Any, list[Any], Any]:
     executor = concurrent.futures.ThreadPoolExecutor()
 
     thread_list = unit_cooler.actuator.worker.start(
-        executor, unit_cooler.actuator.worker.get_worker_def(config, message_queue, setting)
+        executor,
+        unit_cooler.actuator.worker.get_worker_def(config, message_queue, setting),  # type: ignore[arg-type]
     )
 
     signal.signal(signal.SIGTERM, sig_handler)

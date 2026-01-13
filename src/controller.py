@@ -110,10 +110,10 @@ def start(config: Config, arg: dict) -> tuple[threading.Thread | None, threading
 
         control_thread = control_server_start(
             config,
-            setting["real_port"],
-            setting["dummy_mode"],
-            setting["speedup"],
-            setting["msg_count"],
+            int(str(setting["real_port"])),
+            bool(setting["dummy_mode"]),
+            int(str(setting["speedup"])),
+            int(str(setting["msg_count"])),
         )
     except Exception:
         logging.exception("Failed to start controller")

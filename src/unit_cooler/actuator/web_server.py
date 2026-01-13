@@ -51,7 +51,7 @@ def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
     app.config["CONFIG"] = config
     app.config["CONFIG_FILE_NORMAL"] = "config.yaml"  # メトリクス用設定
 
-    app.json.compat = True
+    app.json.compat = True  # type: ignore[attr-defined]
 
     app.register_blueprint(my_lib.webapp.log.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
     app.register_blueprint(my_lib.webapp.event.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
@@ -68,7 +68,7 @@ def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
 
     my_lib.webapp.config.show_handler_list(app, True)
 
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())  # type: ignore[arg-type]
     my_lib.webapp.event.start(event_queue)
 
     # メトリクスデータベースの初期化
@@ -144,6 +144,6 @@ if __name__ == "__main__":
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
     config = Config.load(config_file)
-    event_queue = multiprocessing.Queue()
+    event_queue: multiprocessing.Queue = multiprocessing.Queue()
 
     log_server_handle = start(config, event_queue, port)

@@ -45,7 +45,7 @@ def watering(config: Config, day_before: int) -> dict[str, float]:
     day_offset = 7 if os.environ.get("DUMMY_MODE", "false") == "true" else 0
 
     amount = my_lib.sensor_data.get_day_sum(
-        config.controller.influxdb.to_dict(),
+        config.controller.influxdb.to_dict(),  # type: ignore[arg-type]
         config.controller.watering.measure,
         config.controller.watering.hostname,
         "flow",
@@ -67,11 +67,11 @@ def watering_list(config: Config) -> list[dict[str, float]]:
 def get_last_message(message_queue: Queue[Any]) -> dict[str, Any] | None:
     # NOTE: 現在の実際の制御モードを取得する。
     while not message_queue.empty():
-        get_last_message.last_message = message_queue.get()
-    return get_last_message.last_message
+        get_last_message.last_message = message_queue.get()  # type: ignore[attr-defined]
+    return get_last_message.last_message  # type: ignore[attr-defined]
 
 
-get_last_message.last_message = None
+get_last_message.last_message = None  # type: ignore[attr-defined]
 
 
 def get_stats(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
@@ -122,4 +122,4 @@ if __name__ == "__main__":
 
     config = my_lib.config.load(config_file)
 
-    logging.info(my_lib.pretty.format(watering_list(config)))
+    logging.info(my_lib.pretty.format(watering_list(config)))  # type: ignore[arg-type]

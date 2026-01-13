@@ -116,10 +116,10 @@ if __name__ == "__main__":
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
     config = Config.load(config_file)
-    event_queue = multiprocessing.Queue()
+    event_queue: multiprocessing.Queue = multiprocessing.Queue()
 
     my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())  # type: ignore[arg-type]
     unit_cooler.actuator.work_log.init(config, event_queue)
     init(config.actuator.control.valve.pin_no, config)
 

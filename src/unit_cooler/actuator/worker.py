@@ -406,7 +406,8 @@ def monitor_worker(
             get_worker_state("monitor_worker").notify_processed()
             _notify_state_manager_monitor_processed()
 
-            if get_should_terminate().is_set():
+            terminate_event = get_should_terminate()
+            if terminate_event is not None and terminate_event.is_set():
                 logging.info("Terminate monitor worker")
                 break
 
@@ -477,7 +478,8 @@ def control_worker(
             get_worker_state("control_worker").notify_processed()
             _notify_state_manager_control_processed()
 
-            if get_should_terminate().is_set():
+            terminate_event = get_should_terminate()
+            if terminate_event is not None and terminate_event.is_set():
                 logging.info("Terminate control worker")
                 break
 
@@ -599,13 +601,13 @@ if __name__ == "__main__":
     my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
 
     config = Config.load(config_file)
-    message_queue = multiprocessing.Queue()
-    event_queue = multiprocessing.Queue()
+    message_queue: multiprocessing.Queue = multiprocessing.Queue()
+    event_queue: multiprocessing.Queue = multiprocessing.Queue()
 
     os.environ["DUMMY_MODE"] = "true"
 
     my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())  # type: ignore[arg-type]
     unit_cooler.actuator.work_log.init(config, event_queue)
 
     unit_cooler.actuator.valve.init(config.actuator.control.valve.pin_no, config)

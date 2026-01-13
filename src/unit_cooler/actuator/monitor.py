@@ -81,7 +81,7 @@ def get_mist_condition():
     return {"valve": valve_status, "flow": flow}
 
 
-get_mist_condition.last_flow = 0
+get_mist_condition.last_flow = 0  # type: ignore[attr-defined]
 
 
 def hazard_notify(config: Config, message: str) -> None:
@@ -154,9 +154,7 @@ def check_mist_condition(handle: dict[str, Any], mist_condition: dict[str, Any])
                     "長い間バルブが閉じられていますので、流量計の電源を OFF します。"
                 )
                 unit_cooler.actuator.sensor.stop()
-        elif (mist_condition["valve"]["duration"] > 120) and (
-            mist_condition["flow"] > flow_config.off.max
-        ):
+        elif (mist_condition["valve"]["duration"] > 120) and (mist_condition["flow"] > flow_config.off.max):
             hazard_notify(
                 config,
                 "電磁弁が壊れていますので制御を停止します。"

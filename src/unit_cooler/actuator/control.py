@@ -80,7 +80,9 @@ def get_control_message_impl(handle: dict[str, Any], last_message: dict[str, Any
             # 1 回に1個のコマンドのみ処理する。
             break
 
-    if control_message["mode_index"] != last_message["mode_index"]:
+    # NOTE: control_message is guaranteed to be set by the while loop above
+    # because we return early if the queue is empty
+    if control_message["mode_index"] != last_message["mode_index"]:  # type: ignore[index]
         unit_cooler.actuator.work_log.add(
             ("冷却モードが変更されました。({before} → {after})").format(
                 before="init" if last_message["mode_index"] == -1 else last_message["mode_index"],
@@ -88,7 +90,7 @@ def get_control_message_impl(handle: dict[str, Any], last_message: dict[str, Any
             )
         )
 
-    return control_message
+    return control_message  # type: ignore[return-value]
 
 
 def get_control_message(handle: dict[str, Any], last_message: dict[str, Any]) -> dict[str, Any]:

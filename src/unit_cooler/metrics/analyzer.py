@@ -108,8 +108,8 @@ class MetricsAnalyzer:
         env_factors = ["temperature", "humidity", "lux", "solar_radiation", "rain_amount"]
         target_metrics = ["cooling_mode", "duty_ratio"]
 
-        correlations = {}
-        scatter_data = {}
+        correlations: dict[str, dict] = {}
+        scatter_data: dict[str, dict] = {}
 
         for target in target_metrics:
             correlations[target] = {}

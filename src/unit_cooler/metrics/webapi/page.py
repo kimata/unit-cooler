@@ -338,9 +338,9 @@ def _extract_hour_from_timestamp(timestamp) -> int | None:
 
 def _prepare_hourly_data(minute_data: list[dict], hourly_data: list[dict]) -> tuple:
     """時間別データを準備"""
-    hourly_cooling_mode = [[] for _ in range(24)]
-    hourly_duty_ratio = [[] for _ in range(24)]
-    hourly_valve_ops = [[] for _ in range(24)]
+    hourly_cooling_mode: list[list] = [[] for _ in range(24)]
+    hourly_duty_ratio: list[list] = [[] for _ in range(24)]
+    hourly_valve_ops: list[list] = [[] for _ in range(24)]
 
     # 分データから時間別に集計
     for data in minute_data:
