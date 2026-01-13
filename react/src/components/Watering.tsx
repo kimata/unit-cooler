@@ -64,7 +64,7 @@ const Watering = React.memo(({ isReady, stat }: StatComponentProps) => {
                             本日の散水量
                         </h4>
                     </div>
-                    {isReady || stat.watering.length > 0 ? amount(stat.watering[0]) : (
+                    {isReady || (stat.watering?.length ?? 0) > 0 ? amount(stat.watering?.[0] ?? { amount: 0, price: 0 }) : (
                         <div className="card-body outdoor_unit">
                             <Loading size="large" />
                         </div>

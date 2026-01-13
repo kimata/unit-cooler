@@ -235,7 +235,7 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                             現在の冷却モード
                         </h4>
                     </div>
-                    <div className="card-body">{isReady || stat.mode.mode_index !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}</div>
+                    <div className="card-body">{isReady || (stat.mode?.mode_index ?? 0) !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}</div>
                 </div>
             </div>
         </div>

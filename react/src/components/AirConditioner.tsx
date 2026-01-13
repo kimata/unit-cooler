@@ -99,7 +99,7 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {stat.sensor.power.map((airconData: ApiResponse.SensorData, index: number) => (
+                        {(stat.sensor.power ?? []).map((airconData: ApiResponse.SensorData, index: number) => (
                             <AirconRow airconData={airconData} key={index} />
                         ))}
                     </tbody>
@@ -119,7 +119,7 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                             エアコン稼働状況
                         </h4>
                     </div>
-                    <div className="card-body">{isReady || stat.sensor.power.length > 0 ? sensorInfo(stat) : <Loading size="large" />}</div>
+                    <div className="card-body">{isReady || (stat.sensor.power?.length ?? 0) > 0 ? sensorInfo(stat) : <Loading size="large" />}</div>
                 </div>
             </div>
         </div>

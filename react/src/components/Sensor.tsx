@@ -89,17 +89,17 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {sensorRow("temp", stat.sensor.temp[0], <span>℃</span>)}
-                        {sensorRow("humi", stat.sensor.humi[0], <span>%</span>)}
-                        {sensorRow("lux", stat.sensor.lux[0], <span>lx</span>)}
-                        {sensorRow(
+                        {stat.sensor.temp?.[0] && sensorRow("temp", stat.sensor.temp[0], <span>℃</span>)}
+                        {stat.sensor.humi?.[0] && sensorRow("humi", stat.sensor.humi[0], <span>%</span>)}
+                        {stat.sensor.lux?.[0] && sensorRow("lux", stat.sensor.lux[0], <span>lx</span>)}
+                        {stat.sensor.solar_rad?.[0] && sensorRow(
                             "solar_rad",
                             stat.sensor.solar_rad[0],
                             <span>
                                 W/m<sup>2</sup>
                             </span>
                         )}
-                        {sensorRow("rain", stat.sensor.rain[0], <span>mm/h</span>)}
+                        {stat.sensor.rain?.[0] && sensorRow("rain", stat.sensor.rain[0], <span>mm/h</span>)}
                     </tbody>
                 </table>
                 <div className="text-left mt-4">{outdoorStatus(stat)}</div>
@@ -117,7 +117,7 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                             センサー値
                         </h4>
                     </div>
-                    <div className="card-body">{isReady || stat.sensor.temp.length > 0 ? sensorInfo(stat) : loading()}</div>
+                    <div className="card-body">{isReady || (stat.sensor.temp?.length ?? 0) > 0 ? sensorInfo(stat) : loading()}</div>
                 </div>
             </div>
         </div>

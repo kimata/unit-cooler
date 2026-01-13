@@ -60,7 +60,7 @@ const History = React.memo(({ isReady, stat }: Props) => {
 
     // データが更新された時にチャートを更新
     useEffect(() => {
-        if (chartRef.current && isReady && stat.watering && stat.watering.length >= 10) {
+        if (chartRef.current && isReady && stat.watering && (stat.watering?.length ?? 0) >= 10) {
             const chart = chartRef.current;
             const newData = stat.watering.map((watering) => parseFloat(watering["amount"].toFixed(1))).reverse();
 
@@ -103,7 +103,7 @@ const History = React.memo(({ isReady, stat }: Props) => {
                             散水履歴
                         </h4>
                     </div>
-                    {isReady || stat.watering.length > 0 ? history() : loading()}
+                    {isReady || (stat.watering?.length ?? 0) > 0 ? history() : loading()}
                 </div>
             </div>
         </div>
