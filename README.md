@@ -246,10 +246,13 @@ sequenceDiagram
 
 #### フロントエンド
 
-- **フレームワーク**: React 18
-- **UIライブラリ**: Bootstrap + React Bootstrap
+- **フレームワーク**: React 19
+- **UI スタイリング**: Tailwind CSS 4.x
+- **アイコン**: Heroicons 2.x + カスタム SVG
+- **アニメーション**: Framer Motion
+- **グラフ**: Chart.js + react-chartjs-2
 - **ビルドツール**: Vite
-- **言語**: TypeScript/JavaScript
+- **言語**: TypeScript
 
 #### バックエンド
 
@@ -377,18 +380,26 @@ uv run python ./src/actuator.py -c config.yaml -d
 
 ## 🧪 テスト
 
-```bash
-# Pythonテスト（カバレッジ付き）
-uv run pytest
+テストは3層構造で管理されています:
 
-# 特定のテストファイルを実行
-uv run pytest tests/test_basic.py tests/test_error_handling.py
+```bash
+# ユニットテスト（外部依存なし、高速）
+uv run pytest tests/unit/
+
+# 統合テスト（コンポーネント間の連携テスト）
+uv run pytest tests/integration/
+
+# E2Eテスト（Playwright、外部サーバー必要）
+uv run pytest tests/e2e/ --host <host> --port <port>
+
+# 全テスト実行（カバレッジ付き）
+uv run pytest
 
 # 並列実行でテスト高速化
 uv run pytest --numprocesses=auto
 
-# E2Eテスト（Playwright）
-uv run pytest tests/test_playwright.py
+# 型チェック
+uv run mypy src/
 ```
 
 テスト結果：
