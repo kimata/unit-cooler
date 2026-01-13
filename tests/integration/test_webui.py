@@ -97,12 +97,13 @@ class TestWebuiApi:
                 assert isinstance(item["price"], int | float)
 
     def test_api_stat_handles_sensor_error(self, config, mocker):
-        """API /api/stat がセンサーエラーを処理する"""
+        """API /api/stat がデータ取得エラーを処理する"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
+        # watering_list() 内で呼ばれる my_lib.sensor_data.get_day_sum をモック
         mocker.patch(
-            "unit_cooler.controller.sensor.get_sense_data",
-            side_effect=Exception("Sensor error"),
+            "my_lib.sensor_data.get_day_sum",
+            side_effect=Exception("Data fetch error"),
         )
 
         app = flask.Flask(__name__)
