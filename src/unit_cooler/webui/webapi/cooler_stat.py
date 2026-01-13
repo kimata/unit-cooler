@@ -81,7 +81,6 @@ def get_stats(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
     actuator_status_dict = actuator_status.to_dict() if actuator_status else None
 
     return {
-        "watering": watering_list(config),
         "sensor": control_message.get("sense_data", {}) if control_message else {},
         "mode": control_message,
         "cooler_status": control_message.get("cooler_status") if control_message else None,
@@ -100,6 +99,18 @@ def api_get_stats():
         return flask.jsonify(get_stats(config, message_queue))
     except Exception as e:
         logging.exception("Error in api_get_stats")
+        return flask.jsonify({"error": str(e)}), 500
+
+
+@blueprint.route("/api/watering", methods=["GET"])
+@my_lib.flask_util.support_jsonp
+def api_get_watering():
+    try:
+        config = flask.current_app.config["CONFIG"]
+
+        return flask.jsonify({"watering": watering_list(config)})
+    except Exception as e:
+        logging.exception("Error in api_get_watering")
         return flask.jsonify({"error": str(e)}), 500
 
 

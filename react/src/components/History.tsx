@@ -9,10 +9,10 @@ import { CalendarDaysIcon } from "./icons";
 
 type Props = {
     isReady: boolean;
-    stat: ApiResponse.Stat;
+    watering: ApiResponse.Watering[];
 };
 
-const History = React.memo(({ isReady, stat }: Props) => {
+const History = React.memo(({ isReady, watering }: Props) => {
     const chartRef = useRef<Chart<"bar"> | null>(null);
 
     // chartOptionsは変更されないのでメモ化
@@ -60,15 +60,15 @@ const History = React.memo(({ isReady, stat }: Props) => {
 
     // データが更新された時にチャートを更新
     useEffect(() => {
-        if (chartRef.current && isReady && stat.watering && (stat.watering?.length ?? 0) >= 10) {
+        if (chartRef.current && isReady && watering && (watering?.length ?? 0) >= 10) {
             const chart = chartRef.current;
-            const newData = stat.watering.map((watering) => parseFloat(watering["amount"].toFixed(1))).reverse();
+            const newData = watering.map((w) => parseFloat(w["amount"].toFixed(1))).reverse();
 
             // データセットのデータのみ更新
             chart.data.datasets[0].data = newData;
             chart.update('none'); // アニメーションなしで更新
         }
-    }, [isReady, stat.watering]);
+    }, [isReady, watering]);
 
     const history = () => {
         return (
@@ -103,7 +103,7 @@ const History = React.memo(({ isReady, stat }: Props) => {
                             散水履歴
                         </h4>
                     </div>
-                    {isReady || (stat.watering?.length ?? 0) > 0 ? history() : loading()}
+                    {isReady || (watering?.length ?? 0) > 0 ? history() : loading()}
                 </div>
             </div>
         </div>

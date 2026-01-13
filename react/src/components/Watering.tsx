@@ -4,10 +4,14 @@ import NumberFlow, { continuous } from '@number-flow/react';
 
 import { ApiResponse } from "../lib/ApiResponse";
 import { Loading } from "./common/Loading";
-import { StatComponentProps } from "../types/common";
 import { DropletIcon } from "./icons";
 
-const Watering = React.memo(({ isReady, stat }: StatComponentProps) => {
+type Props = {
+    isReady: boolean;
+    watering: ApiResponse.Watering[];
+};
+
+const Watering = React.memo(({ isReady, watering }: Props) => {
     const amount = (watering: ApiResponse.Watering) => {
         return (
             <div className="card-body outdoor_unit">
@@ -64,7 +68,7 @@ const Watering = React.memo(({ isReady, stat }: StatComponentProps) => {
                             本日の散水量
                         </h4>
                     </div>
-                    {isReady || (stat.watering?.length ?? 0) > 0 ? amount(stat.watering?.[0] ?? { amount: 0, price: 0 }) : (
+                    {isReady || (watering?.length ?? 0) > 0 ? amount(watering?.[0] ?? { amount: 0, price: 0 }) : (
                         <div className="card-body outdoor_unit">
                             <Loading size="large" />
                         </div>

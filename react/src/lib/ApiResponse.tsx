@@ -48,6 +48,9 @@ export namespace ApiResponse {
             solar_rad: SensorData[];
             power: SensorData[];
         };
+    }
+
+    export interface WateringResponse {
         watering: Watering[];
     }
 

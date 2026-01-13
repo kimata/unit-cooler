@@ -56,6 +56,9 @@ function App() {
             rain: [],
             power: [],
         },
+    };
+
+    const emptyWatering: ApiResponse.WateringResponse = {
         watering: [
             {
                 amount: 0,
@@ -85,6 +88,13 @@ function App() {
         error: statError,
         refetch: refetchStat
     } = useApi(`${API_ENDPOINT}/stat`, emptyStat, { interval: 58000 });
+
+    const {
+        data: wateringData,
+        loading: wateringLoading,
+        error: wateringError,
+        refetch: refetchWatering
+    } = useApi(`${API_ENDPOINT}/watering`, emptyWatering, { interval: 58000 });
 
     const {
         data: log,
@@ -125,11 +135,12 @@ function App() {
         setUpdateTime(dayjs().format("LLL"));
     }
 
-    const hasError = statError || logError || sysInfoError || actuatorSysInfoError;
-    const isReady = !statLoading && !logLoading;
+    const hasError = statError || wateringError || logError || sysInfoError || actuatorSysInfoError;
+    const isReady = !statLoading && !wateringLoading && !logLoading;
 
     const getErrorMessage = () => {
         if (statError) return `統計データ: ${statError}`;
+        if (wateringError) return `散水データ: ${wateringError}`;
         if (logError) return `ログデータ: ${logError}`;
         if (sysInfoError) return `システム情報: ${sysInfoError}`;
         if (actuatorSysInfoError) return `アクチュエータ情報: ${actuatorSysInfoError}`;
@@ -138,8 +149,9 @@ function App() {
 
     const handleRetry = useCallback(() => {
         refetchStat();
+        refetchWatering();
         refetchLog();
-    }, [refetchStat, refetchLog]);
+    }, [refetchStat, refetchWatering, refetchLog]);
 
     // Format system info data with memoization
     const systemInfoMemo = useMemo(() => ({
@@ -173,8 +185,8 @@ function App() {
                 <div className="mt-2">
                     <div className="container mx-auto px-4">
                         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
-                            <Watering isReady={isReady} stat={stat} />
-                            <History isReady={isReady} stat={stat} />
+                            <Watering isReady={isReady} watering={wateringData.watering} />
+                            <History isReady={isReady} watering={wateringData.watering} />
                             <CoolingMode isReady={isReady} stat={stat} logUpdateTrigger={logUpdateTrigger} />
                             <AirConditioner isReady={isReady} stat={stat} />
                             <Sensor isReady={isReady} stat={stat} />

@@ -19,7 +19,6 @@ class TestWebuiApi:
         """API /api/stat が JSON を返す"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
-        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=100.0)
         mocker.patch(
             "unit_cooler.controller.sensor.get_sense_data",
             return_value={"outdoor": {"temp": 30, "humi": 50}},
@@ -49,41 +48,24 @@ class TestWebuiApi:
             assert response.content_type == "application/json"
 
             data = response.get_json()
-            assert "watering" in data
             assert "sensor" in data
             assert "mode" in data
             assert "cooler_status" in data
             assert "outdoor_status" in data
 
-    def test_api_stat_watering_list_structure(self, config, mocker):
-        """API /api/stat の watering リスト構造"""
+    def test_api_watering_list_structure(self, config, mocker):
+        """API /api/watering の watering リスト構造"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
-        mocker.patch(
-            "unit_cooler.controller.sensor.get_sense_data",
-            return_value={"outdoor": {"temp": 28}},
-        )
-        mocker.patch(
-            "unit_cooler.controller.engine.judge_cooling_mode",
-            return_value={
-                "sense_data": {},
-                "cooler_status": {},
-                "outdoor_status": {},
-            },
-        )
-        mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
 
         app = flask.Flask(__name__)
         app.register_blueprint(cooler_stat.blueprint)
 
-        queue = multiprocessing.Queue()
         app.config["CONFIG"] = config
-        app.config["MESSAGE_QUEUE"] = queue
-        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
 
         with app.test_client() as client:
-            response = client.get("/api/stat")
+            response = client.get("/api/watering")
             data = response.get_json()
 
             # watering リストの検証
@@ -96,8 +78,8 @@ class TestWebuiApi:
                 assert isinstance(item["amount"], int | float)
                 assert isinstance(item["price"], int | float)
 
-    def test_api_stat_handles_sensor_error(self, config, mocker):
-        """API /api/stat がデータ取得エラーを処理する"""
+    def test_api_watering_handles_sensor_error(self, config, mocker):
+        """API /api/watering がデータ取得エラーを処理する"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         # watering_list() 内で呼ばれる my_lib.sensor_data.get_day_sum をモック
@@ -109,12 +91,10 @@ class TestWebuiApi:
         app = flask.Flask(__name__)
         app.register_blueprint(cooler_stat.blueprint)
 
-        queue = multiprocessing.Queue()
         app.config["CONFIG"] = config
-        app.config["MESSAGE_QUEUE"] = queue
 
         with app.test_client() as client:
-            response = client.get("/api/stat")
+            response = client.get("/api/watering")
 
             assert response.status_code == 500
             data = response.get_json()
@@ -126,7 +106,6 @@ class TestWebuiApi:
         from unit_cooler.const import VALVE_STATE
         from unit_cooler.messages import ActuatorStatus, ValveStatus
 
-        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=100.0)
         mocker.patch(
             "unit_cooler.controller.sensor.get_sense_data",
             return_value={"outdoor": {"temp": 30}},
@@ -181,7 +160,6 @@ class TestWebuiJsonp:
         """API /api/stat が JSONP コールバックをサポートする"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
-        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=100.0)
         mocker.patch(
             "unit_cooler.controller.sensor.get_sense_data",
             return_value={"outdoor": {"temp": 30}},
@@ -221,7 +199,6 @@ class TestWebuiCors:
         """API が CORS を許可する"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
-        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=100.0)
         mocker.patch(
             "unit_cooler.controller.sensor.get_sense_data",
             return_value={"outdoor": {"temp": 30}},
