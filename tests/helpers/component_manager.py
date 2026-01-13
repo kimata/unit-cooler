@@ -55,6 +55,7 @@ class ComponentManager:
             (control_thread, proxy_thread) のタプル
         """
         import controller
+        from unit_cooler.config import RuntimeSettings
 
         default_options = {
             "speedup": 100,
@@ -64,9 +65,10 @@ class ComponentManager:
             "real_port": real_port,
         }
         default_options.update(kwargs)
+        settings = RuntimeSettings.from_dict(default_options)
 
         with self._lock:
-            self.handles["controller"] = controller.start(config, default_options)
+            self.handles["controller"] = controller.start(config, settings)
             logging.debug("Controller started on port %d", server_port)
             return self.handles["controller"]
 
@@ -89,17 +91,20 @@ class ComponentManager:
             (executor, thread_list, log_server_handle) のタプル
         """
         import actuator
+        from unit_cooler.config import RuntimeSettings
 
         default_options = {
             "speedup": 100,
             "msg_count": 1,
             "pub_port": server_port,
             "log_port": log_port,
+            "dummy_mode": True,
         }
         default_options.update(kwargs)
+        settings = RuntimeSettings.from_dict(default_options)
 
         with self._lock:
-            self.handles["actuator"] = actuator.start(config, default_options)
+            self.handles["actuator"] = actuator.start(config, settings)
             logging.debug("Actuator started on port %d", server_port)
             return self.handles["actuator"]
 
@@ -127,6 +132,7 @@ class ComponentManager:
             (thread, app) のタプル
         """
         import webui
+        from unit_cooler.config import RuntimeSettings
 
         default_options = {
             "msg_count": 1,
@@ -135,8 +141,9 @@ class ComponentManager:
             "log_port": log_port,
         }
         default_options.update(kwargs)
+        settings = RuntimeSettings.from_dict(default_options)
 
-        app = webui.create_app(config, default_options)
+        app = webui.create_app(config, settings)
 
         def run_webui():
             app.run(host="127.0.0.1", port=http_port, threaded=True, use_reloader=False)

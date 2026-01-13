@@ -10,6 +10,8 @@ from __future__ import annotations
 import threading
 import time
 
+from unit_cooler.config import RuntimeSettings
+
 
 class TestControllerStartup:
     """Controller 起動テスト"""
@@ -58,15 +60,17 @@ class TestControllerStartup:
         time.sleep(0.05)  # サブスクライバーが完全に準備されるまで待機
 
         # Controller を起動
-        options = {
-            "speedup": 100,
-            "dummy_mode": True,
-            "msg_count": 2,
-            "server_port": server_port,
-            "real_port": real_port,
-        }
+        settings = RuntimeSettings.from_dict(
+            {
+                "speedup": 100,
+                "dummy_mode": True,
+                "msg_count": 2,
+                "server_port": server_port,
+                "real_port": real_port,
+            }
+        )
 
-        control_thread, proxy_thread = controller.start(config, options)
+        control_thread, proxy_thread = controller.start(config, settings)
 
         # 終了を待機
         controller.wait_and_term(control_thread, proxy_thread)
@@ -128,15 +132,17 @@ class TestControllerMessageContent:
         subscriber_ready.wait(timeout=2)
         time.sleep(0.05)  # プロキシが起動するまで待機
 
-        options = {
-            "speedup": 100,
-            "dummy_mode": True,
-            "msg_count": 2,
-            "server_port": server_port,
-            "real_port": real_port,
-        }
+        settings = RuntimeSettings.from_dict(
+            {
+                "speedup": 100,
+                "dummy_mode": True,
+                "msg_count": 2,
+                "server_port": server_port,
+                "real_port": real_port,
+            }
+        )
 
-        control_thread, proxy_thread = controller.start(config, options)
+        control_thread, proxy_thread = controller.start(config, settings)
         controller.wait_and_term(control_thread, proxy_thread)
 
         should_stop.set()
@@ -201,15 +207,17 @@ class TestControllerDummyMode:
         subscriber_ready.wait(timeout=2)
         time.sleep(0.05)
 
-        options = {
-            "speedup": 1000,  # 高速化
-            "dummy_mode": True,
-            "msg_count": 5,
-            "server_port": server_port,
-            "real_port": real_port,
-        }
+        settings = RuntimeSettings.from_dict(
+            {
+                "speedup": 1000,  # 高速化
+                "dummy_mode": True,
+                "msg_count": 5,
+                "server_port": server_port,
+                "real_port": real_port,
+            }
+        )
 
-        control_thread, proxy_thread = controller.start(config, options)
+        control_thread, proxy_thread = controller.start(config, settings)
         controller.wait_and_term(control_thread, proxy_thread)
 
         should_stop.set()

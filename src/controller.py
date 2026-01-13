@@ -28,7 +28,7 @@ import unit_cooler.controller.engine
 import unit_cooler.pubsub.publish
 import unit_cooler.pubsub.subscribe
 import unit_cooler.util
-from unit_cooler.config import Config
+from unit_cooler.config import Config, RuntimeSettings
 
 SCHEMA_CONFIG = "config.schema"
 
@@ -44,10 +44,10 @@ def test_client(server_host: str, server_port: int) -> None:
 
 
 # NOTE: Last Value Caching Proxy
-def cache_proxy_start(server_host, real_port, server_port, msg_count):
+def cache_proxy_start(server_host, real_port, server_port, msg_count, idle_timeout_sec=0):
     thread = threading.Thread(
         target=unit_cooler.pubsub.publish.start_proxy,
-        args=(server_host, real_port, server_port, msg_count),
+        args=(server_host, real_port, server_port, msg_count, idle_timeout_sec),
     )
     thread.start()
 
@@ -78,42 +78,33 @@ def control_server_start(
     return thread
 
 
-def start(config: Config, arg: dict) -> tuple[threading.Thread | None, threading.Thread | None]:
-    setting = {
-        "server_host": "localhost",
-        "server_port": 2222,
-        "real_port": 2200,
-        "dummy_mode": False,
-        "disable_proxy": False,
-        "speedup": 1,
-        "msg_count": 0,
-        "debug_mode": False,
-    }
-    setting.update(arg)
+def start(
+    config: Config, settings: RuntimeSettings
+) -> tuple[threading.Thread | None, threading.Thread | None]:
+    logging.info("Start controller (port: %d", settings.server_port)
 
-    logging.info("Start controller (port: %d", setting["server_port"])
-
-    if setting["dummy_mode"]:
+    if settings.dummy_mode:
         logging.warning("DUMMY mode")
         os.environ["DUMMY_MODE"] = "true"
 
     proxy_thread = None
     control_thread = None
     try:
-        if not setting["disable_proxy"]:
+        if not settings.disable_proxy:
             proxy_thread = cache_proxy_start(
-                setting["server_host"],
-                setting["real_port"],
-                setting["server_port"],
-                setting["msg_count"],
+                settings.server_host,
+                settings.real_port,
+                settings.server_port,
+                settings.msg_count,
+                settings.idle_timeout_sec,
             )
 
         control_thread = control_server_start(
             config,
-            int(str(setting["real_port"])),
-            bool(setting["dummy_mode"]),
-            int(str(setting["speedup"])),
-            int(str(setting["msg_count"])),
+            settings.real_port,
+            settings.dummy_mode,
+            settings.speedup,
+            settings.msg_count,
         )
     except Exception:
         logging.exception("Failed to start controller")
@@ -153,21 +144,17 @@ if __name__ == "__main__":
     my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
 
     config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
-
-    sys.exit(
-        wait_and_term(
-            *start(
-                config,
-                {
-                    "real_port": real_port,
-                    "server_host": "localhost",
-                    "server_port": server_port,
-                    "dummy_mode": dummy_mode,
-                    "debug_mode": debug_mode,
-                    "disable_proxy": disable_proxy,
-                    "speedup": speedup,
-                    "msg_count": msg_count,
-                },
-            )
-        )
+    settings = RuntimeSettings.from_dict(
+        {
+            "real_port": real_port,
+            "server_host": "localhost",
+            "server_port": server_port,
+            "dummy_mode": dummy_mode,
+            "debug_mode": debug_mode,
+            "disable_proxy": disable_proxy,
+            "speedup": speedup,
+            "msg_count": msg_count,
+        }
     )
+
+    sys.exit(wait_and_term(*start(config, settings)))

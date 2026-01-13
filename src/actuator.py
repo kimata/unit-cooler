@@ -26,7 +26,7 @@ import signal
 import time
 from typing import Any
 
-from unit_cooler.config import Config
+from unit_cooler.config import Config, RuntimeSettings
 
 SCHEMA_CONFIG = "config.schema"
 
@@ -51,25 +51,13 @@ def wait_before_start(config: Config) -> None:
         time.sleep(1)
 
 
-def start(config: Config, arg: dict[str, Any]) -> tuple[Any, list[Any], Any]:
+def start(config: Config, settings: RuntimeSettings) -> tuple[Any, list[Any], Any]:
     global log_server_handle
 
-    setting = {
-        "control_host": "localhost",
-        "pub_port": 2222,
-        "log_port": 5001,
-        "status_pub_port": 0,
-        "dummy_mode": False,
-        "speedup": 1,
-        "msg_count": 0,
-        "debug_mode": False,
-    }
-    setting.update(arg)
-
-    logging.info("Using ZMQ server of %s:%d", setting["control_host"], setting["pub_port"])
+    logging.info("Using ZMQ server of %s:%d", settings.control_host, settings.pub_port)
 
     # NOTE: オプションでダミーモードが指定された場合、環境変数もそれに揃えておく
-    if setting["dummy_mode"]:
+    if settings.dummy_mode:
         logging.warning("Set dummy mode")
         os.environ["DUMMY_MODE"] = "true"
 
@@ -77,7 +65,7 @@ def start(config: Config, arg: dict[str, Any]) -> tuple[Any, list[Any], Any]:
     message_queue = manager.Queue()
     event_queue = manager.Queue()
 
-    if not setting["dummy_mode"] and (os.environ.get("TEST", "false") != "true"):
+    if not settings.dummy_mode and (os.environ.get("TEST", "false") != "true"):
         # NOTE: 動作開始前に待つ。これを行わないと、複数の Pod が電磁弁を制御することに
         # なり、電磁弁の故障を誤判定する可能性がある。
         wait_before_start(config)
@@ -97,12 +85,11 @@ def start(config: Config, arg: dict[str, Any]) -> tuple[Any, list[Any], Any]:
     import unit_cooler.actuator.web_server
 
     try:
-        logging.info("Starting web server on port %d", setting["log_port"])
-        log_port = int(str(setting["log_port"]))
+        logging.info("Starting web server on port %d", settings.log_port)
         log_server_handle = unit_cooler.actuator.web_server.start(
             config,
-            event_queue,
-            log_port,  # type: ignore[arg-type]
+            event_queue,  # type: ignore[arg-type]
+            settings.log_port,
         )
         logging.info("Web server started successfully")
     except Exception:
@@ -113,7 +100,7 @@ def start(config: Config, arg: dict[str, Any]) -> tuple[Any, list[Any], Any]:
 
     thread_list = unit_cooler.actuator.worker.start(
         executor,
-        unit_cooler.actuator.worker.get_worker_def(config, message_queue, setting),  # type: ignore[arg-type]
+        unit_cooler.actuator.worker.get_worker_def(config, message_queue, settings),  # type: ignore[arg-type]
     )
 
     signal.signal(signal.SIGTERM, sig_handler)
@@ -178,21 +165,21 @@ if __name__ == "__main__":
     my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
 
     config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
+    settings = RuntimeSettings.from_dict(
+        {
+            "control_host": control_host,
+            "pub_port": pub_port,
+            "log_port": log_port,
+            "status_pub_port": status_pub_port,
+            "dummy_mode": dummy_mode,
+            "speedup": speedup,
+            "msg_count": msg_count,
+            "debug_mode": debug_mode,
+        }
+    )
     sys.exit(
         wait_and_term(
-            *start(
-                config,
-                {
-                    "control_host": control_host,
-                    "pub_port": pub_port,
-                    "log_port": log_port,
-                    "status_pub_port": status_pub_port,
-                    "dummy_mode": dummy_mode,
-                    "speedup": speedup,
-                    "msg_count": msg_count,
-                    "debug_mode": debug_mode,
-                },
-            ),
+            *start(config, settings),
             terminate=False,
         )
     )

@@ -28,14 +28,14 @@ import pathlib
 import signal
 import sys
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import flask
 import flask_cors
 import my_lib.proc_util
 
 if TYPE_CHECKING:
-    from unit_cooler.config import Config
+    from unit_cooler.config import Config, RuntimeSettings
 
 SCHEMA_CONFIG = "config.schema"
 
@@ -72,20 +72,8 @@ def signal_handler(signum, _frame):
     term()
 
 
-def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
-    setting = {
-        "control_host": "localhost",
-        "pub_port": 2222,
-        "actuator_host": "localhost",
-        "log_port": 5001,
-        "status_pub_port": 0,
-        "dummy_mode": False,
-        "msg_count": 0,
-    }
-
-    setting.update(arg)
-
-    logging.info("Using ZMQ server of %s:%d", setting["control_host"], setting["pub_port"])
+def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
+    logging.info("Using ZMQ server of %s:%d", settings.control_host, settings.pub_port)
 
     import my_lib.webapp.config
 
@@ -107,24 +95,24 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
         target=unit_cooler.webui.worker.subscribe_worker,
         args=(
             config,
-            setting["control_host"],
-            setting["pub_port"],
+            settings.control_host,
+            settings.pub_port,
             message_queue,
             pathlib.Path(config.webui.subscribe.liveness.file),
-            setting["msg_count"],
+            settings.msg_count,
         ),
     )
     subscribe_thread.start()
     worker_threads.append(subscribe_thread)
 
     # ActuatorStatus 購読ワーカ（status_pub_port が指定されている場合）
-    if int(str(setting["status_pub_port"])) > 0:
+    if settings.status_pub_port > 0:
         status_thread = threading.Thread(
             target=unit_cooler.webui.worker.actuator_status_worker,
             args=(
                 config,
-                setting["actuator_host"],
-                setting["status_pub_port"],
+                settings.actuator_host,
+                settings.status_pub_port,
             ),
         )
         status_thread.start()
@@ -139,7 +127,7 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        if setting["dummy_mode"]:
+        if settings.dummy_mode:
             logging.warning("Set dummy mode")
             # NOTE: オプションでダミーモードが指定された場合、環境変数もそれに揃えておく
             os.environ["DUMMY_MODE"] = "true"
@@ -147,6 +135,8 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
             pass
 
         def notify_terminate():  # pragma: no cover
+            import my_lib.webapp.log
+
             term()
             my_lib.webapp.log.info("🏃 アプリを再起動します。")
             my_lib.webapp.log.term()
@@ -163,7 +153,7 @@ def create_app(config: Config, arg: dict[str, Any]) -> flask.Flask:
     app.json.compat = True  # type: ignore[attr-defined]
 
     # Initialize proxy before registering blueprint
-    api_base_url = f"http://{setting['actuator_host']}:{setting['log_port']}/unit-cooler"
+    api_base_url = f"http://{settings.actuator_host}:{settings.log_port}/unit-cooler"
     my_lib.webapp.proxy.init(api_base_url)
 
     app.register_blueprint(my_lib.webapp.base.blueprint_default)
@@ -187,7 +177,7 @@ if __name__ == "__main__":
     import docopt
     import my_lib.logger
 
-    from unit_cooler.config import Config
+    from unit_cooler.config import Config, RuntimeSettings
 
     args = docopt.docopt(__doc__)
 
@@ -204,9 +194,7 @@ if __name__ == "__main__":
     my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
 
     config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
-
-    app = create_app(
-        config,
+    settings = RuntimeSettings.from_dict(
         {
             "control_host": control_host,
             "pub_port": pub_port,
@@ -215,8 +203,10 @@ if __name__ == "__main__":
             "status_pub_port": status_pub_port,
             "dummy_mode": dummy_mode,
             "msg_count": msg_count,
-        },
+        }
     )
+
+    app = create_app(config, settings)
 
     # Flaskアプリケーションを実行
     try:

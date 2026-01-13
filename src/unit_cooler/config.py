@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 from dataclasses import dataclass
 from typing import Any, Self
@@ -10,6 +11,74 @@ from typing import Any, Self
 import my_lib.config
 import my_lib.notify.slack
 import my_lib.webapp.config
+
+
+# =============================================================================
+# 実行時設定 (CLI引数・環境変数由来)
+# =============================================================================
+@dataclass
+class RuntimeSettings:
+    """実行時設定 (config.yaml ではなく起動時に指定される設定)
+
+    各コンポーネント (Controller, Actuator, WebUI) の起動時に
+    CLI引数や環境変数から設定される値を型安全に管理する。
+    """
+
+    # ネットワーク設定 (共通)
+    control_host: str = "localhost"
+    pub_port: int = 2222
+
+    # Actuator 固有
+    log_port: int = 5001
+    status_pub_port: int = 0
+
+    # Controller 固有
+    server_host: str = "localhost"
+    server_port: int = 2222
+    real_port: int = 2200
+    disable_proxy: bool = False
+    idle_timeout_sec: int = 0  # proxy のアイドルタイムアウト（0=無制限）
+
+    # WebUI 固有
+    actuator_host: str = "localhost"
+
+    # 実行モード設定 (共通)
+    dummy_mode: bool = False
+    speedup: int = 1
+    msg_count: int = 0
+    debug_mode: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """dict から RuntimeSettings を生成 (未知のキーは無視)
+
+        型変換も自動的に行う:
+        - 文字列 "true"/"false" → bool
+        - 文字列の数値 → int
+        """
+        valid_fields = {f.name for f in dataclasses.fields(cls)}
+        field_types = {f.name: f.type for f in dataclasses.fields(cls)}
+        filtered: dict[str, Any] = {}
+
+        for k, v in data.items():
+            if k not in valid_fields:
+                continue
+
+            expected_type = field_types[k]
+
+            # bool 型フィールドの変換
+            if expected_type is bool:
+                if isinstance(v, str):
+                    filtered[k] = v.lower() in ("true", "1", "yes")
+                else:
+                    filtered[k] = bool(v)
+            # int 型フィールドの変換
+            elif expected_type is int:
+                filtered[k] = int(v) if v is not None else 0
+            else:
+                filtered[k] = v
+
+        return cls(**filtered)
 
 
 # =============================================================================

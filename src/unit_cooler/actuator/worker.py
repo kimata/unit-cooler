@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from my_lib.lifecycle import LifecycleManager
 
-    from unit_cooler.config import Config
+    from unit_cooler.config import Config, RuntimeSettings
 
 
 # =============================================================================
@@ -504,7 +504,7 @@ def control_worker(
 
 
 def get_worker_def(
-    config: Config, message_queue: Queue[Any], setting: dict[str, Any]
+    config: Config, message_queue: Queue[Any], settings: RuntimeSettings
 ) -> list[dict[str, Any]]:
     return [
         {
@@ -512,11 +512,11 @@ def get_worker_def(
             "param": [
                 subscribe_worker,
                 config,
-                setting["control_host"],
-                setting["pub_port"],
+                settings.control_host,
+                settings.pub_port,
                 message_queue,
                 pathlib.Path(config.actuator.subscribe.liveness.file),
-                setting["msg_count"],
+                settings.msg_count,
             ],
         },
         {
@@ -525,10 +525,10 @@ def get_worker_def(
                 monitor_worker,
                 config,
                 pathlib.Path(config.actuator.monitor.liveness.file),
-                setting["dummy_mode"],
-                setting["speedup"],
-                setting["msg_count"],
-                setting.get("status_pub_port", 0),
+                settings.dummy_mode,
+                settings.speedup,
+                settings.msg_count,
+                settings.status_pub_port,
             ],
         },
         {
@@ -538,9 +538,9 @@ def get_worker_def(
                 config,
                 message_queue,
                 pathlib.Path(config.actuator.control.liveness.file),
-                setting["dummy_mode"],
-                setting["speedup"],
-                setting["msg_count"],
+                settings.dummy_mode,
+                settings.speedup,
+                settings.msg_count,
             ],
         },
     ]
@@ -587,7 +587,7 @@ if __name__ == "__main__":
     import my_lib.webapp.log
 
     import unit_cooler.actuator.valve
-    from unit_cooler.config import Config
+    from unit_cooler.config import Config, RuntimeSettings
 
     args = docopt.docopt(__doc__)
 
@@ -616,15 +616,17 @@ if __name__ == "__main__":
     # NOTE: テストしやすいように、threading.Thread ではなく multiprocessing.pool.ThreadPool を使う
     executor = concurrent.futures.ThreadPoolExecutor()
 
-    setting = {
-        "control_host": control_host,
-        "pub_port": pub_port,
-        "speedup": speedup,
-        "msg_count": msg_count,
-        "dummy_mode": True,
-    }
+    settings = RuntimeSettings.from_dict(
+        {
+            "control_host": control_host,
+            "pub_port": pub_port,
+            "speedup": speedup,
+            "msg_count": msg_count,
+            "dummy_mode": True,
+        }
+    )
 
-    thread_list = start(executor, get_worker_def(config, message_queue, setting))
+    thread_list = start(executor, get_worker_def(config, message_queue, settings))
 
     for thread_info in thread_list:
         logging.info("Wait %s finish", thread_info["name"])
