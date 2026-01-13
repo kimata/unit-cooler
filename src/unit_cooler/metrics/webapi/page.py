@@ -27,7 +27,7 @@ def metrics_view():
     try:
         # 設定からメトリクスデータパスを取得
         config = flask.current_app.config["CONFIG"]
-        metrics_data_path = config.get("actuator", {}).get("metrics", {}).get("data")
+        metrics_data_path = config.actuator.metrics.data
 
         # データベースファイルの存在確認
         if not metrics_data_path:
