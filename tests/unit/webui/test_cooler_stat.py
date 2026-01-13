@@ -134,7 +134,6 @@ class TestGetStats:
         """統計辞書を返す"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
-        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
 
         queue = multiprocessing.Queue()
@@ -148,7 +147,6 @@ class TestGetStats:
 
         result = cooler_stat.get_stats(config, queue)
 
-        assert "watering" in result
         assert "sensor" in result
         assert "mode" in result
         assert "cooler_status" in result
@@ -159,7 +157,6 @@ class TestGetStats:
         """ZMQ メッセージがない場合は空データを返す"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
-        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
 
         queue = multiprocessing.Queue()
@@ -177,8 +174,6 @@ class TestGetStats:
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
         from unit_cooler.const import VALVE_STATE
         from unit_cooler.messages import ActuatorStatus, ValveStatus
-
-        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
 
         valve_status = ValveStatus(
             state=VALVE_STATE.OPEN,
@@ -226,7 +221,6 @@ class TestApiGetStats:
         app.config["CONFIG"] = config
         app.config["MESSAGE_QUEUE"] = queue
 
-        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
         cooler_stat.get_last_message.last_message = {  # pyright: ignore[reportFunctionMemberAccess]
             "mode_index": 3,
@@ -240,7 +234,8 @@ class TestApiGetStats:
 
             assert response.status_code == 200
             data = response.get_json()
-            assert "watering" in data
+            assert "sensor" in data
+            assert "mode" in data
 
     def test_returns_error_on_exception(self, config, mocker):
         """例外時にエラーを返す"""
@@ -255,6 +250,55 @@ class TestApiGetStats:
         app.config["CONFIG"] = config
         app.config["MESSAGE_QUEUE"] = queue
 
+        # get_stats で例外を発生させる
+        mocker.patch(
+            "unit_cooler.webui.webapi.cooler_stat.get_stats",
+            side_effect=Exception("test error"),
+        )
+
+        with app.test_client() as client:
+            response = client.get("/api/stat")
+
+            assert response.status_code == 500
+            data = response.get_json()
+            assert "error" in data
+
+
+class TestApiGetWatering:
+    """api_get_watering のテスト"""
+
+    def test_returns_json_response(self, config, mocker):
+        """JSON レスポンスを返す"""
+        import flask
+
+        import unit_cooler.webui.webapi.cooler_stat as cooler_stat
+
+        app = flask.Flask(__name__)
+        app.register_blueprint(cooler_stat.blueprint)
+
+        app.config["CONFIG"] = config
+
+        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=50.0)
+
+        with app.test_client() as client:
+            response = client.get("/api/watering")
+
+            assert response.status_code == 200
+            data = response.get_json()
+            assert "watering" in data
+            assert len(data["watering"]) == 10
+
+    def test_returns_error_on_exception(self, config, mocker):
+        """例外時にエラーを返す"""
+        import flask
+
+        import unit_cooler.webui.webapi.cooler_stat as cooler_stat
+
+        app = flask.Flask(__name__)
+        app.register_blueprint(cooler_stat.blueprint)
+
+        app.config["CONFIG"] = config
+
         # watering_list で例外を発生させる
         mocker.patch(
             "unit_cooler.webui.webapi.cooler_stat.watering_list",
@@ -262,7 +306,7 @@ class TestApiGetStats:
         )
 
         with app.test_client() as client:
-            response = client.get("/api/stat")
+            response = client.get("/api/watering")
 
             assert response.status_code == 500
             data = response.get_json()
