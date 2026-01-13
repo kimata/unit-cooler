@@ -91,7 +91,7 @@ function App() {
         loading: logLoading,
         error: logError,
         refetch: refetchLog
-    } = useApi(`${API_ENDPOINT}/proxy/json/api/log_view`, emptyLog);
+    } = useApi(`${API_ENDPOINT}/proxy/json/api/log_view`, emptyLog, { retryInterval: 10000 });
 
     const {
         data: sysInfo,

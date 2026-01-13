@@ -9,12 +9,13 @@ interface UseApiState<T> {
 interface UseApiOptions {
     interval?: number;
     immediate?: boolean;
+    retryInterval?: number; // エラー時のリトライ間隔（ミリ秒）
 }
 
 export function useApi<T>(
     url: string,
     initialData: T,
-    options: UseApiOptions = {},
+    options: UseApiOptions = {}
 ): UseApiState<T> & { refetch: () => Promise<void> } {
     const [data, setData] = useState<T>(initialData);
     const [loading, setLoading] = useState(true);
@@ -61,6 +62,14 @@ export function useApi<T>(
             return () => clearInterval(intervalId);
         }
     }, [fetchData, options.immediate, options.interval]);
+
+    // エラー時のリトライ
+    useEffect(() => {
+        if (error && options.retryInterval) {
+            const retryId = setTimeout(fetchData, options.retryInterval);
+            return () => clearTimeout(retryId);
+        }
+    }, [error, options.retryInterval, fetchData]);
 
     return {
         data,
