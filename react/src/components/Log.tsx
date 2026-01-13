@@ -146,7 +146,7 @@ const Log = React.memo(({ isReady, log }: Props) => {
                 <div className="card shadow-sm h-full">
                     <div className="card-header">
                         <h4 className="my-0 font-normal">
-                            <ClipboardDocumentListIcon className="size-5 text-gray-600" />
+                            <ClipboardDocumentListIcon className="size-5 text-gray-500" />
                             作動ログ
                         </h4>
                     </div>

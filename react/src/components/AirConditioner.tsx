@@ -104,7 +104,7 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                         ))}
                     </tbody>
                 </table>
-                <div className="text-left">{coolerStatus(stat)}</div>
+                <div className="text-left mt-4">{coolerStatus(stat)}</div>
             </div>
         );
     };
@@ -115,7 +115,7 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                 <div className="card shadow-sm h-full">
                     <div className="card-header">
                         <h4 className="my-0 font-normal">
-                            <BoltIcon className="size-5 text-yellow-500" />
+                            <BoltIcon className="size-5 text-gray-500" />
                             エアコン稼働状況
                         </h4>
                     </div>

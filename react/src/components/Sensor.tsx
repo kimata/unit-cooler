@@ -102,7 +102,7 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                         {sensorRow("rain", stat.sensor.rain[0], <span>mm/h</span>)}
                     </tbody>
                 </table>
-                <div className="text-left">{outdoorStatus(stat)}</div>
+                <div className="text-left mt-4">{outdoorStatus(stat)}</div>
             </div>
         );
     };
@@ -113,7 +113,7 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                 <div className="card shadow-sm h-full">
                     <div className="card-header">
                         <h4 className="my-0 font-normal">
-                            <ThermometerIcon className="size-5 text-red-500" />
+                            <ThermometerIcon className="size-5 text-gray-500" />
                             センサー値
                         </h4>
                     </div>

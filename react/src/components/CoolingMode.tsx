@@ -231,7 +231,7 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                 <div className="card shadow-sm h-full">
                     <div className="card-header">
                         <h4 className="my-0 font-normal">
-                            <SnowflakeIcon className="size-5 text-cyan-500" />
+                            <SnowflakeIcon className="size-5 text-gray-500" />
                             現在の冷却モード
                         </h4>
                     </div>

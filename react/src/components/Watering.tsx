@@ -60,7 +60,7 @@ const Watering = React.memo(({ isReady, stat }: StatComponentProps) => {
                 <div className="card shadow-sm h-full">
                     <div className="card-header">
                         <h4 className="my-0 font-normal">
-                            <DropletIcon className="size-5 text-blue-500" />
+                            <DropletIcon className="size-5 text-gray-500" />
                             本日の散水量
                         </h4>
                     </div>

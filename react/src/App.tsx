@@ -159,8 +159,8 @@ function App() {
     return (
         <>
             <div className="App">
-                <div className="flex flex-col md:flex-row items-center p-3 px-4 md:px-5 mb-4 bg-white border-b shadow-sm">
-                    <h1 className="text-2xl md:text-3xl font-normal my-0 mr-auto tracking-wide text-gray-800">
+                <div className="py-4 px-4 mb-4 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-b shadow-sm">
+                    <h1 className="text-2xl md:text-3xl font-light my-0 text-center tracking-widest text-gray-700">
                         室外機自動冷却システム
                     </h1>
                 </div>
