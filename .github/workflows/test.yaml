@@ -71,7 +71,7 @@ jobs:
                   sudo locale-gen ja_JP.UTF-8
 
             - name: Install uv
-              uses: astral-sh/setup-uv@v5
+              uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7
               with:
                   enable-cache: true
 
@@ -149,7 +149,7 @@ jobs:
                   sudo locale-gen ja_JP.UTF-8
 
             - name: Install uv
-              uses: astral-sh/setup-uv@v5
+              uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7
               with:
                   enable-cache: true
 
