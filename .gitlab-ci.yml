@@ -106,6 +106,7 @@ test-typecheck:
     script:
         - uv run python -m pyright
         - uv run mypy src/
+        - uv run ty check src/
 
 test-walk-through:
     extends: .cache-base
