@@ -13,7 +13,7 @@ import pytest
 from unit_cooler.config import Config
 
 CONFIG_FILE = "config.example.yaml"
-SCHEMA_CONFIG = "config.schema"
+SCHEMA_CONFIG = "schema/config.schema"
 
 
 @pytest.fixture

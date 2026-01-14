@@ -30,7 +30,7 @@ import unit_cooler.pubsub.subscribe
 import unit_cooler.util
 from unit_cooler.config import Config, RuntimeSettings
 
-SCHEMA_CONFIG = "config.schema"
+SCHEMA_CONFIG = "schema/config.schema"
 
 
 def test_client(server_host: str, server_port: int) -> None:

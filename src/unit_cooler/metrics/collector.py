@@ -23,6 +23,7 @@ import my_lib.sqlite_util
 
 TIMEZONE = zoneinfo.ZoneInfo("Asia/Tokyo")
 DEFAULT_DB_PATH = pathlib.Path("data/metrics.db")
+SCHEMA_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "schema" / "sqlite.schema"
 
 logger = logging.getLogger(__name__)
 
@@ -56,57 +57,16 @@ class MetricsCollector:
         self._last_hour: datetime.datetime | None = None
 
     def _init_database(self):
-        """Initialize database tables for new metrics schema."""
+        """Initialize database tables from schema file."""
         with self._get_db_connection() as conn:
             # WALモードを設定（分散ストレージに適している）
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA wal_autocheckpoint=100")
 
-            # 1分毎のメトリクス
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS minute_metrics (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME NOT NULL,
-                    cooling_mode INTEGER,
-                    duty_ratio REAL,
-                    temperature REAL,
-                    humidity REAL,
-                    lux REAL,
-                    solar_radiation REAL,
-                    rain_amount REAL,
-                    flow_value REAL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(timestamp)
-                )
-            """)
-
-            # 1時間毎のメトリクス
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS hourly_metrics (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME NOT NULL,
-                    valve_operations INTEGER DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(timestamp)
-                )
-            """)
-
-            # エラー記録
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS error_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME NOT NULL,
-                    error_type TEXT NOT NULL,
-                    error_message TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            # インデックス作成
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_minute_timestamp ON minute_metrics(timestamp)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_hourly_timestamp ON hourly_metrics(timestamp)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_error_timestamp ON error_events(timestamp)")
+            # スキーマファイルからテーブルとインデックスを作成
+            schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
+            conn.executescript(schema_sql)
 
     @contextmanager
     def _get_db_connection(self):

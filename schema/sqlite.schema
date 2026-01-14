@@ -1,0 +1,41 @@
+-- Metrics database schema for outdoor unit cooler
+-- This file is used by MetricsCollector to initialize the database
+
+-- 1分毎のメトリクス
+CREATE TABLE IF NOT EXISTS minute_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME NOT NULL,
+    cooling_mode INTEGER,
+    duty_ratio REAL,
+    temperature REAL,
+    humidity REAL,
+    lux REAL,
+    solar_radiation REAL,
+    rain_amount REAL,
+    flow_value REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(timestamp)
+);
+
+-- 1時間毎のメトリクス
+CREATE TABLE IF NOT EXISTS hourly_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME NOT NULL,
+    valve_operations INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(timestamp)
+);
+
+-- エラー記録
+CREATE TABLE IF NOT EXISTS error_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME NOT NULL,
+    error_type TEXT NOT NULL,
+    error_message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- インデックス
+CREATE INDEX IF NOT EXISTS idx_minute_timestamp ON minute_metrics(timestamp);
+CREATE INDEX IF NOT EXISTS idx_hourly_timestamp ON hourly_metrics(timestamp);
+CREATE INDEX IF NOT EXISTS idx_error_timestamp ON error_events(timestamp);

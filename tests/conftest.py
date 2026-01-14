@@ -32,7 +32,7 @@ my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
 
 # 設定ファイル
 CONFIG_FILE = "config.example.yaml"
-SCHEMA_CONFIG = "config.schema"
+SCHEMA_CONFIG = "schema/config.schema"
 
 
 # =============================================================================

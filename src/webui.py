@@ -37,7 +37,7 @@ import my_lib.proc_util
 if TYPE_CHECKING:
     from unit_cooler.config import Config, RuntimeSettings
 
-SCHEMA_CONFIG = "config.schema"
+SCHEMA_CONFIG = "schema/config.schema"
 
 # グローバル変数でワーカースレッドを管理
 worker_threads: list[threading.Thread] = []

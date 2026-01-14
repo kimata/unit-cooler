@@ -313,7 +313,7 @@ class TestConfigLoad:
 
     def test_load_example_config(self):
         """config.example.yaml を読み込める"""
-        config = Config.load("config.example.yaml", pathlib.Path("config.schema"))
+        config = Config.load("config.example.yaml", pathlib.Path("schema/config.schema"))
 
         # 基本構造の確認
         assert config.base_dir is not None

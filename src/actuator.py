@@ -28,7 +28,7 @@ from typing import Any
 
 from unit_cooler.config import Config, RuntimeSettings
 
-SCHEMA_CONFIG = "config.schema"
+SCHEMA_CONFIG = "schema/config.schema"
 
 # Global variable for web server handle
 log_server_handle: Any = None

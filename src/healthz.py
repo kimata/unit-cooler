@@ -18,7 +18,7 @@ import pathlib
 import my_lib.healthz
 from my_lib.healthz import HealthzTarget
 
-SCHEMA_CONFIG = "config.schema"
+SCHEMA_CONFIG = "schema/config.schema"
 
 
 def check_liveness(target_list: list[HealthzTarget], port: int | None = None) -> bool:

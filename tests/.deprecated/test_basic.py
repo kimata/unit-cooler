@@ -33,7 +33,7 @@ from tests.test_helpers import (
 my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
 
 CONFIG_FILE = "config.example.yaml"
-SCHEMA_CONFIG = "config.schema"
+SCHEMA_CONFIG = "schema/config.schema"
 
 
 @pytest.fixture(scope="session", autouse=True)
