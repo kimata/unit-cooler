@@ -89,51 +89,6 @@ build-image:
     # after_script:
     #     - docker buildx rm ${BUILDER} || true
 
-test-prepare:
-    stage: build
-
-    script:
-        - apt update
-        - apt install --no-install-recommends --assume-yes swig
-
-        - uv sync --locked --no-editable
-
-        - |
-            now=$(date +%s)
-            threshold=$((60*60*1))  # 1時間
-
-            for net in $(docker network ls --format '{{.Name}}'); do
-                if [[ "$net" == "bridge" || "$net" == "host" || "$net" == "none" ]]; then
-                    continue
-                fi
-
-                attached=$(docker network inspect "$net" --format '{{json .Containers}}')
-                if [[ "$attached" != "{}" ]]; then
-                    continue
-                fi
-
-                created=$(docker network inspect "$net" --format '{{.Created}}')
-                created_fixed=$(echo "$created" | sed -E 's/\.[0-9]+//; s/ [A-Z]+$//')
-                created_ts=$(date --date="$created_fixed" +%s)
-
-                if [[ -n "$created_ts" && $((now - created_ts)) -gt $threshold ]]; then
-                    echo "Removing unused network: $net (created at $created)"
-                    docker network rm "$net" || true
-                fi
-            done
-
-    artifacts:
-        paths:
-            - ${UV_CACHE_DIR}
-        expire_in: 1 hour
-
-    cache:
-        - key:
-              files:
-                  - uv.lock
-          paths:
-              - ${UV_CACHE_DIR}
-
 .cache-base:
     cache:
         - key:
@@ -146,8 +101,7 @@ test-typecheck:
     extends: .cache-base
     stage: test
 
-    needs:
-        - test-prepare
+    needs: []
 
     script:
         - uv run python -m pyright
@@ -156,8 +110,7 @@ test-typecheck:
 test-walk-through:
     extends: .cache-base
     stage: test
-    needs:
-        - test-prepare
+    needs: []
     script:
         - >
             uv run pytest tests/unit/ tests/integration/
@@ -313,7 +266,6 @@ test-webui-docker:
     needs:
         - generate-tag
         - build-image
-        - test-prepare
     cache:
         - key:
               files:
