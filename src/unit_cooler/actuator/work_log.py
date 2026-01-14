@@ -70,24 +70,8 @@ def add(message: str, level: unit_cooler.const.LOG_LEVEL = unit_cooler.const.LOG
 
     log_hist.append(message)
 
-    if level == unit_cooler.const.LOG_LEVEL.ERROR:
-        if config is not None:
-            unit_cooler.util.notify_error(config, message)
-        # エラーメトリクス記録
-        try:
-            from unit_cooler.actuator.webapi.metrics import record_error
-
-            record_error("work_log_error", message)
-        except ImportError:
-            pass
-    elif level == unit_cooler.const.LOG_LEVEL.WARN:
-        # 警告メトリクス記録
-        try:
-            from unit_cooler.actuator.webapi.metrics import record_warning
-
-            record_warning("work_log_warning", message)
-        except ImportError:
-            pass
+    if level == unit_cooler.const.LOG_LEVEL.ERROR and config is not None:
+        unit_cooler.util.notify_error(config, message)
 
 
 if __name__ == "__main__":
@@ -101,6 +85,7 @@ if __name__ == "__main__":
 
     from unit_cooler.config import Config
 
+    assert __doc__ is not None  # noqa: S101
     args = docopt.docopt(__doc__)
 
     config_file = args["-c"]

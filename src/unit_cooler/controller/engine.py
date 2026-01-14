@@ -25,11 +25,15 @@ ON_SEC_MIN = 5
 # 最低でもこの時間は OFF にする (テスト時含む)
 OFF_SEC_MIN = 5
 
+# dummy_cooling_mode の状態をモジュールレベル変数で管理
+_dummy_prev_mode: int = 0
+
 
 def dummy_cooling_mode():
+    global _dummy_prev_mode
     import random
 
-    current_mode = dummy_cooling_mode.prev_mode
+    current_mode = _dummy_prev_mode
     max_mode = len(unit_cooler.controller.message.CONTROL_MESSAGE_LIST) - 1
 
     # 60%の確率で現状維持、40%の確率で変更
@@ -53,14 +57,22 @@ def dummy_cooling_mode():
         # その他の場合、50%で+1、50%で-1
         cooling_mode = current_mode + 1 if random.random() < 0.5 else current_mode - 1  # noqa: S311
 
-    dummy_cooling_mode.prev_mode = cooling_mode
+    _dummy_prev_mode = cooling_mode
 
     logging.info("cooling_mode: %d (prev: %d)", cooling_mode, current_mode)
 
     return {"cooling_mode": cooling_mode}
 
 
-dummy_cooling_mode.prev_mode = 0  # type: ignore[attr-defined]
+def set_dummy_prev_mode(mode: int) -> None:
+    """テスト用: dummy_cooling_mode の prev_mode を設定します。"""
+    global _dummy_prev_mode
+    _dummy_prev_mode = mode
+
+
+def get_dummy_prev_mode() -> int:
+    """テスト用: dummy_cooling_mode の prev_mode を取得します。"""
+    return _dummy_prev_mode
 
 
 def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> dict[str, Any]:
@@ -164,6 +176,7 @@ if __name__ == "__main__":
     import my_lib.logger
     import my_lib.pretty
 
+    assert __doc__ is not None  # noqa: S101
     args = docopt.docopt(__doc__)
 
     config_file = args["-c"]

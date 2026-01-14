@@ -153,7 +153,7 @@ def generate_cooler_metrics_icon():
     )
 
     # 32x32に縮小してアンチエイリアス効果を得る
-    return img.resize((size, size), Image.LANCZOS)
+    return img.resize((size, size), Image.Resampling.LANCZOS)
 
 
 def get_data_period_info(minute_data: list[dict], hourly_data: list[dict]) -> dict:

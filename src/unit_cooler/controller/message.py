@@ -10,11 +10,24 @@ Options:
 """
 
 import logging
+from typing import TypedDict
 
 import unit_cooler.const
 
+
+class DutyDict(TypedDict):
+    enable: bool
+    on_sec: int
+    off_sec: int
+
+
+class ControlMessageDict(TypedDict):
+    state: unit_cooler.const.COOLING_STATE
+    duty: DutyDict
+
+
 # アクチュエータへの指示に使うメッセージ
-CONTROL_MESSAGE_LIST = [
+CONTROL_MESSAGE_LIST: list[ControlMessageDict] = [
     # 0
     {
         "state": unit_cooler.const.COOLING_STATE.IDLE,
@@ -89,6 +102,7 @@ if __name__ == "__main__":
     import my_lib.logger
     import my_lib.pretty
 
+    assert __doc__ is not None  # noqa: S101
     args = docopt.docopt(__doc__)
 
     debug_mode = args["-D"]

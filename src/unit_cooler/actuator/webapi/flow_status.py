@@ -14,7 +14,7 @@ blueprint = flask.Blueprint("flow-status", __name__)
 @my_lib.flask_util.support_jsonp
 def get_flow():
     """最後に測定された流量を JSON 形式で返します。"""
-    flow = unit_cooler.actuator.monitor.get_mist_condition.last_flow
+    flow = unit_cooler.actuator.monitor.get_last_flow()
 
     response = {
         "flow": flow,

@@ -11,7 +11,9 @@ from unit_cooler.controller.engine import (
     ON_SEC_MIN,
     dummy_cooling_mode,
     gen_control_msg,
+    get_dummy_prev_mode,
     judge_cooling_mode,
+    set_dummy_prev_mode,
 )
 from unit_cooler.controller.message import CONTROL_MESSAGE_LIST
 
@@ -45,7 +47,7 @@ class TestDummyCoolingMode:
 
     def setup_method(self):
         """各テスト前に prev_mode をリセット"""
-        dummy_cooling_mode.prev_mode = 0
+        set_dummy_prev_mode(0)
 
     def test_returns_dict_with_cooling_mode(self):
         """cooling_mode を含む dict を返す"""
@@ -62,7 +64,7 @@ class TestDummyCoolingMode:
 
     def test_mode_zero_can_only_increase(self):
         """モード 0 からは増加のみ"""
-        dummy_cooling_mode.prev_mode = 0
+        set_dummy_prev_mode(0)
         for _ in range(20):
             result = dummy_cooling_mode()
             if result["cooling_mode"] != 0:
@@ -73,7 +75,7 @@ class TestDummyCoolingMode:
     def test_mode_max_can_only_decrease(self):
         """最大モードからは減少のみ"""
         max_mode = len(CONTROL_MESSAGE_LIST) - 1
-        dummy_cooling_mode.prev_mode = max_mode
+        set_dummy_prev_mode(max_mode)
         for _ in range(20):
             result = dummy_cooling_mode()
             if result["cooling_mode"] != max_mode:
@@ -83,16 +85,16 @@ class TestDummyCoolingMode:
 
     def test_prev_mode_is_updated(self):
         """prev_mode が更新される"""
-        dummy_cooling_mode.prev_mode = 0
+        set_dummy_prev_mode(0)
         result = dummy_cooling_mode()
-        assert dummy_cooling_mode.prev_mode == result["cooling_mode"]
+        assert get_dummy_prev_mode() == result["cooling_mode"]
 
     def test_randomness_with_seed(self):
         """ランダム性のテスト (シード固定)"""
         import random
 
         random.seed(42)
-        dummy_cooling_mode.prev_mode = 3
+        set_dummy_prev_mode(3)
         results = [dummy_cooling_mode()["cooling_mode"] for _ in range(10)]
 
         # 結果の多様性を確認 (少なくとも 2 種類の値が出るはず)

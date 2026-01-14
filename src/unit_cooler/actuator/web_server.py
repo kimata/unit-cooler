@@ -135,6 +135,7 @@ if __name__ == "__main__":
 
     from unit_cooler.config import Config
 
+    assert __doc__ is not None  # noqa: S101
     args = docopt.docopt(__doc__)
 
     config_file = args["-c"]

@@ -207,10 +207,11 @@ if __name__ == "__main__":
     import my_lib.logger
     import my_lib.pretty
 
-    import unit_cooler.actuator.subscribe
     import unit_cooler.const
     import unit_cooler.controller.engine
+    import unit_cooler.pubsub.subscribe
 
+    assert __doc__ is not None  # noqa: S101
     args = docopt.docopt(__doc__)
 
     config_file = args["-c"]
@@ -243,7 +244,7 @@ if __name__ == "__main__":
     )
     server_thread.start()
 
-    unit_cooler.actuator.subscribe.start_client(
+    unit_cooler.pubsub.subscribe.start_client(
         server_host,
         server_port,
         lambda message: logging.info("receive: %s", message),

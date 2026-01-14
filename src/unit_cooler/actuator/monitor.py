@@ -19,6 +19,9 @@ import unit_cooler.const
 if TYPE_CHECKING:
     from unit_cooler.config import Config
 
+# last_flow をモジュールレベル変数として管理
+_last_flow: float | int = 0
+
 
 def init(pin_no: int) -> None:
     unit_cooler.actuator.sensor.init(pin_no)
@@ -64,6 +67,8 @@ def send_mist_condition(
 
 
 def get_mist_condition():
+    global _last_flow
+
     valve_status = unit_cooler.actuator.valve.get_status()
 
     if valve_status["state"] == unit_cooler.const.VALVE_STATE.OPEN:
@@ -74,14 +79,16 @@ def get_mist_condition():
     else:
         # NOTE: 電磁弁が閉じている場合、流量が 0 になるまでは計測を継続する。
         # (電磁弁の電源を切るため、流量が 0 になった場合は、電磁弁が開かれるまで計測は再開しない)
-        flow = unit_cooler.actuator.sensor.get_flow() if get_mist_condition.last_flow != 0 else 0
+        flow = unit_cooler.actuator.sensor.get_flow() if _last_flow != 0 else 0
 
-    get_mist_condition.last_flow = flow
+    _last_flow = flow
 
     return {"valve": valve_status, "flow": flow}
 
 
-get_mist_condition.last_flow = 0  # type: ignore[attr-defined]
+def get_last_flow() -> float | int:
+    """最後に測定された流量を取得します。"""
+    return _last_flow
 
 
 def hazard_notify(config: Config, message: str) -> None:

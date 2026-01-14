@@ -315,7 +315,11 @@ def sleep_until_next_iter(start_time, interval_sec):
     logging.debug("Seep %.1f sec...", sleep_sec)
 
     # should_terminate が設定されるまで待機（最大 sleep_sec 秒）
-    get_should_terminate().wait(timeout=sleep_sec)
+    should_terminate = get_should_terminate()
+    if should_terminate is not None:
+        should_terminate.wait(timeout=sleep_sec)
+    else:
+        time.sleep(sleep_sec)
 
 
 # NOTE: コントローラから制御指示を受け取ってキューに積むワーカ
@@ -589,6 +593,7 @@ if __name__ == "__main__":
     import unit_cooler.actuator.valve
     from unit_cooler.config import Config, RuntimeSettings
 
+    assert __doc__ is not None  # noqa: S101
     args = docopt.docopt(__doc__)
 
     config_file = args["-c"]
