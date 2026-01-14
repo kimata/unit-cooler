@@ -1224,7 +1224,7 @@ wheels = [
 [[package]]
 name = "my-lib"
 version = "0.2.0"
-source = { git = "https://github.com/kimata/my-py-lib?rev=7481d562fbb6f355525ec8b09d59977ed88e0c60#7481d562fbb6f355525ec8b09d59977ed88e0c60" }
+source = { git = "https://github.com/kimata/my-py-lib?rev=7a8a60297910d7904fcdd295d339699158975ab9#7a8a60297910d7904fcdd295d339699158975ab9" }
 dependencies = [
     { name = "coloredlogs" },
     { name = "docopt-ng" },
@@ -2542,7 +2542,7 @@ requires-dist = [
     { name = "flask-cors", specifier = ">=5.0.1" },
     { name = "fluent-logger", specifier = ">=0.11.1" },
     { name = "influxdb-client", extras = ["ciso"], specifier = ">=1.49.0" },
-    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=7481d562fbb6f355525ec8b09d59977ed88e0c60" },
+    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=7a8a60297910d7904fcdd295d339699158975ab9" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pillow", specifier = ">=11.2.1" },
