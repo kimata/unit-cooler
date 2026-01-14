@@ -34,7 +34,15 @@ export const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
   });
 
   useEffect(() => {
-    spring.set(value);
+    const currentValue = spring.get();
+
+    // 異常な状態を検出：負の値、または差が大きすぎる場合はアニメーションをスキップ
+    // （バックグラウンドタブでのスプリング状態異常への対策）
+    if (currentValue < 0 || Math.abs(value - currentValue) > Math.abs(value) * 2) {
+      spring.jump(value);
+    } else {
+      spring.set(value);
+    }
   }, [value, spring]);
 
   useEffect(() => {
