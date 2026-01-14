@@ -103,6 +103,9 @@ test-typecheck:
 
     needs: []
 
+    before_script:
+        - uv sync --locked --no-editable
+
     script:
         - uv run python -m pyright
         - uv run mypy src/
@@ -112,6 +115,10 @@ test-walk-through:
     extends: .cache-base
     stage: test
     needs: []
+
+    before_script:
+        - uv sync --locked --no-editable
+
     script:
         - >
             uv run pytest tests/unit/ tests/integration/
