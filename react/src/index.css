@@ -50,7 +50,7 @@
     }
 
     .progress-label {
-        @apply absolute top-0;
+        @apply absolute top-1/2 -translate-y-1/2;
         right: 5%;
     }
 
