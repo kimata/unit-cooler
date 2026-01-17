@@ -163,7 +163,7 @@ src/
         └── webapi/            # メトリクス API
             └── page.py        # ダッシュボード
 
-react/                         # React フロントエンド
+frontend/                         # React フロントエンド
 ├── src/
 │   ├── App.tsx                # メインコンポーネント
 │   ├── components/            # UI コンポーネント
