@@ -140,7 +140,7 @@ actuator:
 
 webui:
     webapp:
-        static_dir_path: react/dist
+        static_dir_path: frontend/dist
         port: 5000
     subscribe:
         liveness:
