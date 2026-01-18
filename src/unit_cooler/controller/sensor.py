@@ -318,12 +318,12 @@ def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
         stop = "now()"
 
     zoneinfo = my_lib.time.get_zoneinfo()
-    influxdb_config = {
-        "url": config.controller.influxdb.url,
-        "token": config.controller.influxdb.token,
-        "org": config.controller.influxdb.org,
-        "bucket": config.controller.influxdb.bucket,
-    }
+    influxdb_config = my_lib.sensor_data.InfluxDBConfig(
+        url=config.controller.influxdb.url,
+        token=config.controller.influxdb.token,
+        org=config.controller.influxdb.org,
+        bucket=config.controller.influxdb.bucket,
+    )
 
     # センサー種別とセンサーリストのマッピング
     sensor_kinds = {
