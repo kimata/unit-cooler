@@ -61,7 +61,7 @@ class TestMetricsView:
         mock_collector.get_error_data.return_value = []
 
         mocker.patch(
-            "unit_cooler.metrics.webapi.page.get_metrics_collector",
+            "unit_cooler.metrics.collector.get_metrics_collector",
             return_value=mock_collector,
         )
 
@@ -113,8 +113,8 @@ class TestMetricsView:
         assert hasattr(config.actuator, "metrics")
         assert hasattr(config.actuator.metrics, "data")
 
-        # data は文字列パス
-        assert isinstance(config.actuator.metrics.data, str)
+        # data は pathlib.Path
+        assert isinstance(config.actuator.metrics.data, Path)
 
     def test_endpoint_with_real_config_catches_dict_access(self, config, mocker):
         """実際の Config dataclass を使用してエンドポイントをテスト

@@ -39,7 +39,7 @@ class TestWebuiApi:
         queue = multiprocessing.Queue()
         app.config["CONFIG"] = config
         app.config["MESSAGE_QUEUE"] = queue
-        cooler_stat.get_last_message.last_message = {"mode_index": 3}  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat.get_last_message.last_message = {"mode_index": 3}  # pyright: ignore[reportFunctionMemberAccess]  # ty: ignore[unresolved-attribute]
 
         with app.test_client() as client:
             response = client.get("/api/stat")
@@ -141,7 +141,7 @@ class TestWebuiApi:
         queue = multiprocessing.Queue()
         app.config["CONFIG"] = config
         app.config["MESSAGE_QUEUE"] = queue
-        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]  # ty: ignore[unresolved-attribute]
 
         with app.test_client() as client:
             response = client.get("/api/stat")
@@ -180,7 +180,7 @@ class TestWebuiJsonp:
         queue = multiprocessing.Queue()
         app.config["CONFIG"] = config
         app.config["MESSAGE_QUEUE"] = queue
-        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]  # ty: ignore[unresolved-attribute]
 
         with app.test_client() as client:
             response = client.get("/api/stat?callback=myCallback")
@@ -219,7 +219,7 @@ class TestWebuiCors:
         queue = multiprocessing.Queue()
         app.config["CONFIG"] = config
         app.config["MESSAGE_QUEUE"] = queue
-        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]  # ty: ignore[unresolved-attribute]
 
         with app.test_client() as client:
             response = client.get("/api/stat", headers={"Origin": "http://example.com"})

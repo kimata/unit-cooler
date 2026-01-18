@@ -9,7 +9,12 @@ Provides:
 
 import datetime
 import logging
-import zoneinfo
+
+import my_lib.time
+
+from . import collector
+
+logger = logging.getLogger(__name__)
 
 # 分析ライブラリ
 try:
@@ -19,28 +24,26 @@ try:
     _ANALYSIS_AVAILABLE = True
 except ImportError:
     _ANALYSIS_AVAILABLE = False
-    logger = logging.getLogger(__name__)
     logger.warning("Analysis libraries not available. Install numpy, pandas, scipy for analytics.")
-
-from .collector import MetricsCollector, get_metrics_collector
-
-TIMEZONE = zoneinfo.ZoneInfo("Asia/Tokyo")
-logger = logging.getLogger(__name__)
 
 
 class MetricsAnalyzer:
     """Metrics analysis focused on cooling mode and environmental correlations."""
 
-    def __init__(self, collector: MetricsCollector | None = None):
-        """Initialize analyzer with metrics collector."""
-        self.collector = collector or get_metrics_collector()
+    def __init__(self, metrics_collector: collector.MetricsCollector):
+        """Initialize analyzer with metrics collector.
+
+        Args:
+            metrics_collector: MetricsCollector instance (required).
+        """
+        self.collector = metrics_collector
 
     def get_hourly_boxplot_data(self, days: int = 7) -> dict:
         """Get hourly box plot data for cooling_mode, duty_ratio, valve_operations."""
         if not _ANALYSIS_AVAILABLE:
             return {"error": "Analysis libraries not available"}
 
-        end_time = datetime.datetime.now(TIMEZONE)
+        end_time = my_lib.time.now()
         start_time = end_time - datetime.timedelta(days=days)
 
         # Get minute data for cooling_mode and duty_ratio
@@ -68,7 +71,7 @@ class MetricsAnalyzer:
 
     def get_timeseries_data(self, days: int = 7) -> dict:
         """Get time series data for trending analysis."""
-        end_time = datetime.datetime.now(TIMEZONE)
+        end_time = my_lib.time.now()
         start_time = end_time - datetime.timedelta(days=days)
 
         minute_data = self.collector.get_minute_data(start_time, end_time, limit=10080)
@@ -95,7 +98,7 @@ class MetricsAnalyzer:
         if not _ANALYSIS_AVAILABLE:
             return {"error": "Analysis libraries not available"}
 
-        end_time = datetime.datetime.now(TIMEZONE)
+        end_time = my_lib.time.now()
         start_time = end_time - datetime.timedelta(days=days)
 
         minute_data = self.collector.get_minute_data(start_time, end_time, limit=43200)  # 30 days
@@ -209,7 +212,7 @@ class MetricsAnalyzer:
         if not _ANALYSIS_AVAILABLE:
             return {"error": "Analysis libraries not available"}
 
-        end_time = datetime.datetime.now(TIMEZONE)
+        end_time = my_lib.time.now()
         start_time = end_time - datetime.timedelta(days=days)
 
         minute_data = self.collector.get_minute_data(start_time, end_time, limit=10080)
@@ -255,6 +258,11 @@ class MetricsAnalyzer:
         }
 
 
-def get_metrics_analyzer() -> MetricsAnalyzer:
-    """Get metrics analyzer instance."""
-    return MetricsAnalyzer()
+def get_metrics_analyzer(db_path: str) -> MetricsAnalyzer:
+    """Get metrics analyzer instance.
+
+    Args:
+        db_path: Path to the metrics database.
+    """
+    metrics_collector = collector.get_metrics_collector(db_path)
+    return MetricsAnalyzer(metrics_collector)

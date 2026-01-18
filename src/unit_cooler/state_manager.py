@@ -20,13 +20,19 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
+
+import my_lib.time
+
+from unit_cooler.messages import ControlMessage
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from unit_cooler.const import COOLING_STATE, VALVE_STATE
@@ -49,13 +55,13 @@ class StateManager:
     subscribe_worker_count: int = field(default=0, init=False)
 
     # ワーカー最終処理時刻
-    control_worker_last_time: datetime | None = field(default=None, init=False)
-    monitor_worker_last_time: datetime | None = field(default=None, init=False)
-    subscribe_worker_last_time: datetime | None = field(default=None, init=False)
+    control_worker_last_time: datetime.datetime | None = field(default=None, init=False)
+    monitor_worker_last_time: datetime.datetime | None = field(default=None, init=False)
+    subscribe_worker_last_time: datetime.datetime | None = field(default=None, init=False)
 
     # バルブ状態
     valve_state: VALVE_STATE | None = field(default=None, init=False)
-    valve_last_change: datetime | None = field(default=None, init=False)
+    valve_last_change: datetime.datetime | None = field(default=None, init=False)
     valve_operation_count: int = field(default=0, init=False)
 
     # 冷却状態
@@ -64,7 +70,7 @@ class StateManager:
 
     # メッセージ受信
     message_receive_count: int = field(default=0, init=False)
-    last_message: dict[str, Any] | None = field(default=None, init=False)
+    last_message: ControlMessage | None = field(default=None, init=False)
 
     # 流量
     flow_lpm: float = field(default=0.0, init=False)
@@ -90,7 +96,7 @@ class StateManager:
                 if hasattr(self, key) and not key.startswith("_"):
                     setattr(self, key, value)
                 else:
-                    logging.warning("StateManager: unknown attribute %s", key)
+                    logger.warning("StateManager: unknown attribute %s", key)
             self._condition.notify_all()
 
     def increment(self, attr: str, delta: int = 1) -> int:
@@ -182,21 +188,21 @@ class StateManager:
         """control_worker の処理完了を通知"""
         with self._condition:
             self.control_worker_count += 1
-            self.control_worker_last_time = datetime.now()
+            self.control_worker_last_time = my_lib.time.now()
             self._condition.notify_all()
 
     def notify_monitor_processed(self) -> None:
         """monitor_worker の処理完了を通知"""
         with self._condition:
             self.monitor_worker_count += 1
-            self.monitor_worker_last_time = datetime.now()
+            self.monitor_worker_last_time = my_lib.time.now()
             self._condition.notify_all()
 
     def notify_subscribe_processed(self) -> None:
         """subscribe_worker の処理完了を通知"""
         with self._condition:
             self.subscribe_worker_count += 1
-            self.subscribe_worker_last_time = datetime.now()
+            self.subscribe_worker_last_time = my_lib.time.now()
             self._condition.notify_all()
 
     def wait_for_control_process(self, timeout: float = 1.0) -> bool:
@@ -232,7 +238,7 @@ class StateManager:
         """バルブ状態変更を通知"""
         with self._condition:
             self.valve_state = state
-            self.valve_last_change = datetime.now()
+            self.valve_last_change = my_lib.time.now()
             self.valve_operation_count += 1
             self._condition.notify_all()
 
@@ -285,7 +291,7 @@ class StateManager:
     # =========================================================================
     # 便利メソッド: メッセージ関連
     # =========================================================================
-    def notify_message_received(self, message: dict[str, Any]) -> None:
+    def notify_message_received(self, message: ControlMessage) -> None:
         """メッセージ受信を通知"""
         with self._condition:
             self.message_receive_count += 1

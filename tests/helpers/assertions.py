@@ -5,9 +5,9 @@
 from __future__ import annotations
 
 import logging
+import pathlib
 from typing import TYPE_CHECKING
 
-import my_lib.config
 import my_lib.footprint
 
 if TYPE_CHECKING:
@@ -29,9 +29,29 @@ class LivenessChecker:
             config: アプリケーション設定
         """
         self.config = config
-        self.raw_config = my_lib.config.load(
-            "config.example.yaml",
-        )
+
+    def _get_liveness_file(self, component_path: list[str]) -> pathlib.Path:
+        """コンポーネントパスから liveness ファイルパスを取得
+
+        Args:
+            component_path: コンポーネントパス (例: ["controller"], ["actuator", "control"])
+
+        Returns:
+            liveness ファイルのパス
+        """
+        # コンポーネントパスから明示的にマッピング
+        if component_path == ["controller"]:
+            return pathlib.Path(self.config.controller.liveness.file)
+        elif component_path == ["actuator", "subscribe"]:
+            return pathlib.Path(self.config.actuator.subscribe.liveness.file)
+        elif component_path == ["actuator", "control"]:
+            return pathlib.Path(self.config.actuator.control.liveness.file)
+        elif component_path == ["actuator", "monitor"]:
+            return pathlib.Path(self.config.actuator.monitor.liveness.file)
+        elif component_path == ["webui", "subscribe"]:
+            return pathlib.Path(self.config.webui.subscribe.liveness.file)
+        else:
+            raise ValueError(f"未知のコンポーネントパス: {component_path}")
 
     def assert_healthy(
         self,
@@ -50,7 +70,7 @@ class LivenessChecker:
         if threshold_sec is None:
             threshold_sec = self.DEFAULT_THRESHOLD_SEC
 
-        liveness_file = my_lib.config.get_path(self.raw_config, component_path, ["liveness", "file"])
+        liveness_file = self._get_liveness_file(component_path)
 
         elapsed = my_lib.footprint.elapsed(liveness_file)
         assert (elapsed < threshold_sec) is True, (
@@ -67,7 +87,7 @@ class LivenessChecker:
         Raises:
             AssertionError: コンポーネントが健全な場合
         """
-        liveness_file = my_lib.config.get_path(self.raw_config, component_path, ["liveness", "file"])
+        liveness_file = self._get_liveness_file(component_path)
 
         elapsed = my_lib.footprint.elapsed(liveness_file)
         assert elapsed >= self.DEFAULT_THRESHOLD_SEC, (
@@ -222,17 +242,17 @@ class ValveStateChecker:
     @staticmethod
     def assert_open() -> None:
         """バルブが開いていることを確認"""
-        import unit_cooler.actuator.valve
+        import unit_cooler.actuator.valve_controller
         from unit_cooler.const import VALVE_STATE
 
-        state = unit_cooler.actuator.valve.get_state()
+        state = unit_cooler.actuator.valve_controller.get_valve_controller().get_state()
         assert state == VALVE_STATE.OPEN, f"バルブが開いていません。現在の状態: {state}"
 
     @staticmethod
     def assert_closed() -> None:
         """バルブが閉じていることを確認"""
-        import unit_cooler.actuator.valve
+        import unit_cooler.actuator.valve_controller
         from unit_cooler.const import VALVE_STATE
 
-        state = unit_cooler.actuator.valve.get_state()
+        state = unit_cooler.actuator.valve_controller.get_valve_controller().get_state()
         assert state == VALVE_STATE.CLOSE, f"バルブが閉じていません。現在の状態: {state}"

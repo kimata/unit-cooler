@@ -10,15 +10,39 @@ import datetime
 import io
 import json
 import logging
-import zoneinfo
 
 import flask
+import my_lib.time
 import my_lib.webapp.config
 from PIL import Image, ImageDraw
 
-from unit_cooler.metrics.collector import get_metrics_collector
+import unit_cooler.metrics.collector
+
+logger = logging.getLogger(__name__)
 
 blueprint = flask.Blueprint("metrics", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
+
+TOKYO_TZ = my_lib.time.get_zoneinfo()
+
+
+def normalize_timestamp(timestamp: str | datetime.datetime) -> datetime.datetime:
+    """タイムスタンプを datetime に正規化する
+
+    Args:
+        timestamp: ISO形式文字列または datetime オブジェクト
+
+    Returns:
+        タイムゾーン付き datetime オブジェクト
+    """
+    if isinstance(timestamp, datetime.datetime):
+        return timestamp
+
+    # ISO形式（T区切り）
+    if "T" in timestamp:
+        return datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+
+    # スペース区切りの形式
+    return datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").replace(tzinfo=TOKYO_TZ)
 
 
 @blueprint.route("/api/metrics", methods=["GET"])
@@ -51,10 +75,10 @@ def metrics_view():
             )
 
         # メトリクス収集器を取得
-        collector = get_metrics_collector(metrics_data_path)
+        collector = unit_cooler.metrics.collector.get_metrics_collector(metrics_data_path)
 
         # 全期間のデータを取得（制限なし）
-        end_time = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Tokyo"))
+        end_time = my_lib.time.now()
         start_time = None  # 無制限
 
         minute_data = collector.get_minute_data(start_time, end_time, limit=None)
@@ -73,7 +97,7 @@ def metrics_view():
         return flask.Response(html_content, mimetype="text/html")
 
     except Exception as e:
-        logging.exception("メトリクス表示の生成エラー")
+        logger.exception("メトリクス表示の生成エラー")
         return flask.Response(f"エラー: {e!s}", mimetype="text/plain", status=500)
 
 
@@ -98,7 +122,7 @@ def favicon():
             },
         )
     except Exception:
-        logging.exception("favicon生成エラー")
+        logger.exception("favicon生成エラー")
         return flask.Response("", status=500)
 
 
@@ -167,21 +191,9 @@ def get_data_period_info(minute_data: list[dict], hourly_data: list[dict]) -> di
     for data in all_data:
         if data.get("timestamp"):
             try:
-                if isinstance(data["timestamp"], str):
-                    if "T" in data["timestamp"]:
-                        dt = datetime.datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
-                    elif "+" in data["timestamp"] or data["timestamp"].endswith("Z"):
-                        # タイムゾーン付きの場合はそのまま fromisoformat を使用
-                        dt = datetime.datetime.fromisoformat(data["timestamp"])
-                    else:
-                        dt = datetime.datetime.strptime(data["timestamp"], "%Y-%m-%d %H:%M:%S").replace(
-                            tzinfo=zoneinfo.ZoneInfo("Asia/Tokyo")
-                        )
-                else:
-                    dt = data["timestamp"]
-                timestamps.append(dt)
+                timestamps.append(normalize_timestamp(data["timestamp"]))
             except Exception:
-                logging.debug("Failed to parse timestamp: %s", data["timestamp"])
+                logger.debug("Failed to parse timestamp: %s", data["timestamp"])
 
     if not timestamps:
         return {
@@ -241,7 +253,7 @@ def generate_statistics(minute_data: list[dict], hourly_data: list[dict], error_
                 )
                 unique_dates.add(date_part)
             except Exception:
-                logging.debug("Failed to parse timestamp for date calculation")
+                logger.debug("Failed to parse timestamp for date calculation")
 
     return {
         "total_days": len(unique_dates),
@@ -320,19 +332,13 @@ def calculate_boxplot_stats(values: list) -> dict:
     return {"min": min_val, "q1": q1, "median": median, "q3": q3, "max": max_val, "outliers": outliers}
 
 
-def _extract_hour_from_timestamp(timestamp) -> int | None:
+def _extract_hour_from_timestamp(timestamp: str | datetime.datetime) -> int | None:
     """タイムスタンプから時間を抽出"""
     try:
-        if isinstance(timestamp, str):
-            if "T" in timestamp:
-                time_part = timestamp.split("T")[1].split(":")[0]
-            else:
-                time_part = timestamp.split()[1].split(":")[0]
-            return int(time_part)
-        else:
-            return timestamp.hour
+        dt = normalize_timestamp(timestamp)
+        return dt.hour
     except Exception:
-        logging.debug("Failed to extract hour from timestamp")
+        logger.debug("Failed to extract hour from timestamp")
         return None
 
 
@@ -420,24 +426,12 @@ def _prepare_timeseries_data(minute_data: list[dict]) -> list[dict]:
     for data in recent_data:
         if data.get("timestamp"):
             # タイムスタンプを簡潔な形式に変換（月/日 時:分）
-            timestamp = data["timestamp"]
-            if isinstance(timestamp, str):
-                # ISO形式の場合は datetime に変換
-                try:
-                    if "T" in timestamp:
-                        timestamp = datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                    else:
-                        timestamp = datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").replace(
-                            tzinfo=zoneinfo.ZoneInfo("Asia/Tokyo")
-                        )
-                except Exception:
-                    logging.debug("Failed to parse timestamp for time series formatting")
-
-            # 簡潔な形式にフォーマット
-            if hasattr(timestamp, "strftime"):
-                formatted_timestamp = timestamp.strftime("%m/%d %H:%M")
-            else:
-                formatted_timestamp = str(timestamp)
+            try:
+                dt = normalize_timestamp(data["timestamp"])
+                formatted_timestamp = dt.strftime("%m/%d %H:%M")
+            except Exception:
+                logger.debug("Failed to parse timestamp for time series formatting")
+                formatted_timestamp = str(data["timestamp"])
 
             timeseries_data.append(
                 {

@@ -5,185 +5,212 @@ import logging
 import math
 import os
 import socket
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import fluent.sender
-import my_lib.footprint
 import my_lib.pretty
 
+import unit_cooler.actuator.control
 import unit_cooler.actuator.sensor
-import unit_cooler.actuator.valve
+import unit_cooler.actuator.valve_controller
 import unit_cooler.actuator.work_log
 import unit_cooler.const
+import unit_cooler.messages
+from unit_cooler.messages import ControlMessage
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from unit_cooler.config import Config
 
 # last_flow をモジュールレベル変数として管理
-_last_flow: float | int = 0
+_last_flow: float = 0.0
+
+
+@dataclass
+class MistData:
+    """ミスト状態データ（Fluentd 送信用）"""
+
+    hostname: str
+    state: int
+    cooling_mode: int
+    flow: float | None = None
+
+    def to_dict(self) -> dict[str, float | int | str]:
+        """Fluentd 送信用の辞書に変換"""
+        result: dict[str, float | int | str] = {
+            "hostname": self.hostname,
+            "state": self.state,
+            "cooling_mode": self.cooling_mode,
+        }
+        if self.flow is not None:
+            result["flow"] = self.flow
+        return result
+
+
+@dataclass
+class MonitorHandle:
+    """モニターワーカーのハンドル"""
+
+    config: Config
+    hostname: str
+    sender: fluent.sender.FluentSender
+    log_period: int
+    flow_unknown: int = 0
+    monitor_count: int = 0
+
+
+@dataclass(frozen=True)
+class MistCondition:
+    """ミスト状態"""
+
+    valve: unit_cooler.messages.ValveStatus
+    flow: float | None
 
 
 def init(pin_no: int) -> None:
     unit_cooler.actuator.sensor.init(pin_no)
 
 
-def gen_handle(config: Config, interval_sec: float) -> dict[str, Any]:
-    return {
-        "config": config,
-        "hostname": os.environ.get("NODE_HOSTNAME", socket.gethostname()),
-        "sender": fluent.sender.FluentSender("sensor", host=config.actuator.monitor.fluent.host),
-        "log_period": max(math.ceil(60 / interval_sec), 1),  # この回数毎にログを出力する
-        "flow_unknown": 0,  # 流量不明が続いた回数
-        "monitor_count": 0,  # 観測した回数
-    }
+def gen_handle(config: Config, interval_sec: float) -> MonitorHandle:
+    return MonitorHandle(
+        config=config,
+        hostname=os.environ.get("NODE_HOSTNAME", socket.gethostname()),
+        sender=fluent.sender.FluentSender("sensor", host=config.actuator.monitor.fluent.host),
+        log_period=max(math.ceil(60 / interval_sec), 1),
+    )
 
 
 def send_mist_condition(
-    handle: dict[str, Any],
-    mist_condition: dict[str, Any],
-    control_message: dict[str, Any] | None,
+    handle: MonitorHandle,
+    mist_condition: MistCondition,
+    control_message: ControlMessage,
     dummy_mode: bool = False,
 ) -> None:
-    send_data: dict[str, Any] = {
-        "hostname": handle["hostname"],
-        "state": mist_condition["valve"]["state"].value,
-    }
+    mist_data = MistData(
+        hostname=handle.hostname,
+        state=mist_condition.valve.state.value,
+        cooling_mode=control_message.mode_index,
+        flow=mist_condition.flow,
+    )
 
-    if mist_condition["flow"] is not None:
-        send_data["flow"] = mist_condition["flow"]
-
-    if control_message is not None:
-        send_data["cooling_mode"] = control_message["mode_index"]
-
-    logging.debug("Send: %s", my_lib.pretty.format(send_data))
+    logger.debug("Send: %s", my_lib.pretty.format(mist_data.to_dict()))
 
     if dummy_mode:
         return
 
-    if handle["sender"].emit("rasp", send_data):
-        logging.debug("Send OK")
+    send_data = mist_data.to_dict()
+
+    if handle.sender.emit("rasp", send_data):
+        logger.debug("Send OK")
     else:
-        logging.error(handle["sender"].last_error)
+        logger.error(handle.sender.last_error)
 
 
-def get_mist_condition():
+def get_mist_condition() -> MistCondition:
     global _last_flow
 
-    valve_status = unit_cooler.actuator.valve.get_status()
+    valve_status = unit_cooler.actuator.valve_controller.get_valve_controller().get_status()
 
-    if valve_status["state"] == unit_cooler.const.VALVE_STATE.OPEN:
+    if valve_status.state == unit_cooler.const.VALVE_STATE.OPEN:
         flow = unit_cooler.actuator.sensor.get_flow()
         # NOTE: get_flow() の内部で流量センサーの電源を入れている場合は計測に時間がかかるので、
         # その間に電磁弁の状態が変化している可能性があるので、再度状態を取得する。
-        valve_status = unit_cooler.actuator.valve.get_status()
+        valve_status = unit_cooler.actuator.valve_controller.get_valve_controller().get_status()
     else:
         # NOTE: 電磁弁が閉じている場合、流量が 0 になるまでは計測を継続する。
         # (電磁弁の電源を切るため、流量が 0 になった場合は、電磁弁が開かれるまで計測は再開しない)
         flow = unit_cooler.actuator.sensor.get_flow() if _last_flow != 0 else 0
 
-    _last_flow = flow
+    if flow is not None:
+        _last_flow = flow
 
-    return {"valve": valve_status, "flow": flow}
+    return MistCondition(valve=valve_status, flow=flow)
 
 
-def get_last_flow() -> float | int:
+def get_last_flow() -> float:
     """最後に測定された流量を取得します。"""
     return _last_flow
 
 
-def hazard_notify(config: Config, message: str) -> None:
-    hazard_file = config.actuator.control.hazard.file
-    logging.error(my_lib.footprint.exists(hazard_file))
-    if not my_lib.footprint.exists(hazard_file):
-        unit_cooler.actuator.work_log.add(message, unit_cooler.const.LOG_LEVEL.ERROR)
-        my_lib.footprint.update(hazard_file)
-
-    unit_cooler.actuator.valve.set_state(unit_cooler.const.VALVE_STATE.CLOSE)
-
-
-def check_sensing(handle: dict[str, Any], mist_condition: dict[str, Any]) -> None:
-    if mist_condition["flow"] is None:
-        handle["flow_unknown"] += 1
+def check_sensing(handle: MonitorHandle, mist_condition: MistCondition) -> None:
+    if mist_condition.flow is None:
+        handle.flow_unknown += 1
     else:
-        handle["flow_unknown"] = 0
+        handle.flow_unknown = 0
 
-    config: Config = handle["config"]
-    if handle["flow_unknown"] > config.actuator.monitor.sense.giveup:
+    config = handle.config
+    if handle.flow_unknown > config.actuator.monitor.sense.giveup:
         unit_cooler.actuator.work_log.add("流量計が使えません。", unit_cooler.const.LOG_LEVEL.ERROR)
-    elif handle["flow_unknown"] > (config.actuator.monitor.sense.giveup / 2):
+    elif handle.flow_unknown > (config.actuator.monitor.sense.giveup / 2):
         unit_cooler.actuator.work_log.add(
             "流量計が応答しないので一旦、リセットします。", unit_cooler.const.LOG_LEVEL.WARN
         )
         unit_cooler.actuator.sensor.stop()
 
 
-def check_mist_condition(handle: dict[str, Any], mist_condition: dict[str, Any]) -> None:
-    logging.debug("Check mist condition")
+def check_mist_condition(handle: MonitorHandle, mist_condition: MistCondition) -> None:
+    logger.debug("Check mist condition")
 
-    config: Config = handle["config"]
+    # NOTE: この関数は mist_condition.flow が None ではない場合にのみ呼ばれる
+    assert mist_condition.flow is not None  # noqa: S101
+
+    config = handle.config
     flow_config = config.actuator.monitor.flow
 
-    if mist_condition["valve"]["state"] == unit_cooler.const.VALVE_STATE.OPEN:
+    if mist_condition.valve.state == unit_cooler.const.VALVE_STATE.OPEN:
         for i in range(len(flow_config.on.max)):
-            if (mist_condition["flow"] > flow_config.on.max[i]) and (
-                mist_condition["valve"]["duration"] > 5 * (i + 1)
+            if (mist_condition.flow > flow_config.on.max[i]) and (
+                mist_condition.valve.duration_sec > 5 * (i + 1)
             ):
-                hazard_notify(
+                unit_cooler.actuator.control.hazard_notify(
                     config,
                     (
                         "水漏れしています。"
-                        "(バルブを開いてから{duration:.1f}秒経過しても流量が "
-                        "{flow:.1f} L/min [> {threshold:.1f} L/min])"
-                    ).format(
-                        duration=mist_condition["valve"]["duration"],
-                        flow=mist_condition["flow"],
-                        threshold=flow_config.on.max[i],
+                        f"(バルブを開いてから{mist_condition.valve.duration_sec:.1f}秒経過しても流量が "
+                        f"{mist_condition.flow:.1f} L/min [> {flow_config.on.max[i]:.1f} L/min])"
                     ),
                 )
 
-        if (mist_condition["flow"] < flow_config.on.min) and (mist_condition["valve"]["duration"] > 5):
+        if (mist_condition.flow < flow_config.on.min) and (mist_condition.valve.duration_sec > 5):
             # NOTE: ハザード扱いにはしない
+            duration = mist_condition.valve.duration_sec
+            flow = mist_condition.flow
             unit_cooler.actuator.work_log.add(
-                (
-                    "元栓が閉じています。"
-                    "(バルブを開いてから{duration:.1f}秒経過しても流量が {flow:.1f} L/min)"
-                ).format(duration=mist_condition["valve"]["duration"], flow=mist_condition["flow"]),
+                f"元栓が閉じています。(バルブを開いてから{duration:.1f}秒経過しても流量が {flow:.1f} L/min)",
                 unit_cooler.const.LOG_LEVEL.ERROR,
             )
     else:
-        logging.debug("Valve is close for %.1f sec", mist_condition["valve"]["duration"])
-        if (mist_condition["valve"]["duration"] >= flow_config.power_off_sec) and (
-            mist_condition["flow"] == 0
-        ):
+        logger.debug("Valve is close for %.1f sec", mist_condition.valve.duration_sec)
+        if (mist_condition.valve.duration_sec >= flow_config.power_off_sec) and (mist_condition.flow == 0):
             # バルブが閉じてから長い時間が経っていて流量も 0 の場合、センサーを停止する
             if unit_cooler.actuator.sensor.get_power_state():
                 unit_cooler.actuator.work_log.add(
                     "長い間バルブが閉じられていますので、流量計の電源を OFF します。"
                 )
                 unit_cooler.actuator.sensor.stop()
-        elif (mist_condition["valve"]["duration"] > 120) and (mist_condition["flow"] > flow_config.off.max):
-            hazard_notify(
-                config,
-                "電磁弁が壊れていますので制御を停止します。"
-                + "(バルブを閉じてから{duration:.1f}秒経過しても流量が {flow:.1f} L/min)".format(
-                    duration=mist_condition["valve"]["duration"], flow=mist_condition["flow"]
-                ),
-            )
+        elif (mist_condition.valve.duration_sec > 120) and (mist_condition.flow > flow_config.off.max):
+            duration = mist_condition.valve.duration_sec
+            flow = mist_condition.flow
+            msg = "電磁弁が壊れていますので制御を停止します。"
+            msg += f"(バルブを閉じてから{duration:.1f}秒経過しても流量が {flow:.1f} L/min)"
+            unit_cooler.actuator.control.hazard_notify(config, msg)
 
 
-def check(handle: dict[str, Any], mist_condition: dict[str, Any], need_logging: bool) -> bool:
-    handle["monitor_count"] += 1
+def check(handle: MonitorHandle, mist_condition: MistCondition, need_logging: bool) -> bool:
+    handle.monitor_count += 1
 
     if need_logging:
-        logging.info(
+        logger.info(
             "Valve Condition: %s (flow = %s L/min)",
-            mist_condition["valve"]["state"].name,
-            "?" if mist_condition["flow"] is None else "{flow:.2f}".format(flow=mist_condition["flow"]),
+            mist_condition.valve.state.name,
+            "?" if mist_condition.flow is None else f"{mist_condition.flow:.2f}",
         )
 
     check_sensing(handle, mist_condition)
 
-    if mist_condition["flow"] is not None:
+    if mist_condition.flow is not None:
         check_mist_condition(handle, mist_condition)
 
     return True

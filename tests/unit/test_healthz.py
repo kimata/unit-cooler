@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import pathlib
+
 
 class TestCheckLiveness:
     """check_liveness のテスト"""
@@ -17,8 +19,8 @@ class TestCheckLiveness:
         mocker.patch("my_lib.healthz.check_liveness_all", return_value=[])
 
         targets = [
-            HealthzTarget(name="test1", liveness_file="/tmp/test1", interval=60),
-            HealthzTarget(name="test2", liveness_file="/tmp/test2", interval=60),
+            HealthzTarget(name="test1", liveness_file=pathlib.Path("/tmp/test1"), interval=60),
+            HealthzTarget(name="test2", liveness_file=pathlib.Path("/tmp/test2"), interval=60),
         ]
 
         result = check_liveness(targets)
@@ -34,7 +36,7 @@ class TestCheckLiveness:
         mocker.patch("my_lib.healthz.check_liveness_all", return_value=["test1"])
 
         targets = [
-            HealthzTarget(name="test1", liveness_file="/tmp/test1", interval=60),
+            HealthzTarget(name="test1", liveness_file=pathlib.Path("/tmp/test1"), interval=60),
         ]
 
         result = check_liveness(targets)
@@ -51,7 +53,7 @@ class TestCheckLiveness:
         mock_check_http = mocker.patch("my_lib.healthz.check_http_port", return_value=True)
 
         targets = [
-            HealthzTarget(name="test1", liveness_file="/tmp/test1", interval=60),
+            HealthzTarget(name="test1", liveness_file=pathlib.Path("/tmp/test1"), interval=60),
         ]
 
         result = check_liveness(targets, port=5000)
@@ -69,7 +71,7 @@ class TestCheckLiveness:
         mocker.patch("my_lib.healthz.check_http_port", return_value=False)
 
         targets = [
-            HealthzTarget(name="test1", liveness_file="/tmp/test1", interval=60),
+            HealthzTarget(name="test1", liveness_file=pathlib.Path("/tmp/test1"), interval=60),
         ]
 
         result = check_liveness(targets, port=5000)
@@ -86,7 +88,7 @@ class TestCheckLiveness:
         mock_check_http = mocker.patch("my_lib.healthz.check_http_port")
 
         targets = [
-            HealthzTarget(name="test1", liveness_file="/tmp/test1", interval=60),
+            HealthzTarget(name="test1", liveness_file=pathlib.Path("/tmp/test1"), interval=60),
         ]
 
         result = check_liveness(targets, port=None)

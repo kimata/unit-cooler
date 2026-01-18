@@ -6,6 +6,7 @@ import threading
 import time
 
 from unit_cooler.const import COOLING_STATE, VALVE_STATE
+from unit_cooler.messages import ControlMessage, DutyConfig
 from unit_cooler.state_manager import (
     StateManager,
     get_state_manager,
@@ -290,7 +291,11 @@ class TestStateManagerMessage:
     def test_notify_message_received(self):
         """メッセージ受信通知"""
         sm = StateManager()
-        msg = {"state": 1, "mode_index": 2}
+        msg = ControlMessage(
+            state=COOLING_STATE.WORKING,
+            mode_index=2,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
 
         sm.notify_message_received(msg)
 
@@ -301,11 +306,17 @@ class TestStateManagerMessage:
         """メッセージ受信回数待機"""
         sm = StateManager()
         for i in range(3):
-            sm.notify_message_received({"id": i})
+            msg = ControlMessage(
+                state=COOLING_STATE.IDLE,
+                mode_index=i,
+                duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+            )
+            sm.notify_message_received(msg)
 
         result = sm.wait_for_message_count(3, timeout=0.1)
         assert result is True
-        assert sm.last_message == {"id": 2}
+        assert sm.last_message is not None
+        assert sm.last_message.mode_index == 2
 
 
 class TestStateManagerServer:

@@ -2,96 +2,126 @@
 import logging
 import os
 import random
-from typing import ClassVar
+from typing import ClassVar, Protocol
 
 import my_lib.rpi
 
 import unit_cooler.const
 
-fd_q10c = None
-pin_no = None
+logger = logging.getLogger(__name__)
 
-if os.environ.get("DUMMY_MODE", "false") != "true":  # pragma: no cover
-    from my_lib.sensor.fd_q10c import FD_Q10C
-else:
 
-    class FD_Q10C:  # type: ignore[no-redef]
-        # ワーカーごとの電源状態を管理する辞書（初期値はTrue）
-        _power_states: ClassVar[dict[str, bool]] = {}
+class FlowSensorProtocol(Protocol):
+    """流量センサーのプロトコル"""
 
-        def __init__(self, lock_file="DUMMY", timeout=2):
-            worker_id = self._get_worker_id()
+    def get_value(self, force_power_on: bool = True) -> float | None: ...
+    def get_state(self) -> bool: ...
+    def stop(self) -> None: ...
+
+
+class DummyFlowSensor:
+    """ダミー流量センサー（テスト用）"""
+
+    # ワーカーごとの電源状態を管理する辞書（初期値はTrue）
+    _power_states: ClassVar[dict[str, bool]] = {}
+
+    def __init__(self, pin_no: int) -> None:
+        self._pin_no = pin_no
+        worker_id = self._get_worker_id()
+        self._power_states[worker_id] = True
+
+    def _get_worker_id(self) -> str:
+        """現在のワーカーIDを取得"""
+        return os.environ.get("PYTEST_XDIST_WORKER", "main")
+
+    def get_value(self, force_power_on: bool = True) -> float | None:
+        worker_id = self._get_worker_id()
+
+        # force_power_on=Trueで呼ばれた場合、電源状態をTrueに設定
+        if force_power_on:
             self._power_states[worker_id] = True
 
-        def _get_worker_id(self):
-            """現在のワーカーIDを取得"""
-            return os.environ.get("PYTEST_XDIST_WORKER", "main")
+        if my_lib.rpi.gpio.input(self._pin_no) == unit_cooler.const.VALVE_STATE.OPEN.value:
+            return 1 + random.random() * 1.5  # noqa: S311
+        else:
+            return 0.0
 
-        def get_value(self, force_power_on=True):
-            global pin_no
-            worker_id = self._get_worker_id()
+    def get_state(self) -> bool:
+        worker_id = self._get_worker_id()
+        return self._power_states[worker_id]
 
-            # force_power_on=Trueで呼ばれた場合、電源状態をTrueに設定
-            if force_power_on:
-                self._power_states[worker_id] = True
-
-            assert pin_no is not None  # noqa: S101
-            if my_lib.rpi.gpio.input(pin_no) == unit_cooler.const.VALVE_STATE.OPEN.value:
-                return 1 + random.random() * 1.5  # noqa: S311
-            else:
-                return 0
-
-        def get_state(self):
-            worker_id = self._get_worker_id()
-
-            return self._power_states[worker_id]
-
-        def stop(self):
-            worker_id = self._get_worker_id()
-            # stopが呼ばれたら電源状態をFalseに設定
-            self._power_states[worker_id] = False
+    def stop(self) -> None:
+        worker_id = self._get_worker_id()
+        # stopが呼ばれたら電源状態をFalseに設定
+        self._power_states[worker_id] = False
 
 
-def init(pin_no_):
-    global fd_q10c
-    global pin_no
-
-    pin_no = pin_no_
-    fd_q10c = FD_Q10C()
+# グローバル変数
+_sensor: FlowSensorProtocol | None = None
+_pin_no: int | None = None
 
 
-def stop():
-    global fd_q10c
+def init(pin_no: int) -> None:
+    """流量センサーを初期化する
 
-    logging.info("Stop flow sensing")
+    Args:
+        pin_no: バルブの GPIO ピン番号
+    """
+    global _sensor
+    global _pin_no
 
-    assert fd_q10c is not None  # noqa: S101
+    _pin_no = pin_no
+
+    if os.environ.get("DUMMY_MODE", "false") != "true":  # pragma: no cover
+        from my_lib.sensor.fd_q10c import FD_Q10C
+
+        _sensor = FD_Q10C()
+    else:
+        _sensor = DummyFlowSensor(pin_no)
+
+
+def stop() -> None:
+    """流量センサーを停止する"""
+    global _sensor
+
+    logger.info("Stop flow sensing")
+
+    assert _sensor is not None  # noqa: S101
     try:
-        fd_q10c.stop()
+        _sensor.stop()
     except RuntimeError:
-        logging.exception("Failed to stop FD-Q10C")
+        logger.exception("Failed to stop FD-Q10C")
 
 
-def get_power_state():
-    global fd_q10c
+def get_power_state() -> bool:
+    """電源状態を取得する"""
+    global _sensor
 
-    assert fd_q10c is not None  # noqa: S101
-    return fd_q10c.get_state()
+    assert _sensor is not None  # noqa: S101
+    return _sensor.get_state()
 
 
-def get_flow(force_power_on=True):
-    global fd_q10c
+def get_flow(force_power_on: bool = True) -> float | None:
+    """流量を取得する
 
-    assert fd_q10c is not None  # noqa: S101
+    Args:
+        force_power_on: True の場合、電源を強制的に ON にする
+
+    Returns:
+        流量値。取得できない場合は None
+    """
+    global _sensor
+
+    assert _sensor is not None  # noqa: S101
     try:
-        flow = fd_q10c.get_value(force_power_on)
+        flow = _sensor.get_value(force_power_on)
     except Exception:
-        logging.exception("バグの可能性あり。")
+        logger.exception("バグの可能性あり。")
         flow = None
 
     if flow is not None:
-        logging.info("Valve flow = %.2f", flow)
+        logger.info("Valve flow = %.2f", flow)
     else:
-        logging.info("Valve flow = UNKNOWN")
+        logger.info("Valve flow = UNKNOWN")
 
     return flow

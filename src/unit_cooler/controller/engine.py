@@ -18,7 +18,9 @@ import unit_cooler.controller.message
 import unit_cooler.controller.sensor
 import unit_cooler.util
 from unit_cooler.config import Config
-from unit_cooler.messages import ControlMessage, DutyConfig, StatusInfo
+from unit_cooler.messages import ControlMessage, CoolingModeResult, DutyConfig, StatusInfo
+
+logger = logging.getLogger(__name__)
 
 # 最低でもこの時間は ON にする (テスト時含む)
 ON_SEC_MIN = 5
@@ -29,7 +31,7 @@ OFF_SEC_MIN = 5
 _dummy_prev_mode: int = 0
 
 
-def dummy_cooling_mode():
+def dummy_cooling_mode() -> dict[str, int]:
     global _dummy_prev_mode
     import random
 
@@ -59,7 +61,7 @@ def dummy_cooling_mode():
 
     _dummy_prev_mode = cooling_mode
 
-    logging.info("cooling_mode: %d (prev: %d)", cooling_mode, current_mode)
+    logger.info("cooling_mode: %d (prev: %d)", cooling_mode, current_mode)
 
     return {"cooling_mode": cooling_mode}
 
@@ -75,8 +77,8 @@ def get_dummy_prev_mode() -> int:
     return _dummy_prev_mode
 
 
-def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> dict[str, Any]:
-    logging.info("Judge cooling mode")
+def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> CoolingModeResult:
+    logger.info("Judge cooling mode")
 
     # 閾値を config から取得
     thresholds = dataclasses.asdict(config.controller.decision.thresholds)
@@ -85,89 +87,80 @@ def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> dict[str, 
         cooler_activity = unit_cooler.controller.sensor.get_cooler_activity(sense_data, thresholds)
     except RuntimeError as e:
         unit_cooler.util.notify_error(config, e.args[0])
-        cooler_activity = {"status": 0, "message": None}
+        cooler_activity = StatusInfo(status=0, message=None)
 
-    if cooler_activity["status"] == 0:
-        outdoor_status = {"status": None, "message": None}
+    if cooler_activity.status == 0:
+        outdoor_status = StatusInfo(status=0, message=None)
         cooling_mode = 0
     else:
         outdoor_status = unit_cooler.controller.sensor.get_outdoor_status(sense_data, thresholds)
-        cooling_mode = max(cooler_activity["status"] + outdoor_status["status"], 0)
+        cooling_mode = max(cooler_activity.status + outdoor_status.status, 0)
 
-    if cooler_activity["message"] is not None:
-        logging.info(cooler_activity["message"])
-    if outdoor_status["message"] is not None:
-        logging.info(outdoor_status["message"])
+    if cooler_activity.message is not None:
+        logger.info(cooler_activity.message)
+    if outdoor_status.message is not None:
+        logger.info(outdoor_status.message)
 
-    logging.info(
+    logger.info(
         "cooling_mode: %d (cooler_status: %s, outdoor_status: %s)",
         cooling_mode,
-        cooler_activity["status"],
-        outdoor_status["status"],
+        cooler_activity.status,
+        outdoor_status.status,
     )
 
-    return {
-        "cooling_mode": cooling_mode,
-        "cooler_status": cooler_activity,
-        "outdoor_status": outdoor_status,
-        "sense_data": sense_data,
-    }
+    return CoolingModeResult(
+        cooling_mode=cooling_mode,
+        cooler_status=cooler_activity,
+        outdoor_status=outdoor_status,
+        sense_data=sense_data,
+    )
 
 
-def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) -> dict[str, Any]:
+def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) -> ControlMessage:
     if dummy_mode:
-        sense_data = {}
-        mode = dummy_cooling_mode()
-        # ダミーモード用のデフォルト値
-        cooler_status = StatusInfo(status=0, message=None)
-        outdoor_status = StatusInfo(status=0, message=None)
+        sense_data: dict[str, Any] = {}
+        mode_result = CoolingModeResult(
+            cooling_mode=dummy_cooling_mode()["cooling_mode"],
+            cooler_status=StatusInfo(status=0, message=None),
+            outdoor_status=StatusInfo(status=0, message=None),
+            sense_data=sense_data,
+        )
     else:
         sense_data = unit_cooler.controller.sensor.get_sense_data(config)
-        mode = judge_cooling_mode(config, sense_data)
-        # judge_cooling_mode から取得した値を StatusInfo に変換
-        cooler_status = StatusInfo(
-            status=mode["cooler_status"]["status"],
-            message=mode["cooler_status"]["message"],
-        )
-        outdoor_status = StatusInfo(
-            status=mode["outdoor_status"]["status"],
-            message=mode["outdoor_status"]["message"],
-        )
+        mode_result = judge_cooling_mode(config, sense_data)
 
-    mode_index = min(mode["cooling_mode"], len(unit_cooler.controller.message.CONTROL_MESSAGE_LIST) - 1)
+    mode_index = min(mode_result.cooling_mode, len(unit_cooler.controller.message.CONTROL_MESSAGE_LIST) - 1)
 
     # 既存のメッセージリストから基本設定を取得
-    base_msg = unit_cooler.controller.message.CONTROL_MESSAGE_LIST[mode_index]
-    base_duty = base_msg["duty"]
+    template = unit_cooler.controller.message.CONTROL_MESSAGE_LIST[mode_index]
 
     # DutyConfig を構築（speedup 対応）
     if dummy_mode:
         duty = DutyConfig(
-            enable=base_duty["enable"],
-            on_sec=int(max(base_duty["on_sec"] / speedup, ON_SEC_MIN)),
-            off_sec=int(max(base_duty["off_sec"] / speedup, OFF_SEC_MIN)),
+            enable=template.duty.enable,
+            on_sec=int(max(template.duty.on_sec / speedup, ON_SEC_MIN)),
+            off_sec=int(max(template.duty.off_sec / speedup, OFF_SEC_MIN)),
         )
     else:
         duty = DutyConfig(
-            enable=base_duty["enable"],
-            on_sec=base_duty["on_sec"],
-            off_sec=base_duty["off_sec"],
+            enable=template.duty.enable,
+            on_sec=template.duty.on_sec,
+            off_sec=template.duty.off_sec,
         )
 
     # ControlMessage を構築
     control_msg = ControlMessage(
-        state=base_msg["state"],
+        state=template.state,
         duty=duty,
         mode_index=mode_index,
-        sense_data=sense_data,
-        cooler_status=cooler_status,
-        outdoor_status=outdoor_status,
+        sense_data=mode_result.sense_data,
+        cooler_status=mode_result.cooler_status,
+        outdoor_status=mode_result.outdoor_status,
     )
 
-    logging.info(control_msg.to_dict())
+    logger.info(control_msg.to_dict())
 
-    # 後方互換性のため dict で返す
-    return control_msg.to_dict()
+    return control_msg
 
 
 if __name__ == "__main__":
@@ -186,4 +179,4 @@ if __name__ == "__main__":
 
     config = Config.load(config_file)
 
-    logging.info(my_lib.pretty.format(gen_control_msg(config)))
+    logger.info(my_lib.pretty.format(gen_control_msg(config)))

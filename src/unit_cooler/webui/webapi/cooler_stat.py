@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import flask
@@ -22,6 +23,9 @@ import my_lib.sensor_data
 import my_lib.webapp.config
 
 import unit_cooler.webui.worker
+from unit_cooler.messages import ControlMessage
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from multiprocessing import Queue
@@ -30,16 +34,19 @@ if TYPE_CHECKING:
 
 blueprint = flask.Blueprint("cooler-stat", __name__)
 
-api_base_url = None
+
+@dataclass(frozen=True)
+class WateringInfo:
+    """散水情報"""
+
+    amount: float
+    price: float
+
+    def to_dict(self) -> dict[str, float]:
+        return {"amount": self.amount, "price": self.price}
 
 
-def init(api_base_url_):
-    global api_base_url
-
-    api_base_url = api_base_url_
-
-
-def watering(config: Config, day_before: int) -> dict[str, float]:
+def watering(config: Config, day_before: int) -> WateringInfo:
     day_offset = 7 if os.environ.get("DUMMY_MODE", "false") == "true" else 0
 
     amount = my_lib.sensor_data.get_day_sum(
@@ -52,27 +59,29 @@ def watering(config: Config, day_before: int) -> dict[str, float]:
         day_offset,
     )
 
-    return {
-        "amount": amount,
-        "price": amount * config.controller.watering.unit_price / 1000.0,
-    }
+    return WateringInfo(
+        amount=amount,
+        price=amount * config.controller.watering.unit_price / 1000.0,
+    )
 
 
 def watering_list(config: Config) -> list[dict[str, float]]:
-    return [watering(config, i) for i in range(10)]
+    return [watering(config, i).to_dict() for i in range(10)]
 
 
-def get_last_message(message_queue: Queue[Any]) -> dict[str, Any] | None:
+# モジュールレベル変数（関数属性パターンの代替）
+_last_message: ControlMessage | None = None
+
+
+def get_last_message(message_queue: Queue[ControlMessage]) -> ControlMessage | None:
     # NOTE: 現在の実際の制御モードを取得する。
+    global _last_message
     while not message_queue.empty():
-        get_last_message.last_message = message_queue.get()  # type: ignore[attr-defined]
-    return get_last_message.last_message  # type: ignore[attr-defined]
+        _last_message = message_queue.get()
+    return _last_message
 
 
-get_last_message.last_message = None  # type: ignore[attr-defined]
-
-
-def get_stats(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
+def get_stats(config: Config, message_queue: Queue[ControlMessage]) -> dict[str, Any]:
     # ZMQ 経由で Controller から受信したメッセージを使用
     control_message = get_last_message(message_queue)
 
@@ -80,11 +89,22 @@ def get_stats(config: Config, message_queue: Queue[Any]) -> dict[str, Any]:
     actuator_status = unit_cooler.webui.worker.get_last_actuator_status()
     actuator_status_dict = actuator_status.to_dict() if actuator_status else None
 
+    if control_message is None:
+        return {
+            "sensor": {},
+            "mode": None,
+            "cooler_status": None,
+            "outdoor_status": None,
+            "actuator_status": actuator_status_dict,
+        }
+
     return {
-        "sensor": control_message.get("sense_data", {}) if control_message else {},
-        "mode": control_message,
-        "cooler_status": control_message.get("cooler_status") if control_message else None,
-        "outdoor_status": control_message.get("outdoor_status") if control_message else None,
+        "sensor": control_message.sense_data,
+        "mode": control_message.to_dict(),
+        "cooler_status": control_message.cooler_status.to_dict() if control_message.cooler_status else None,
+        "outdoor_status": control_message.outdoor_status.to_dict()
+        if control_message.outdoor_status
+        else None,
         "actuator_status": actuator_status_dict,
     }
 
@@ -98,7 +118,7 @@ def api_get_stats():
 
         return flask.jsonify(get_stats(config, message_queue))
     except Exception as e:
-        logging.exception("Error in api_get_stats")
+        logger.exception("Error in api_get_stats")
         return flask.jsonify({"error": str(e)}), 500
 
 
@@ -110,7 +130,7 @@ def api_get_watering():
 
         return flask.jsonify({"watering": watering_list(config)})
     except Exception as e:
-        logging.exception("Error in api_get_watering")
+        logger.exception("Error in api_get_watering")
         return flask.jsonify({"error": str(e)}), 500
 
 

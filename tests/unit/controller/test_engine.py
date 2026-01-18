@@ -106,35 +106,38 @@ class TestDummyCoolingMode:
 class TestJudgeCoolingMode:
     """judge_cooling_mode のテスト"""
 
-    def test_returns_dict_with_required_keys(self, config):
-        """必要なキーを含む dict を返す"""
+    def test_returns_cooling_mode_result(self, config):
+        """CoolingModeResult を返す"""
+        from unit_cooler.messages import CoolingModeResult
+
         sense_data = create_sense_data()
         result = judge_cooling_mode(config, sense_data)
 
-        assert "cooling_mode" in result
-        assert "cooler_status" in result
-        assert "outdoor_status" in result
-        assert "sense_data" in result
+        assert isinstance(result, CoolingModeResult)
+        assert hasattr(result, "cooling_mode")
+        assert hasattr(result, "cooler_status")
+        assert hasattr(result, "outdoor_status")
+        assert hasattr(result, "sense_data")
 
     def test_idle_when_no_aircon_activity(self, config):
         """エアコン稼働なしで cooling_mode=0"""
         sense_data = create_sense_data(powers=[10, 10])
         result = judge_cooling_mode(config, sense_data)
-        assert result["cooling_mode"] == 0
+        assert result.cooling_mode == 0
 
     def test_mode_based_on_cooler_and_outdoor(self, config):
         """cooler_status + outdoor_status で mode 決定"""
         # 1 台平常運転 (cooler_status=3)、通常条件 (outdoor_status=0)
         sense_data = create_sense_data(powers=[600, 10])
         result = judge_cooling_mode(config, sense_data)
-        assert result["cooling_mode"] == 3
+        assert result.cooling_mode == 3
 
     def test_mode_is_capped_at_zero(self, config):
         """モードは 0 以上"""
         # 低稀働 (cooler_status=1) + 低照度 (outdoor_status=-2) = -1 -> 0
         sense_data = create_sense_data(powers=[100, 10], lux=200)
         result = judge_cooling_mode(config, sense_data)
-        assert result["cooling_mode"] >= 0
+        assert result.cooling_mode >= 0
 
     def test_handles_sensor_error(self, config, caplog):
         """センサーエラーをハンドリング"""
@@ -142,18 +145,32 @@ class TestJudgeCoolingMode:
         sense_data["temp"][0]["value"] = None  # 外気温なし
         result = judge_cooling_mode(config, sense_data)
         # エラー時は cooling_mode=0
-        assert result["cooling_mode"] == 0
+        assert result.cooling_mode == 0
 
 
 class TestGenControlMsg:
     """gen_control_msg のテスト"""
 
-    def test_returns_dict_in_dummy_mode(self, config):
-        """ダミーモードで dict を返す"""
+    def test_returns_control_message_in_dummy_mode(self, config):
+        """ダミーモードで ControlMessage を返す"""
+        from unit_cooler.messages import ControlMessage
+
         # prev_mode をリセット
-        dummy_cooling_mode.prev_mode = 0
+        set_dummy_prev_mode(0)
 
         result = gen_control_msg(config, dummy_mode=True, speedup=1)
+
+        assert isinstance(result, ControlMessage)
+        assert hasattr(result, "state")
+        assert hasattr(result, "duty")
+        assert hasattr(result, "mode_index")
+        assert hasattr(result, "sense_data")
+
+    def test_to_dict_has_required_keys(self, config):
+        """to_dict() は必要なキーを含む"""
+        set_dummy_prev_mode(0)
+
+        result = gen_control_msg(config, dummy_mode=True, speedup=1).to_dict()
 
         assert "state" in result
         assert "duty" in result
@@ -162,19 +179,19 @@ class TestGenControlMsg:
 
     def test_state_matches_message_list(self, config):
         """state が CONTROL_MESSAGE_LIST と一致"""
-        dummy_cooling_mode.prev_mode = 0
-        result = gen_control_msg(config, dummy_mode=True, speedup=1)
+        set_dummy_prev_mode(0)
+        result = gen_control_msg(config, dummy_mode=True, speedup=1).to_dict()
 
         mode_index = result["mode_index"]
-        expected_state = CONTROL_MESSAGE_LIST[mode_index]["state"].value
+        expected_state = CONTROL_MESSAGE_LIST[mode_index].state.value
         assert result["state"] == expected_state
 
     def test_speedup_affects_duty(self, config):
         """speedup が duty に影響"""
-        dummy_cooling_mode.prev_mode = 3  # WORKING モード
+        set_dummy_prev_mode(3)  # WORKING モード
 
-        result_normal = gen_control_msg(config, dummy_mode=True, speedup=1)
-        result_fast = gen_control_msg(config, dummy_mode=True, speedup=10)
+        result_normal = gen_control_msg(config, dummy_mode=True, speedup=1).to_dict()
+        result_fast = gen_control_msg(config, dummy_mode=True, speedup=10).to_dict()
 
         # speedup が大きいと on_sec/off_sec が小さくなる
         if result_normal["mode_index"] == result_fast["mode_index"]:
@@ -182,18 +199,18 @@ class TestGenControlMsg:
 
     def test_speedup_respects_minimum(self, config):
         """speedup は最小値を守る"""
-        dummy_cooling_mode.prev_mode = 1  # WORKING モード
+        set_dummy_prev_mode(1)  # WORKING モード
 
-        result = gen_control_msg(config, dummy_mode=True, speedup=1000)
+        result = gen_control_msg(config, dummy_mode=True, speedup=1000).to_dict()
 
         assert result["duty"]["on_sec"] >= ON_SEC_MIN
         assert result["duty"]["off_sec"] >= OFF_SEC_MIN
 
     def test_mode_index_is_capped(self, config):
         """mode_index は CONTROL_MESSAGE_LIST の範囲内"""
-        dummy_cooling_mode.prev_mode = len(CONTROL_MESSAGE_LIST) - 1
+        set_dummy_prev_mode(len(CONTROL_MESSAGE_LIST) - 1)
 
-        result = gen_control_msg(config, dummy_mode=True, speedup=1)
+        result = gen_control_msg(config, dummy_mode=True, speedup=1).to_dict()
 
         assert 0 <= result["mode_index"] < len(CONTROL_MESSAGE_LIST)
 
@@ -206,27 +223,27 @@ class TestGenControlMsg:
             return_value=mock_sense_data,
         )
 
-        result = gen_control_msg(config, dummy_mode=False, speedup=1)
+        result = gen_control_msg(config, dummy_mode=False, speedup=1).to_dict()
 
         assert "sense_data" in result
         assert result["sense_data"] == mock_sense_data
 
     def test_idle_state_is_zero(self, config):
         """IDLE state は 0"""
-        dummy_cooling_mode.prev_mode = 0  # IDLE モードを強制
+        set_dummy_prev_mode(0)  # IDLE モードを強制
 
         # 何度か実行して IDLE が返ることを確認
         for _ in range(10):
-            result = gen_control_msg(config, dummy_mode=True, speedup=1)
+            result = gen_control_msg(config, dummy_mode=True, speedup=1).to_dict()
             if result["mode_index"] == 0:
                 assert result["state"] == COOLING_STATE.IDLE.value
                 break
 
     def test_working_state_is_one(self, config):
         """WORKING state は 1"""
-        dummy_cooling_mode.prev_mode = 5  # WORKING モードを強制
+        set_dummy_prev_mode(5)  # WORKING モードを強制
 
-        result = gen_control_msg(config, dummy_mode=True, speedup=1)
+        result = gen_control_msg(config, dummy_mode=True, speedup=1).to_dict()
 
         if result["mode_index"] > 0:
             assert result["state"] == COOLING_STATE.WORKING.value

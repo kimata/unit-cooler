@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import pathlib
 import unittest.mock
@@ -145,7 +146,7 @@ def _clear(config):
 
     with unittest.mock.patch.dict("os.environ", {"DUMMY_MODE": "true"}):
         import unit_cooler.actuator.control
-        import unit_cooler.actuator.valve
+        import unit_cooler.actuator.valve_controller
         import unit_cooler.actuator.work_log
 
     liveness_files = [
@@ -160,7 +161,8 @@ def _clear(config):
         my_lib.footprint.clear(liveness_file)
 
     unit_cooler.actuator.control.hazard_clear(config)
-    unit_cooler.actuator.valve.clear_stat()
+    with contextlib.suppress(RuntimeError):
+        unit_cooler.actuator.valve_controller.get_valve_controller().clear_stat()
     unit_cooler.actuator.work_log.hist_clear()
 
     my_lib.webapp.log.term()

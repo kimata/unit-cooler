@@ -361,3 +361,393 @@ use_value(value)  # type: ignore
 - カスタムフック（`useApi`）でデータフェッチロジックを共通化
 - Tailwind CSS 4.x のユーティリティクラスを使用（Bootstrap は廃止）
 - アイコンは Heroicons 2.x + カスタム SVG（`components/icons/index.tsx`）
+
+### 後方互換性コードの扱い
+
+- 後方互換性のためだけに維持されているコードは、影響範囲を調査した上で積極的に削除する
+- 新しいコードでは、後方互換性のためのラッパー関数やフォールバック処理を作成しない
+- `isinstance()` による複数型の分岐が必要な場合は、設計を見直すか Protocol の導入を検討する
+
+### デッドコードの積極的な削除
+
+使用されていないコード（関数、変数、クラス）は積極的に削除する:
+
+- 未使用の変数・定数は削除する
+- 呼び出されていない関数は削除する
+- 「将来使うかもしれない」コードは残さない
+- 後方互換性のためだけのコードは削除を検討する
+
+デッドコードを残すことによる問題:
+
+- 保守コストの増加
+- 読み手の混乱
+- 不要な依存関係の維持
+
+### 関数の重複定義を避ける
+
+同じ機能を持つ関数が複数ファイルで定義されている場合は、1箇所に集約する:
+
+- ユーティリティ関数は適切なモジュールに配置
+- 他モジュールからは import して使用
+
+### isinstance() による型分岐の削減
+
+複数の型を受け入れる関数では、早期に正規化して単一の型で処理する:
+
+```python
+# Good: 早期正規化
+def process(data: DataClass | dict) -> None:
+    normalized = DataClass.from_dict(data) if isinstance(data, dict) else data
+    # 以降は DataClass として処理
+
+# Avoid: 処理全体で分岐
+def process(data: DataClass | dict) -> None:
+    if isinstance(data, DataClass):
+        # DataClass として処理
+    else:
+        # dict として処理
+```
+
+### dict[str, Any] の使用制限
+
+- 構造化されたデータには `dataclass` または `TypedDict` を使用する
+- `dict[str, Any]` は以下の場合のみ許容:
+    - 外部 API からの JSON レスポンスの一時的な受け取り
+    - シリアライゼーション境界（to_dict/from_dict メソッド内）
+- 内部で使い回す構造化データは必ず型定義する
+
+### ハンドルオブジェクトの dataclass 化
+
+ワーカー関数で使用するハンドルオブジェクト（状態を保持する辞書）は dataclass として定義する:
+
+```python
+# Good: dataclass を使用
+@dataclass
+class WorkerHandle:
+    config: Config
+    process_count: int = 0
+
+# Avoid: dict[str, Any] を使用
+def gen_handle(config) -> dict[str, Any]:
+    return {"config": config, "process_count": 0}
+```
+
+サーバーやスレッドを管理するハンドルも dataclass を使用する:
+
+```python
+# Good: サーバーハンドルの dataclass 化
+@dataclass
+class WebServerHandle:
+    server: werkzeug.serving.BaseWSGIServer
+    thread: threading.Thread
+
+def start(config: Config, port: int) -> WebServerHandle:
+    server = make_server(...)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    return WebServerHandle(server=server, thread=thread)
+
+def term(handle: WebServerHandle) -> None:
+    handle.server.shutdown()
+    handle.thread.join()
+
+# Avoid: dict で返す
+def start(...) -> dict[str, Any]:
+    return {"server": server, "thread": thread}
+```
+
+### TypedDict より dataclass を優先
+
+構造化データには TypedDict より dataclass を使用する:
+
+```python
+# Good: dataclass（型安全、IDE補完、frozen可能）
+@dataclass(frozen=True)
+class StatusResult:
+    status: int
+    message: str | None
+
+# Avoid: TypedDict（辞書アクセス、immutability なし）
+class StatusDict(TypedDict):
+    status: int
+    message: str | None
+```
+
+### 数値型の統一
+
+センサーデータなど浮動小数点数を扱う場合は `float` に統一する:
+
+```python
+# Good: float に統一
+flow: float | None = 0.0
+
+# Avoid: int と float の混在
+flow: float | int | None = 0
+```
+
+### dataclass への移行ルール
+
+新規コードで `dict[str, Any]` を返す関数を作成する場合は、dataclass の使用を検討する。
+既存の `dict[str, Any]` を返す関数は、以下の条件を満たす場合に dataclass への移行を検討:
+
+1. 対応する dataclass が既に存在する
+2. 影響範囲が限定的（呼び出し元が少ない）
+3. テストカバレッジが十分
+
+### IIFE パターンの回避
+
+即時実行関数式（IIFE）より、Python の標準的な条件式を使用する:
+
+```python
+# Good: or 演算子
+value = get_value() or default_value
+
+# Good: 条件式
+value = get_value() if condition else default_value
+
+# Avoid: IIFE lambda
+value = (lambda x: x if x is not None else default)(get_value())
+```
+
+### 時刻取得の統一
+
+時刻取得には `my_lib.time.now()` を使用する:
+
+```python
+# Good: my_lib.time を使用
+import my_lib.time
+timestamp = my_lib.time.now()
+
+# Avoid: datetime.now() を直接使用
+from datetime import datetime
+timestamp = datetime.now()
+```
+
+**例外:** UTC タイムスタンプが明示的に必要な場合は `datetime.datetime.now(datetime.UTC)` を使用可。
+
+### 関数属性による状態保持の禁止
+
+関数属性（`func.attr = value`）による状態保持は使用しない:
+
+```python
+# Good: モジュールレベル変数
+_last_value: int | None = None
+
+def get_value() -> int | None:
+    global _last_value
+    # ...
+    return _last_value
+
+# Avoid: 関数属性
+def get_value() -> int | None:
+    # ...
+    get_value.last_value = value  # type: ignore が必要になる
+    return get_value.last_value
+```
+
+### 設定リストの dataclass 化
+
+設定や判定条件のリストは dataclass を使用して定義する:
+
+```python
+# Good: dataclass を使用
+@dataclass
+class JudgeCondition:
+    judge: Callable[[dict], bool]
+    message: str
+    status: int
+
+CONDITIONS: list[JudgeCondition] = [
+    JudgeCondition(judge=lambda x: x > 0, message="Positive", status=1),
+]
+
+# Avoid: dict のリスト
+CONDITIONS = [
+    {"judge": lambda x: x > 0, "message": "Positive", "status": 1},
+]
+```
+
+### base_dir を活用したパス解決
+
+設定ファイルで指定する相対パスは、`config.base_dir` を基準に解決する。ハードコードされたデフォルトパスは使用せず、常に config から取得する:
+
+```python
+# Good: config から取得
+db_path = config.actuator.metrics.data
+
+# Avoid: ハードコードされたデフォルトパス
+DEFAULT_DB_PATH = pathlib.Path("data/metrics.db")
+db_path = db_path or DEFAULT_DB_PATH
+```
+
+### Protocol の使用方針
+
+Protocol は以下の場合のみ検討する:
+
+- 外部ライブラリとのインターフェースが必要な場合
+- 複数の無関係なクラスが同じ振る舞いを持つ場合
+
+現状の dataclass ベースの設計で十分な場合は、Protocol を導入しない。
+
+### `| None` と isinstance の使用方針
+
+- `| None` は初期化状態や Optional パラメータの表現として正当
+- `isinstance()` は外部ライブラリの戻り値チェックや型ガードとして正当
+- 複数箇所で同じ `isinstance()` チェックがある場合は、ヘルパー関数に集約を検討
+
+### シングルトンパターンの使用
+
+シングルトンは以下のパターンで実装する:
+
+```python
+# パターン1: グローバルインスタンス + getter関数（推奨）
+_instance: MyClass | None = None
+
+def get_instance() -> MyClass:
+    global _instance
+    if _instance is None:
+        _instance = MyClass()
+    return _instance
+
+# パターン2: 明示的な初期化が必要な場合
+_instance: MyClass | None = None
+
+def init(config: Config) -> None:
+    global _instance
+    _instance = MyClass(config)
+
+def get_instance() -> MyClass:
+    assert _instance is not None
+    return _instance
+```
+
+### 環境変数の使用
+
+テストモードやダミーモードの判定には環境変数を使用する:
+
+```python
+# 許容: 環境変数による分岐
+if os.environ.get("TEST", "false") == "true":
+    # テスト専用の処理
+
+if os.environ.get("DUMMY_MODE", "false") == "true":
+    # ダミーモード専用の処理
+```
+
+環境変数の参照は各モジュールで独立して行い、中央集権的な管理は行わない。
+
+**使用される主な環境変数:**
+
+| 環境変数              | 用途                             |
+| --------------------- | -------------------------------- |
+| `TEST`                | テストモードの判定               |
+| `DUMMY_MODE`          | ハードウェアなしでのダミーモード |
+| `PYTEST_XDIST_WORKER` | pytest-xdist のワーカー識別      |
+
+### my_lib 機能の優先使用
+
+以下の機能は my_lib を優先的に使用する:
+
+| 機能             | my_lib モジュール            | 避けるべきパターン                |
+| ---------------- | ---------------------------- | --------------------------------- |
+| 時刻取得         | `my_lib.time.now()`          | `datetime.datetime.now()`         |
+| タイムゾーン     | `my_lib.time.get_zoneinfo()` | `zoneinfo.ZoneInfo("Asia/Tokyo")` |
+| 設定読み込み     | `my_lib.config.load()`       | 直接 YAML パース                  |
+| ファイル更新時刻 | `my_lib.footprint`           | 直接ファイル操作                  |
+
+### datetime モジュールのインポートスタイル
+
+datetime モジュールは `import datetime` でインポートし、使用時は `datetime.datetime` と記述する:
+
+```python
+# Good
+import datetime
+timestamp: datetime.datetime = my_lib.time.now()
+
+# Avoid
+from datetime import datetime
+timestamp: datetime = ...
+```
+
+### タイムアウト計算には time.monotonic() を使用
+
+タイムアウトや経過時間の計算には `time.time()` ではなく `time.monotonic()` を使用する:
+
+```python
+# Good: time.monotonic()（システムクロック変更の影響を受けない）
+start = time.monotonic()
+while time.monotonic() - start < timeout:
+    ...
+
+# Avoid: time.time()（システムクロック変更で誤動作する可能性）
+start = time.time()
+while time.time() - start < timeout:
+    ...
+```
+
+### ロガー初期化のパターン
+
+ロガーはモジュールレベルで初期化する:
+
+```python
+# Good: モジュールレベルで初期化
+import logging
+logger = logging.getLogger(__name__)
+
+# Avoid: 関数内や条件分岐内での初期化
+def some_function():
+    logger = logging.getLogger(__name__)  # ❌
+```
+
+### ロギング呼び出しのパターン
+
+ロギングはモジュールロガーを通じて行う。`logging.xxx()` の直接呼び出しは避ける:
+
+```python
+# Good: モジュールロガーを使用
+logger = logging.getLogger(__name__)
+logger.info("Message")
+logger.warning("Warning")
+logger.exception("Error occurred")
+
+# Avoid: logging モジュールを直接呼び出し
+logging.info("Message")
+logging.warning("Warning")
+```
+
+### Config でのパス型定義
+
+設定ファイルから読み込むファイルパスは、Config 側で `pathlib.Path` 型として定義する。呼び出し側での変換を不要にする:
+
+```python
+# Good: Config で pathlib.Path 型を使用
+@dataclass(frozen=True)
+class LivenessConfig:
+    file: pathlib.Path  # parse メソッドで変換
+
+# 呼び出し側: そのまま使用
+my_lib.footprint.update(config.liveness.file)
+
+# Avoid: str 型で定義して呼び出し側で変換
+@dataclass(frozen=True)
+class LivenessConfig:
+    file: str
+
+# 呼び出し側: 毎回 pathlib.Path() でラップが必要
+my_lib.footprint.update(pathlib.Path(config.liveness.file))
+```
+
+### メッセージ型の使用ガイドライン
+
+`ControlMessage` などのメッセージ型は、できるだけ早く dataclass に変換して使用する:
+
+```python
+# Good: 受信直後に dataclass に変換
+raw_message = queue.get()
+control_message = ControlMessage.from_dict(raw_message)
+mode_index = control_message.mode_index  # 属性アクセス
+
+# Avoid: dict のまま処理
+raw_message = queue.get()
+mode_index = raw_message["mode_index"]  # dict アクセス
+```

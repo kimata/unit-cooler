@@ -15,14 +15,16 @@ import logging
 import pathlib
 import sqlite3
 import threading
-import zoneinfo
 from collections.abc import Callable
 from contextlib import contextmanager
 
 import my_lib.sqlite_util
+import my_lib.time
 
-TIMEZONE = zoneinfo.ZoneInfo("Asia/Tokyo")
-DEFAULT_DB_PATH = pathlib.Path("data/metrics.db")
+# NOTE: スキーマパスはモジュール相対パスで解決しています。
+# MetricsCollector は config が渡される前に初期化される場合があるため、
+# config.base_dir を使用せず __file__ から解決しています。
+# 将来的に初期化パターンを変更する場合は config.base_dir への移行を検討してください。
 SCHEMA_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "schema" / "sqlite.schema"
 
 logger = logging.getLogger(__name__)
@@ -33,7 +35,7 @@ class MetricsCollector:
 
     def __init__(
         self,
-        db_path: str | pathlib.Path = DEFAULT_DB_PATH,
+        db_path: str | pathlib.Path,
         time_func: Callable[[], datetime.datetime] | None = None,
     ):
         """Initialize MetricsCollector with database path.
@@ -41,18 +43,18 @@ class MetricsCollector:
         Args:
             db_path: Path to the SQLite database file.
             time_func: Optional function that returns current datetime.
-                       Defaults to datetime.datetime.now(TIMEZONE).
+                       Defaults to my_lib.time.now().
                        Used for testing time-dependent behavior.
         """
         self.db_path = pathlib.Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
         self._lock = threading.Lock()
-        self._time_func = time_func or (lambda: datetime.datetime.now(TIMEZONE))
+        self._time_func = time_func or my_lib.time.now
 
         # Current state tracking
-        self._current_minute_data: dict = {}
-        self._current_hour_data: dict = {"valve_operations": 0}
+        self._current_minute_data: dict[str, float | int | None] = {}
+        self._current_hour_data: dict[str, int] = {"valve_operations": 0}
         self._last_minute: datetime.datetime | None = None
         self._last_hour: datetime.datetime | None = None
 
@@ -332,12 +334,18 @@ class MetricsCollector:
 
 
 # Global instance
-_metrics_collector = None
+_metrics_collector: MetricsCollector | None = None
 
 
-def get_metrics_collector(db_path: str | pathlib.Path = DEFAULT_DB_PATH) -> MetricsCollector:
-    """Get global metrics collector instance."""
+def get_metrics_collector(db_path: str | pathlib.Path | None = None) -> MetricsCollector:
+    """Get global metrics collector instance.
+
+    Args:
+        db_path: Path to the SQLite database file. Required for first initialization.
+    """
     global _metrics_collector
     if _metrics_collector is None:
+        if db_path is None:
+            raise RuntimeError("MetricsCollector not initialized. Provide db_path for first call.")
         _metrics_collector = MetricsCollector(db_path)
     return _metrics_collector

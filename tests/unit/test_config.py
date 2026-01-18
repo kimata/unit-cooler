@@ -32,13 +32,13 @@ class TestLivenessConfig:
         """パース"""
         data = {"file": "/tmp/liveness.txt"}
         config = LivenessConfig.parse(data)
-        assert config.file == "/tmp/liveness.txt"
+        assert config.file == pathlib.Path("/tmp/liveness.txt")
 
     def test_frozen(self):
         """immutable"""
         import dataclasses
 
-        config = LivenessConfig(file="/tmp/test")
+        config = LivenessConfig(file=pathlib.Path("/tmp/test"))
         with pytest.raises(dataclasses.FrozenInstanceError):
             config.file = "/tmp/other"  # type: ignore
 
@@ -291,7 +291,7 @@ class TestMetricsConfig:
         """パース"""
         data = {"data": "/tmp/metrics.db"}
         config = MetricsConfig.parse(data)
-        assert config.data == "/tmp/metrics.db"
+        assert config.data == pathlib.Path("/tmp/metrics.db")
 
 
 class TestWebUIWebappConfig:
@@ -371,11 +371,11 @@ class TestConfigFrozen:
         import dataclasses
 
         with pytest.raises(dataclasses.FrozenInstanceError):
-            config.base_dir = pathlib.Path("/other")  # type: ignore
+            config.base_dir = pathlib.Path("/other")
 
     def test_nested_config_is_frozen(self, config):
         """ネストされた Config も変更不可"""
         import dataclasses
 
         with pytest.raises(dataclasses.FrozenInstanceError):
-            config.controller.interval_sec = 999  # type: ignore
+            config.controller.interval_sec = 999

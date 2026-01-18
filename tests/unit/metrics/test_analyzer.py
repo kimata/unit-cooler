@@ -27,19 +27,17 @@ class TestMetricsAnalyzerInit:
         assert analyzer.collector is collector
         collector.close()
 
-    def test_init_without_collector(self, tmp_path, mocker):
-        """collector なしで初期化（グローバルを使用）"""
-        from unit_cooler.metrics import collector as collector_module
-
+    def test_init_requires_collector(self, tmp_path):
+        """collector が必須である"""
+        # MetricsAnalyzer は collector が必須引数になった
         db_path = tmp_path / "metrics.db"
-        mock_collector = MetricsCollector(db_path)
-        collector_module._metrics_collector = mock_collector
+        collector = MetricsCollector(db_path)
 
-        analyzer = MetricsAnalyzer()
-        assert analyzer.collector is mock_collector
+        # collector を渡さないと TypeError になる
+        with pytest.raises(TypeError):
+            MetricsAnalyzer()  # type: ignore[call-arg]
 
-        mock_collector.close()
-        collector_module._metrics_collector = None
+        collector.close()
 
 
 class TestMetricsAnalyzerGetTimeseriesData:
@@ -320,10 +318,19 @@ class TestMetricsAnalyzerPrivateMethods:
 class TestGetMetricsAnalyzer:
     """get_metrics_analyzer 関数のテスト"""
 
-    def test_returns_analyzer_instance(self):
+    def test_returns_analyzer_instance(self, tmp_path):
         """MetricsAnalyzer インスタンスが返される"""
-        analyzer = get_metrics_analyzer()
+        from unit_cooler.metrics import collector as collector_module
+
+        # グローバル collector をリセット
+        collector_module._metrics_collector = None
+
+        db_path = tmp_path / "metrics.db"
+        analyzer = get_metrics_analyzer(str(db_path))
         assert isinstance(analyzer, MetricsAnalyzer)
+
+        # クリーンアップ
+        collector_module._metrics_collector = None
 
 
 class TestMetricsAnalyzerEdgeCases:

@@ -28,6 +28,8 @@ from typing import Any
 
 from unit_cooler.config import Config, RuntimeSettings
 
+logger = logging.getLogger(__name__)
+
 SCHEMA_CONFIG = "schema/config.schema"
 
 # Global variable for web server handle
@@ -37,7 +39,7 @@ log_server_handle: Any = None
 def sig_handler(num, frame):
     import unit_cooler.actuator.worker
 
-    logging.warning("Receive signal %d", num)
+    logger.warning("Receive signal %d", num)
 
     if num in (signal.SIGTERM, signal.SIGINT):
         unit_cooler.actuator.worker.term()
@@ -45,20 +47,18 @@ def sig_handler(num, frame):
 
 def wait_before_start(config: Config) -> None:
     for i in range(config.actuator.control.interval_sec):
-        logging.info(
-            "Wait for the old Pod to finish (%3d / %3d)", i + 1, config.actuator.control.interval_sec
-        )
+        logger.info("Wait for the old Pod to finish (%3d / %3d)", i + 1, config.actuator.control.interval_sec)
         time.sleep(1)
 
 
 def start(config: Config, settings: RuntimeSettings) -> tuple[Any, list[Any], Any]:
     global log_server_handle
 
-    logging.info("Using ZMQ server of %s:%d", settings.control_host, settings.pub_port)
+    logger.info("Using ZMQ server of %s:%d", settings.control_host, settings.pub_port)
 
     # NOTE: オプションでダミーモードが指定された場合、環境変数もそれに揃えておく
     if settings.dummy_mode:
-        logging.warning("Set dummy mode")
+        logger.warning("Set dummy mode")
         os.environ["DUMMY_MODE"] = "true"
 
     manager = multiprocessing.Manager()
@@ -71,29 +71,29 @@ def start(config: Config, settings: RuntimeSettings) -> tuple[Any, list[Any], An
         wait_before_start(config)
 
     import unit_cooler.actuator.monitor
-    import unit_cooler.actuator.valve
+    import unit_cooler.actuator.valve_controller
     import unit_cooler.actuator.work_log
     import unit_cooler.actuator.worker
 
     unit_cooler.actuator.work_log.init(config, event_queue)  # type: ignore[arg-type]
 
-    logging.info("Initialize valve")
-    unit_cooler.actuator.valve.init(config.actuator.control.valve.pin_no, config)
+    logger.info("Initialize valve")
+    unit_cooler.actuator.valve_controller.init_valve_controller(config, config.actuator.control.valve.pin_no)
     unit_cooler.actuator.monitor.init(config.actuator.control.valve.pin_no)
 
     # NOTE: Blueprint のパス指定を YAML で行いたいので、my_lib.webapp の import 順を制御
     import unit_cooler.actuator.web_server
 
     try:
-        logging.info("Starting web server on port %d", settings.log_port)
+        logger.info("Starting web server on port %d", settings.log_port)
         log_server_handle = unit_cooler.actuator.web_server.start(
             config,
             event_queue,  # type: ignore[arg-type]
             settings.log_port,
         )
-        logging.info("Web server started successfully")
+        logger.info("Web server started successfully")
     except Exception:
-        logging.exception("Failed to start web server")
+        logger.exception("Failed to start web server")
         raise
 
     executor = concurrent.futures.ThreadPoolExecutor()
@@ -114,15 +114,15 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True):
 
     ret = 0
     for thread_info in thread_list:
-        logging.info("Wait %s finish", thread_info["name"])
+        logger.info("Wait %s finish", thread_info["name"])
 
         if thread_info["future"].result() != 0:
-            logging.error("Error occurred in %s", thread_info["name"])
+            logger.error("Error occurred in %s", thread_info["name"])
             ret = -1
 
     unit_cooler.actuator.worker.term()
 
-    logging.info("Shutdown executor")
+    logger.info("Shutdown executor")
     executor.shutdown(wait=True)
 
     # メトリクスコレクターのクローズ
@@ -132,12 +132,12 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True):
         metrics_collector = get_metrics_collector()
         metrics_collector.close()
     except Exception:
-        logging.exception("Failed to close metrics collector")
+        logger.exception("Failed to close metrics collector")
 
     unit_cooler.actuator.web_server.term(log_server_handle)
     unit_cooler.actuator.work_log.term()
 
-    logging.warning("Terminate unit_cooler")
+    logger.warning("Terminate unit_cooler")
 
     return ret
 

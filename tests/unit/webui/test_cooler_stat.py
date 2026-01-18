@@ -6,17 +6,8 @@ from __future__ import annotations
 
 import multiprocessing
 
-
-class TestInit:
-    """init のテスト"""
-
-    def test_sets_api_base_url(self):
-        """api_base_url を設定"""
-        import unit_cooler.webui.webapi.cooler_stat as cooler_stat
-
-        cooler_stat.init("/api/v1")
-
-        assert cooler_stat.api_base_url == "/api/v1"
+from unit_cooler.const import COOLING_STATE
+from unit_cooler.messages import ControlMessage, DutyConfig, StatusInfo
 
 
 class TestWatering:
@@ -30,9 +21,9 @@ class TestWatering:
 
         result = cooler_stat.watering(config, 0)
 
-        assert "amount" in result
-        assert "price" in result
-        assert result["amount"] == 100.0
+        assert hasattr(result, "amount")
+        assert hasattr(result, "price")
+        assert result.amount == 100.0
 
     def test_calculates_price_from_amount(self, config, mocker):
         """使用量から料金を計算"""
@@ -44,7 +35,21 @@ class TestWatering:
 
         # price = amount * unit_price / 1000.0
         expected_price = 1000.0 * config.controller.watering.unit_price / 1000.0
-        assert result["price"] == expected_price
+        assert result.price == expected_price
+
+    def test_to_dict_returns_correct_structure(self, config, mocker):
+        """to_dict() が正しい構造を返す"""
+        import unit_cooler.webui.webapi.cooler_stat as cooler_stat
+
+        mocker.patch("my_lib.sensor_data.get_day_sum", return_value=100.0)
+
+        result = cooler_stat.watering(config, 0)
+        result_dict = result.to_dict()
+
+        assert "amount" in result_dict
+        assert "price" in result_dict
+        assert result_dict["amount"] == result.amount
+        assert result_dict["price"] == result.price
 
 
 class TestWateringList:
@@ -71,7 +76,7 @@ class TestGetLastMessage:
         """各テスト前に状態をリセット"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
-        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat._last_message = None
 
     def test_returns_none_when_empty(self):
         """空キューで None"""
@@ -90,15 +95,20 @@ class TestGetLastMessage:
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         queue = multiprocessing.Queue()
-        queue.put({"mode_index": 1})
-        queue.put({"mode_index": 2})
-        queue.put({"mode_index": 3})
+        for i in range(1, 4):
+            msg = ControlMessage(
+                mode_index=i,
+                state=COOLING_STATE.IDLE,
+                duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+            )
+            queue.put(msg)
         # キューにデータが入るのを待つ
         time.sleep(0.01)
 
         result = cooler_stat.get_last_message(queue)
 
-        assert result == {"mode_index": 3}
+        assert result is not None
+        assert result.mode_index == 3
 
     def test_stores_last_message(self):
         """最後のメッセージを保存"""
@@ -106,25 +116,35 @@ class TestGetLastMessage:
 
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
+        msg = ControlMessage(
+            mode_index=5,
+            state=COOLING_STATE.IDLE,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
         queue = multiprocessing.Queue()
-        queue.put({"mode_index": 5})
+        queue.put(msg)
         # キューにデータが入るのを待つ
         time.sleep(0.01)
 
         cooler_stat.get_last_message(queue)
 
-        assert cooler_stat.get_last_message.last_message == {"mode_index": 5}  # pyright: ignore[reportFunctionMemberAccess]
+        assert cooler_stat._last_message == msg
 
     def test_returns_cached_message_when_queue_empty(self):
         """キュー空時にキャッシュを返す"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
+        cached_msg = ControlMessage(
+            mode_index=10,
+            state=COOLING_STATE.IDLE,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
         queue = multiprocessing.Queue()
-        cooler_stat.get_last_message.last_message = {"mode_index": 10}  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat._last_message = cached_msg
 
         result = cooler_stat.get_last_message(queue)
 
-        assert result == {"mode_index": 10}
+        assert result == cached_msg
 
 
 class TestGetStats:
@@ -138,12 +158,14 @@ class TestGetStats:
 
         queue = multiprocessing.Queue()
         # ZMQ メッセージをシミュレート
-        cooler_stat.get_last_message.last_message = {  # pyright: ignore[reportFunctionMemberAccess]
-            "mode_index": 3,
-            "sense_data": {"outdoor": {"temp": 30}},
-            "cooler_status": {"status": 1, "message": None},
-            "outdoor_status": {"status": 0, "message": None},
-        }
+        cooler_stat._last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.IDLE,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+            sense_data={"outdoor": {"temp": 30}},
+            cooler_status=StatusInfo(status=1, message=None),
+            outdoor_status=StatusInfo(status=0, message=None),
+        )
 
         result = cooler_stat.get_stats(config, queue)
 
@@ -160,7 +182,7 @@ class TestGetStats:
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
 
         queue = multiprocessing.Queue()
-        cooler_stat.get_last_message.last_message = None  # pyright: ignore[reportFunctionMemberAccess]
+        cooler_stat._last_message = None
 
         result = cooler_stat.get_stats(config, queue)
 
@@ -192,12 +214,14 @@ class TestGetStats:
         )
 
         queue = multiprocessing.Queue()
-        cooler_stat.get_last_message.last_message = {  # pyright: ignore[reportFunctionMemberAccess]
-            "mode_index": 3,
-            "sense_data": {},
-            "cooler_status": {"status": 0, "message": None},
-            "outdoor_status": {"status": 0, "message": None},
-        }
+        cooler_stat._last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.IDLE,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+            sense_data={},
+            cooler_status=StatusInfo(status=0, message=None),
+            outdoor_status=StatusInfo(status=0, message=None),
+        )
 
         result = cooler_stat.get_stats(config, queue)
 
@@ -222,12 +246,14 @@ class TestApiGetStats:
         app.config["MESSAGE_QUEUE"] = queue
 
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
-        cooler_stat.get_last_message.last_message = {  # pyright: ignore[reportFunctionMemberAccess]
-            "mode_index": 3,
-            "sense_data": {},
-            "cooler_status": {"status": 0, "message": None},
-            "outdoor_status": {"status": 0, "message": None},
-        }
+        cooler_stat._last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.IDLE,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+            sense_data={},
+            cooler_status=StatusInfo(status=0, message=None),
+            outdoor_status=StatusInfo(status=0, message=None),
+        )
 
         with app.test_client() as client:
             response = client.get("/api/stat")

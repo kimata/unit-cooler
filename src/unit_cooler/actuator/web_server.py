@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import flask
@@ -31,15 +32,25 @@ import unit_cooler.actuator.webapi.valve_status
 import unit_cooler.metrics.webapi.page
 from unit_cooler.metrics import get_metrics_collector
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from multiprocessing import Queue
 
     from unit_cooler.config import Config
 
 
+@dataclass
+class WebServerHandle:
+    """Web サーバーのハンドル"""
+
+    server: werkzeug.serving.BaseWSGIServer
+    thread: threading.Thread
+
+
 def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
     my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
-    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
+    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))
 
     # NOTE: アクセスログは無効にする
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -68,30 +79,30 @@ def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
 
     my_lib.webapp.config.show_handler_list(app, True)
 
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())  # type: ignore[arg-type]
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))  # type: ignore[arg-type]
     my_lib.webapp.event.start(event_queue)
 
     # メトリクスデータベースの初期化
     metrics_db_path = config.actuator.metrics.data
     try:
         metrics_collector = get_metrics_collector(metrics_db_path)
-        logging.info("Metrics database initialized at: %s", metrics_db_path)
+        logger.info("Metrics database initialized at: %s", metrics_db_path)
         app.config["METRICS_COLLECTOR"] = metrics_collector
     except Exception:
-        logging.exception("Failed to initialize metrics database")
+        logger.exception("Failed to initialize metrics database")
 
     # app.debug = True
 
     return app
 
 
-def start(config: Config, event_queue: Queue[Any], port: int) -> dict[str, Any]:
+def start(config: Config, event_queue: Queue[Any], port: int) -> WebServerHandle:
     # NOTE: Flask は別のプロセスで実行
     try:
         app = create_app(config, event_queue)
-        logging.info("Web app created successfully")
+        logger.info("Web app created successfully")
     except Exception:
-        logging.exception("Failed to create web app")
+        logger.exception("Failed to create web app")
         raise
 
     server = werkzeug.serving.make_server(
@@ -102,26 +113,23 @@ def start(config: Config, event_queue: Queue[Any], port: int) -> dict[str, Any]:
     )
     thread = threading.Thread(target=server.serve_forever)
 
-    logging.info("Start web server")
+    logger.info("Start web server")
 
     thread.start()
 
-    return {
-        "server": server,
-        "thread": thread,
-    }
+    return WebServerHandle(server=server, thread=thread)
 
 
-def term(handle: dict[str, Any]) -> None:
+def term(handle: WebServerHandle) -> None:
     import my_lib.webapp.event
 
     logging.warning("Stop web server")
 
     my_lib.webapp.event.term()
 
-    handle["server"].shutdown()
-    handle["server"].server_close()
-    handle["thread"].join()
+    handle.server.shutdown()
+    handle.server.server_close()
+    handle.thread.join()
 
     my_lib.webapp.log.term()
 

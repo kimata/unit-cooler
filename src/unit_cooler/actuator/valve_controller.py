@@ -12,14 +12,16 @@ import os
 import pathlib
 import threading
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import my_lib.footprint
 import my_lib.rpi
 
 import unit_cooler.actuator.work_log
 import unit_cooler.const
-from unit_cooler.messages import DutyConfig, ValveStatus
+from unit_cooler.messages import ControlMessage, DutyConfig, ValveStatus
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from unit_cooler.config import Config
@@ -74,7 +76,7 @@ class ValveController:
             state_changed = valve_state != curr_state
 
             if state_changed:
-                logging.info("VALVE: %s -> %s", curr_state.name, valve_state.name)
+                logger.info("VALVE: %s -> %s", curr_state.name, valve_state.name)
                 self._operation_count += 1
 
                 # テスト時のみ履歴を記録
@@ -108,7 +110,7 @@ class ValveController:
 
             get_state_manager().notify_valve_state_changed(valve_state)
         except Exception:
-            logging.debug("StateManager notification failed (valve_state)")
+            logger.debug("StateManager notification failed (valve_state)")
 
     def get_status(self) -> ValveStatus:
         """バルブ状態と経過時間を取得"""
@@ -125,65 +127,42 @@ class ValveController:
 
             return ValveStatus(state=valve_state, duration_sec=duration)
 
-    def get_status_dict(self) -> dict[str, Any]:
-        """バルブ状態を dict で取得（後方互換性のため）"""
-        status = self.get_status()
-        return {
-            "state": status.state,
-            "duration": status.duration_sec,
-        }
-
-    def set_cooling_working(self, duty: DutyConfig | dict[str, Any]) -> ValveStatus:
+    def set_cooling_working(self, duty: DutyConfig) -> ValveStatus:
         """バルブを動作状態に設定（デューティサイクル制御）"""
-        # dict の場合は DutyConfig に変換
-        duty_config: DutyConfig
-        if isinstance(duty, dict):
-            duty_config = DutyConfig(
-                enable=duty["enable"],
-                on_sec=duty["on_sec"],
-                off_sec=duty["off_sec"],
-            )
-        else:
-            duty_config = duty
-
-        logging.debug("set_cooling_working: %s", duty_config)
+        logger.debug("set_cooling_working: %s", duty)
 
         my_lib.footprint.clear(STAT_PATH_VALVE_STATE_IDLE)
 
         if not my_lib.footprint.exists(STAT_PATH_VALVE_STATE_WORKING):
             my_lib.footprint.update(STAT_PATH_VALVE_STATE_WORKING)
             unit_cooler.actuator.work_log.add("冷却を開始します。")
-            logging.info("COOLING: IDLE -> WORKING")
+            logger.info("COOLING: IDLE -> WORKING")
             return self.set_state(unit_cooler.const.VALVE_STATE.OPEN)
 
-        if not duty_config.enable:
+        if not duty.enable:
             # Duty 制御しない場合
-            logging.info("COOLING: WORKING")
+            logger.info("COOLING: WORKING")
             return self.set_state(unit_cooler.const.VALVE_STATE.OPEN)
 
         status = self.get_status()
 
         if status.state == unit_cooler.const.VALVE_STATE.OPEN:
             # 現在バルブが開かれている
-            if status.duration_sec >= duty_config.on_sec:
-                logging.info("COOLING: WORKING (OFF duty, %d sec left)", duty_config.off_sec)
+            if status.duration_sec >= duty.on_sec:
+                logger.info("COOLING: WORKING (OFF duty, %d sec left)", duty.off_sec)
                 unit_cooler.actuator.work_log.add("OFF Duty になったのでバルブを締めます。")
                 return self.set_state(unit_cooler.const.VALVE_STATE.CLOSE)
             else:
-                logging.info(
-                    "COOLING: WORKING (ON duty, %d sec left)", duty_config.on_sec - status.duration_sec
-                )
+                logger.info("COOLING: WORKING (ON duty, %d sec left)", duty.on_sec - status.duration_sec)
                 return self.set_state(unit_cooler.const.VALVE_STATE.OPEN)
         else:
             # 現在バルブが閉じられている
-            if status.duration_sec >= duty_config.off_sec:
-                logging.info("COOLING: WORKING (ON duty, %d sec left)", duty_config.on_sec)
+            if status.duration_sec >= duty.off_sec:
+                logger.info("COOLING: WORKING (ON duty, %d sec left)", duty.on_sec)
                 unit_cooler.actuator.work_log.add("ON Duty になったのでバルブを開けます。")
                 return self.set_state(unit_cooler.const.VALVE_STATE.OPEN)
             else:
-                logging.info(
-                    "COOLING: WORKING (OFF duty, %d sec left)", duty_config.off_sec - status.duration_sec
-                )
+                logger.info("COOLING: WORKING (OFF duty, %d sec left)", duty.off_sec - status.duration_sec)
                 return self.set_state(unit_cooler.const.VALVE_STATE.CLOSE)
 
     def set_cooling_idle(self) -> ValveStatus:
@@ -193,16 +172,16 @@ class ValveController:
         if not my_lib.footprint.exists(STAT_PATH_VALVE_STATE_IDLE):
             my_lib.footprint.update(STAT_PATH_VALVE_STATE_IDLE)
             unit_cooler.actuator.work_log.add("冷却を停止しました。")
-            logging.info("COOLING: WORKING -> IDLE")
+            logger.info("COOLING: WORKING -> IDLE")
             return self.set_state(unit_cooler.const.VALVE_STATE.CLOSE)
         else:
-            logging.info("COOLING: IDLE")
+            logger.info("COOLING: IDLE")
             return self.set_state(unit_cooler.const.VALVE_STATE.CLOSE)
 
-    def set_cooling_state(self, control_message: dict[str, Any]) -> ValveStatus:
+    def set_cooling_state(self, control_message: ControlMessage) -> ValveStatus:
         """制御メッセージに基づいてバルブ状態を設定"""
-        if control_message["state"] == unit_cooler.const.COOLING_STATE.WORKING:
-            return self.set_cooling_working(control_message["duty"])
+        if control_message.state == unit_cooler.const.COOLING_STATE.WORKING:
+            return self.set_cooling_working(control_message.duty)
         else:
             return self.set_cooling_idle()
 
@@ -236,4 +215,43 @@ class ValveController:
             metrics_collector = get_metrics_collector(metrics_db_path)
             metrics_collector.record_valve_operation()
         except Exception:
-            logging.debug("Failed to record valve operation metrics")
+            logger.debug("Failed to record valve operation metrics")
+
+
+# シングルトンインスタンス
+_instance: ValveController | None = None
+
+
+def init_valve_controller(config: Config, pin_no: int) -> ValveController:
+    """ValveController のシングルトンインスタンスを初期化
+
+    Args:
+        config: 設定オブジェクト
+        pin_no: GPIO ピン番号
+
+    Returns:
+        初期化された ValveController インスタンス
+    """
+    global _instance
+    _instance = ValveController(config=config, pin_no=pin_no)
+    return _instance
+
+
+def get_valve_controller() -> ValveController:
+    """ValveController のシングルトンインスタンスを取得
+
+    Returns:
+        ValveController インスタンス
+
+    Raises:
+        RuntimeError: インスタンスが初期化されていない場合
+    """
+    if _instance is None:
+        raise RuntimeError("ValveController not initialized. Call init_valve_controller() first.")
+    return _instance
+
+
+def clear_valve_controller() -> None:
+    """テスト用: シングルトンインスタンスをクリア"""
+    global _instance
+    _instance = None

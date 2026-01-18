@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 import my_lib.notify.slack
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from unit_cooler.config import Config
 
@@ -20,7 +22,7 @@ T = TypeVar("T")
 
 def notify_error(config: Config, message: str, is_logging: bool = True) -> None:
     if is_logging:
-        logging.error(message)
+        logger.error(message)
 
     if isinstance(config.slack, my_lib.notify.slack.SlackEmptyConfig) or (
         (os.environ.get("TEST", "false") != "true") and (os.environ.get("DUMMY_MODE", "false") == "true")
@@ -31,7 +33,7 @@ def notify_error(config: Config, message: str, is_logging: bool = True) -> None:
     try:
         my_lib.notify.slack.error(config.slack, "室外機冷却システム", message)
     except Exception:
-        logging.exception("Failed to Notify via Slack")
+        logger.exception("Failed to Notify via Slack")
 
 
 def handle_worker_error(
@@ -68,7 +70,7 @@ def handle_worker_error(
             try:
                 return func(*args, **kwargs)
             except Exception:
-                logging.exception(error_message)
+                logger.exception(error_message)
                 if notify:
                     notify_error(config, traceback.format_exc(), is_logging=False)
                 if reraise:
@@ -107,7 +109,7 @@ def safe_call(
         try:
             return func(*args, **kwargs)
         except Exception:
-            logging.exception(error_message)
+            logger.exception(error_message)
             return default_return
 
     return wrapper

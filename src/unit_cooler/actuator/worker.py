@@ -17,6 +17,7 @@ Options:
 from __future__ import annotations
 
 import concurrent.futures
+import datetime
 import logging
 import os
 import pathlib
@@ -24,10 +25,10 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import my_lib.footprint
+import my_lib.time
 
 import unit_cooler.actuator.control
 import unit_cooler.actuator.monitor
@@ -36,6 +37,9 @@ import unit_cooler.actuator.work_log
 import unit_cooler.const
 import unit_cooler.pubsub.subscribe
 import unit_cooler.util
+from unit_cooler.messages import ControlMessage, DutyConfig
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from multiprocessing import Queue
@@ -60,7 +64,7 @@ class WorkerState:
     """
 
     process_count: int = 0
-    last_process_time: datetime | None = None
+    last_process_time: datetime.datetime | None = None
     _condition: threading.Condition = field(default_factory=threading.Condition, init=False)
 
     def notify_processed(self) -> None:
@@ -71,7 +75,7 @@ class WorkerState:
         """
         with self._condition:
             self.process_count += 1
-            self.last_process_time = datetime.now()
+            self.last_process_time = my_lib.time.now()
             self._condition.notify_all()
 
     def wait_for_process(self, timeout: float = 1.0) -> bool:
@@ -124,7 +128,7 @@ class WorkerState:
 # グローバル状態管理（pytestワーカー毎に独立）
 # =============================================================================
 # グローバル辞書（pytestワーカー毎に独立）
-_control_messages: dict[str, dict[str, Any]] = {}
+_control_messages: dict[str, ControlMessage] = {}
 _should_terminate: dict[str, threading.Event] = {}
 _worker_states: dict[str, dict[str, WorkerState]] = {}
 
@@ -132,7 +136,11 @@ _worker_states: dict[str, dict[str, WorkerState]] = {}
 _lifecycle_manager: LifecycleManager | None = None
 
 # メッセージの初期値
-MESSAGE_INIT = {"mode_index": 0, "state": unit_cooler.const.COOLING_STATE.IDLE}
+MESSAGE_INIT = ControlMessage(
+    state=unit_cooler.const.COOLING_STATE.IDLE,
+    duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+    mode_index=0,
+)
 
 
 def set_lifecycle_manager(manager: LifecycleManager | None) -> None:
@@ -150,16 +158,16 @@ def get_worker_id() -> str:
     return os.environ.get("PYTEST_XDIST_WORKER", "")
 
 
-def get_last_control_message():
+def get_last_control_message() -> ControlMessage:
     """グローバル辞書からlast_control_messageを取得"""
     worker_id = get_worker_id()
     if worker_id not in _control_messages:
-        set_last_control_message(MESSAGE_INIT.copy())
+        set_last_control_message(MESSAGE_INIT)
 
     return _control_messages[worker_id]
 
 
-def set_last_control_message(message):
+def set_last_control_message(message: ControlMessage) -> None:
     """グローバル辞書にlast_control_messageを設定"""
     _control_messages[get_worker_id()] = message
 
@@ -243,7 +251,7 @@ def _notify_state_manager_control_processed() -> None:
 
         get_state_manager().notify_control_processed()
     except Exception:
-        logging.debug("StateManager notification failed (control_processed)")
+        logger.debug("StateManager notification failed (control_processed)")
 
 
 def _notify_state_manager_monitor_processed() -> None:
@@ -253,10 +261,10 @@ def _notify_state_manager_monitor_processed() -> None:
 
         get_state_manager().notify_monitor_processed()
     except Exception:
-        logging.debug("StateManager notification failed (monitor_processed)")
+        logger.debug("StateManager notification failed (monitor_processed)")
 
 
-def collect_environmental_metrics(config: Config, current_message: dict[str, Any]) -> None:
+def collect_environmental_metrics(config: Config, current_message: ControlMessage) -> None:
     """環境データのメトリクス収集"""
     from unit_cooler.metrics import get_metrics_collector
 
@@ -265,7 +273,7 @@ def collect_environmental_metrics(config: Config, current_message: dict[str, Any
         metrics_collector = get_metrics_collector(metrics_db_path)
 
         # current_messageのsense_dataからセンサーデータを取得
-        sense_data = current_message.get("sense_data", {})
+        sense_data = current_message.sense_data
 
         if sense_data:
             # 各センサーデータの最新値を取得
@@ -283,9 +291,9 @@ def collect_environmental_metrics(config: Config, current_message: dict[str, Any
                 lux = sense_data["lux"][0].get("value")
             if sense_data.get("solar_rad") and len(sense_data["solar_rad"]) > 0:
                 solar_radiation = sense_data["solar_rad"][0].get("value")
-                logging.debug("Solar radiation data found: %s W/m²", solar_radiation)
+                logger.debug("Solar radiation data found: %s W/m²", solar_radiation)
             else:
-                logging.debug(
+                logger.debug(
                     "No solar radiation data in sense_data: %s",
                     list(sense_data.keys()) if sense_data else "empty",
                 )
@@ -298,21 +306,24 @@ def collect_environmental_metrics(config: Config, current_message: dict[str, Any
             )
 
     except Exception:
-        logging.exception("Failed to collect environmental metrics")
+        logger.exception("Failed to collect environmental metrics")
 
 
-def queue_put(message_queue, message, liveness_file):
-    message["state"] = unit_cooler.const.COOLING_STATE(message["state"])
+def queue_put(
+    message_queue: Queue[ControlMessage], message: dict[str, Any], liveness_file: pathlib.Path
+) -> None:
+    # 受信直後に ControlMessage に変換
+    control_message = ControlMessage.from_dict(message)
 
-    logging.info("Receive message: %s", message)
+    logger.info("Receive message: %s", control_message)
 
-    message_queue.put(message)
+    message_queue.put(control_message)
     my_lib.footprint.update(liveness_file)
 
 
 def sleep_until_next_iter(start_time, interval_sec):
-    sleep_sec = max(interval_sec - (time.time() - start_time), 0.5)
-    logging.debug("Seep %.1f sec...", sleep_sec)
+    sleep_sec = max(interval_sec - (time.monotonic() - start_time), 0.5)
+    logger.debug("Sleep %.1f sec...", sleep_sec)
 
     # should_terminate が設定されるまで待機（最大 sleep_sec 秒）
     should_terminate = get_should_terminate()
@@ -331,7 +342,7 @@ def subscribe_worker(
     liveness_file: pathlib.Path,
     msg_count: int = 0,
 ) -> int:
-    logging.info("Start actuator subscribe worker (%s:%d)", control_host, pub_port)
+    logger.info("Start actuator subscribe worker (%s:%d)", control_host, pub_port)
     ret = 0
     try:
         unit_cooler.pubsub.subscribe.start_client(
@@ -341,11 +352,11 @@ def subscribe_worker(
             msg_count,
         )
     except Exception:
-        logging.exception("Failed to receive control message")
+        logger.exception("Failed to receive control message")
         unit_cooler.util.notify_error(config, traceback.format_exc())
         ret = -1
 
-    logging.warning("Stop subscribe worker")
+    logger.warning("Stop subscribe worker")
     return ret
 
 
@@ -358,13 +369,13 @@ def monitor_worker(
     msg_count: int = 0,
     status_pub_port: int = 0,
 ) -> int:
-    logging.info("Start monitor worker")
+    logger.info("Start monitor worker")
 
     interval_sec = config.actuator.monitor.interval_sec / speedup
     try:
         handle = unit_cooler.actuator.monitor.gen_handle(config, interval_sec)
     except Exception:
-        logging.exception("Failed to create handle")
+        logger.exception("Failed to create handle")
 
         unit_cooler.actuator.work_log.add(
             "流量のロギングを開始できません。", unit_cooler.const.LOG_LEVEL.ERROR
@@ -377,15 +388,15 @@ def monitor_worker(
         try:
             status_socket = unit_cooler.actuator.status_publisher.create_publisher("*", status_pub_port)
         except Exception:
-            logging.exception("Failed to create status publisher")
+            logger.exception("Failed to create status publisher")
 
     i = 0
     ret = 0
     try:
         while True:
-            start_time = time.time()
+            start_time = time.monotonic()
 
-            need_logging = (i % handle["log_period"]) == 0
+            need_logging = (i % handle.log_period) == 0
             i += 1
 
             mist_condition = unit_cooler.actuator.monitor.get_mist_condition()
@@ -402,7 +413,7 @@ def monitor_worker(
                     )
                     unit_cooler.actuator.status_publisher.publish_status(status_socket, status)
                 except Exception:
-                    logging.debug("Failed to publish ActuatorStatus")
+                    logger.debug("Failed to publish ActuatorStatus")
 
             my_lib.footprint.update(liveness_file)
 
@@ -412,14 +423,14 @@ def monitor_worker(
 
             terminate_event = get_should_terminate()
             if terminate_event is not None and terminate_event.is_set():
-                logging.info("Terminate monitor worker")
+                logger.info("Terminate monitor worker")
                 break
 
             if msg_count != 0:
-                logging.debug("(monitor_count, msg_count) = (%d, %d)", handle["monitor_count"], msg_count)
+                logger.debug("(monitor_count, msg_count) = (%d, %d)", handle.monitor_count, msg_count)
                 # NOTE: monitor_worker が先に終了しないようにする
-                if handle["monitor_count"] >= (msg_count + 20):
-                    logging.info(
+                if handle.monitor_count >= (msg_count + 20):
+                    logger.info(
                         "Terminate monitor worker, because the specified number of times has been reached."
                     )
                     break
@@ -434,9 +445,9 @@ def monitor_worker(
             try:
                 unit_cooler.actuator.status_publisher.close_publisher(status_socket)
             except Exception:
-                logging.debug("Failed to close status publisher")
+                logger.debug("Failed to close status publisher")
 
-    logging.warning("Stop monitor worker")
+    logger.warning("Stop monitor worker")
     return ret
 
 
@@ -449,10 +460,10 @@ def control_worker(
     speedup: int = 1,
     msg_count: int = 0,
 ) -> int:
-    logging.info("Start control worker")
+    logger.info("Start control worker")
 
     if dummy_mode:
-        logging.warning("DUMMY mode")
+        logger.warning("DUMMY mode")
 
     interval_sec = config.actuator.control.interval_sec / speedup
     handle = unit_cooler.actuator.control.gen_handle(config, message_queue)
@@ -460,7 +471,7 @@ def control_worker(
     ret = 0
     try:
         while True:
-            start_time = time.time()
+            start_time = time.monotonic()
 
             current_message = unit_cooler.actuator.control.get_control_message(
                 handle, get_last_control_message()
@@ -474,7 +485,7 @@ def control_worker(
             try:
                 collect_environmental_metrics(config, current_message)
             except Exception:
-                logging.debug("Failed to collect environmental metrics")
+                logger.debug("Failed to collect environmental metrics")
 
             my_lib.footprint.update(liveness_file)
 
@@ -484,22 +495,22 @@ def control_worker(
 
             terminate_event = get_should_terminate()
             if terminate_event is not None and terminate_event.is_set():
-                logging.info("Terminate control worker")
+                logger.info("Terminate control worker")
                 break
 
             if msg_count != 0:
-                logging.debug("(receive_count, msg_count) = (%d, %d)", handle["receive_count"], msg_count)
-                if handle["receive_count"] >= msg_count:
-                    logging.info("Terminate control, because the specified number of times has been reached.")
+                logger.debug("(receive_count, msg_count) = (%d, %d)", handle.receive_count, msg_count)
+                if handle.receive_count >= msg_count:
+                    logger.info("Terminate control, because the specified number of times has been reached.")
                     break
 
             sleep_until_next_iter(start_time, interval_sec)
     except Exception:
-        logging.exception("Failed to control valve")
+        logger.exception("Failed to control valve")
         unit_cooler.util.notify_error(config, traceback.format_exc())
         ret = -1
 
-    logging.warning("Stop control worker")
+    logger.warning("Stop control worker")
     # NOTE: Queue を close した後に put されると ValueError が発生するので、
     # 明示的に閉じるのをやめた。
     # message_queue.close()
@@ -519,7 +530,7 @@ def get_worker_def(
                 settings.control_host,
                 settings.pub_port,
                 message_queue,
-                pathlib.Path(config.actuator.subscribe.liveness.file),
+                config.actuator.subscribe.liveness.file,
                 settings.msg_count,
             ],
         },
@@ -528,7 +539,7 @@ def get_worker_def(
             "param": [
                 monitor_worker,
                 config,
-                pathlib.Path(config.actuator.monitor.liveness.file),
+                config.actuator.monitor.liveness.file,
                 settings.dummy_mode,
                 settings.speedup,
                 settings.msg_count,
@@ -541,7 +552,7 @@ def get_worker_def(
                 control_worker,
                 config,
                 message_queue,
-                pathlib.Path(config.actuator.control.liveness.file),
+                config.actuator.control.liveness.file,
                 settings.dummy_mode,
                 settings.speedup,
                 settings.msg_count,
@@ -572,7 +583,7 @@ def term() -> None:
     LifecycleManager が設定されている場合は request_termination() を呼び、
     そうでない場合はグローバルイベントを set する。
     """
-    logging.info("Terminate actuator worker")
+    logger.info("Terminate actuator worker")
     if _lifecycle_manager is not None:
         _lifecycle_manager.request_termination()
     else:
@@ -590,7 +601,7 @@ if __name__ == "__main__":
     import my_lib.webapp.config
     import my_lib.webapp.log
 
-    import unit_cooler.actuator.valve
+    import unit_cooler.actuator.valve_controller
     from unit_cooler.config import Config, RuntimeSettings
 
     assert __doc__ is not None  # noqa: S101
@@ -611,11 +622,11 @@ if __name__ == "__main__":
 
     os.environ["DUMMY_MODE"] = "true"
 
-    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())  # type: ignore[arg-type]
+    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))  # type: ignore[arg-type]
     unit_cooler.actuator.work_log.init(config, event_queue)
 
-    unit_cooler.actuator.valve.init(config.actuator.control.valve.pin_no, config)
+    unit_cooler.actuator.valve_controller.init_valve_controller(config, config.actuator.control.valve.pin_no)
     unit_cooler.actuator.monitor.init(config.actuator.control.valve.pin_no)
 
     # NOTE: テストしやすいように、threading.Thread ではなく multiprocessing.pool.ThreadPool を使う
@@ -634,12 +645,12 @@ if __name__ == "__main__":
     thread_list = start(executor, get_worker_def(config, message_queue, settings))
 
     for thread_info in thread_list:
-        logging.info("Wait %s finish", thread_info["name"])
+        logger.info("Wait %s finish", thread_info["name"])
 
         if thread_info["future"].result() != 0:
-            logging.warning("Error occurred in %s", thread_info["name"])
+            logger.warning("Error occurred in %s", thread_info["name"])
 
     unit_cooler.actuator.work_log.term()
 
-    logging.info("Shutdown executor")
+    logger.info("Shutdown executor")
     executor.shutdown()

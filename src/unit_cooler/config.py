@@ -88,11 +88,11 @@ class RuntimeSettings:
 class LivenessConfig:
     """Liveness チェック設定"""
 
-    file: str
+    file: pathlib.Path
 
     @classmethod
     def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(file=data["file"])
+        return cls(file=pathlib.Path(data["file"]))
 
 
 @dataclass(frozen=True)
@@ -484,11 +484,18 @@ class WebServerWebappConfig:
     def parse(cls, data: dict[str, Any]) -> Self:
         return cls(data=WebServerDataConfig.parse(data["data"]))
 
-    def to_webapp_config(self) -> my_lib.webapp.config.WebappConfig:
-        """my_lib.webapp.config.WebappConfig に変換"""
+    def to_webapp_config(self, base_dir: pathlib.Path | None = None) -> my_lib.webapp.config.WebappConfig:
+        """my_lib.webapp.config.WebappConfig に変換
+
+        Args:
+            base_dir: 設定ファイルの基準ディレクトリ。相対パスを解決するために使用。
+        """
+        log_path = pathlib.Path(self.data.log_file_path)
+        if base_dir and not log_path.is_absolute():
+            log_path = base_dir / log_path
         return my_lib.webapp.config.WebappConfig(
             data=my_lib.webapp.config.WebappDataConfig(
-                log_file_path=pathlib.Path(self.data.log_file_path).resolve(),
+                log_file_path=log_path.resolve(),
             ),
         )
 
@@ -508,11 +515,14 @@ class WebServerConfig:
 class MetricsConfig:
     """Metrics 設定"""
 
-    data: str
+    data: pathlib.Path
 
     @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(data=data["data"])
+    def parse(cls, data: dict[str, Any], base_dir: pathlib.Path | None = None) -> Self:
+        data_path = pathlib.Path(data["data"])
+        if base_dir and not data_path.is_absolute():
+            data_path = base_dir / data_path
+        return cls(data=data_path.resolve())
 
 
 @dataclass(frozen=True)
@@ -526,13 +536,13 @@ class ActuatorConfig:
     metrics: MetricsConfig
 
     @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
+    def parse(cls, data: dict[str, Any], base_dir: pathlib.Path | None = None) -> Self:
         return cls(
             subscribe=SubscribeConfig.parse(data["subscribe"]),
             control=ControlConfig.parse(data["control"]),
             monitor=MonitorConfig.parse(data["monitor"]),
             web_server=WebServerConfig.parse(data["web_server"]),
-            metrics=MetricsConfig.parse(data["metrics"]),
+            metrics=MetricsConfig.parse(data["metrics"], base_dir),
         )
 
 
@@ -553,10 +563,17 @@ class WebUIWebappConfig:
             port=data["port"],
         )
 
-    def to_webapp_config(self) -> my_lib.webapp.config.WebappConfig:
-        """my_lib.webapp.config.WebappConfig に変換"""
+    def to_webapp_config(self, base_dir: pathlib.Path | None = None) -> my_lib.webapp.config.WebappConfig:
+        """my_lib.webapp.config.WebappConfig に変換
+
+        Args:
+            base_dir: 設定ファイルの基準ディレクトリ。相対パスを解決するために使用。
+        """
+        static_path = pathlib.Path(self.static_dir_path)
+        if base_dir and not static_path.is_absolute():
+            static_path = base_dir / static_path
         return my_lib.webapp.config.WebappConfig(
-            static_dir_path=pathlib.Path(self.static_dir_path).resolve(),
+            static_dir_path=static_path.resolve(),
         )
 
 
@@ -589,26 +606,68 @@ class Config:
     slack: my_lib.notify.slack.HasErrorConfig | my_lib.notify.slack.SlackEmptyConfig
 
     @classmethod
+    def _parse_slack_config(
+        cls, raw_slack: dict[str, Any]
+    ) -> my_lib.notify.slack.HasErrorConfig | my_lib.notify.slack.SlackEmptyConfig:
+        """Slack 設定をパースする"""
+        if not raw_slack:
+            return my_lib.notify.slack.SlackEmptyConfig()
+
+        # 必須フィールドの確認
+        # from_name または from のどちらかが必要
+        from_name = raw_slack.get("from_name") or raw_slack.get("from")
+        if "bot_token" not in raw_slack or not from_name:
+            return my_lib.notify.slack.SlackEmptyConfig()
+
+        bot_token = raw_slack["bot_token"]
+
+        # error は必須（このプロジェクトでは）
+        if "error" not in raw_slack:
+            raise ValueError("Slack 設定には error が必要です")
+
+        error_data = raw_slack["error"]
+        error = my_lib.notify.slack.SlackErrorConfig(
+            channel=my_lib.notify.slack.SlackChannelConfig(
+                name=error_data["channel"]["name"],
+                id=error_data["channel"].get("id"),
+            ),
+            interval_min=error_data["interval_min"],
+        )
+
+        # info があるかどうかで返す型を決定
+        if "info" in raw_slack:
+            info_data = raw_slack["info"]
+            info = my_lib.notify.slack.SlackInfoConfig(
+                channel=my_lib.notify.slack.SlackChannelConfig(
+                    name=info_data["channel"]["name"],
+                    id=info_data["channel"].get("id"),
+                )
+            )
+            return my_lib.notify.slack.SlackErrorInfoConfig(
+                bot_token=bot_token,
+                from_name=from_name,
+                error=error,
+                info=info,
+            )
+        else:
+            return my_lib.notify.slack.SlackErrorOnlyConfig(
+                bot_token=bot_token,
+                from_name=from_name,
+                error=error,
+            )
+
+    @classmethod
     def load(cls, config_path: str, schema_path: str | pathlib.Path | None = None) -> Self:
         """設定ファイルを読み込んで Config を生成する"""
         raw_config = my_lib.config.load(config_path, schema_path)
 
-        slack = my_lib.notify.slack.parse_config(raw_config.get("slack", {}))
+        slack = cls._parse_slack_config(raw_config.get("slack", {}))
 
-        # このプロジェクトでは error を持つ設定、または設定なしのパターンに対応
-        if not isinstance(
-            slack,
-            my_lib.notify.slack.SlackErrorOnlyConfig
-            | my_lib.notify.slack.SlackErrorInfoConfig
-            | my_lib.notify.slack.SlackConfig
-            | my_lib.notify.slack.SlackEmptyConfig,
-        ):
-            raise ValueError("Slack 設定には error が必要です（または設定なし）")
-
+        base_dir = pathlib.Path(raw_config["base_dir"])
         return cls(
-            base_dir=pathlib.Path(raw_config["base_dir"]),
+            base_dir=base_dir,
             controller=ControllerConfig.parse(raw_config["controller"]),
-            actuator=ActuatorConfig.parse(raw_config["actuator"]),
+            actuator=ActuatorConfig.parse(raw_config["actuator"], base_dir),
             webui=WebUIConfig.parse(raw_config["webui"]),
             slack=slack,
         )

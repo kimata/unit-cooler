@@ -22,7 +22,7 @@ class TestSensorInit:
 
         unit_cooler.actuator.sensor.init(17)
 
-        assert unit_cooler.actuator.sensor.pin_no == 17
+        assert unit_cooler.actuator.sensor._pin_no == 17
 
     def test_init_creates_fd_q10c(self, monkeypatch):
         """init で FD_Q10C を作成"""
@@ -36,7 +36,7 @@ class TestSensorInit:
 
         unit_cooler.actuator.sensor.init(17)
 
-        assert unit_cooler.actuator.sensor.fd_q10c is not None
+        assert unit_cooler.actuator.sensor._sensor is not None
 
 
 class TestSensorStop:
@@ -56,7 +56,7 @@ class TestSensorStop:
         unit_cooler.actuator.sensor.stop()
 
         # stop 後は電源状態が False になる
-        assert unit_cooler.actuator.sensor.fd_q10c.get_state() is False
+        assert unit_cooler.actuator.sensor._sensor.get_state() is False  # ty: ignore[possibly-missing-attribute]
 
     def test_stop_handles_runtime_error(self, monkeypatch):
         """stop で RuntimeError をハンドリング"""
@@ -69,7 +69,7 @@ class TestSensorStop:
         importlib.reload(unit_cooler.actuator.sensor)
 
         unit_cooler.actuator.sensor.init(17)
-        unit_cooler.actuator.sensor.fd_q10c.stop = MagicMock(side_effect=RuntimeError("test"))
+        unit_cooler.actuator.sensor._sensor.stop = MagicMock(side_effect=RuntimeError("test"))  # ty: ignore[invalid-assignment]
 
         # 例外が発生しないことを確認
         unit_cooler.actuator.sensor.stop()
@@ -163,7 +163,7 @@ class TestSensorGetFlow:
         importlib.reload(unit_cooler.actuator.sensor)
 
         unit_cooler.actuator.sensor.init(17)
-        unit_cooler.actuator.sensor.fd_q10c.get_value = MagicMock(side_effect=Exception("test"))
+        unit_cooler.actuator.sensor._sensor.get_value = MagicMock(side_effect=Exception("test"))  # ty: ignore[invalid-assignment]
 
         flow = unit_cooler.actuator.sensor.get_flow()
 
@@ -231,8 +231,10 @@ class TestDummyFDQ10C:
         mock_gpio.input.return_value = 1  # OPEN
 
         unit_cooler.actuator.sensor.init(17)
-        value = unit_cooler.actuator.sensor.fd_q10c.get_value()
+        assert unit_cooler.actuator.sensor._sensor is not None
+        value = unit_cooler.actuator.sensor._sensor.get_value()
 
+        assert value is not None
         assert value >= 1.0
         assert value <= 2.5  # 1 + random(0, 1.5)
 
@@ -250,7 +252,8 @@ class TestDummyFDQ10C:
         mock_gpio.input.return_value = 0  # CLOSE
 
         unit_cooler.actuator.sensor.init(17)
-        value = unit_cooler.actuator.sensor.fd_q10c.get_value()
+        assert unit_cooler.actuator.sensor._sensor is not None
+        value = unit_cooler.actuator.sensor._sensor.get_value()  # ty: ignore[possibly-missing-attribute]
 
         assert value == 0
 
@@ -266,7 +269,8 @@ class TestDummyFDQ10C:
         importlib.reload(unit_cooler.actuator.sensor)
 
         unit_cooler.actuator.sensor.init(17)
-        worker_id = unit_cooler.actuator.sensor.fd_q10c._get_worker_id()
+        assert unit_cooler.actuator.sensor._sensor is not None
+        worker_id = unit_cooler.actuator.sensor._sensor._get_worker_id()  # ty: ignore[unresolved-attribute]
 
         assert worker_id == "gw0"
 
@@ -285,11 +289,12 @@ class TestDummyFDQ10C:
         unit_cooler.actuator.sensor.init(17)
 
         # 初期状態は True
-        assert unit_cooler.actuator.sensor.fd_q10c.get_state() is True
+        assert unit_cooler.actuator.sensor._sensor is not None
+        assert unit_cooler.actuator.sensor._sensor.get_state() is True  # ty: ignore[possibly-missing-attribute]
 
         # stop で False
-        unit_cooler.actuator.sensor.fd_q10c.stop()
-        assert unit_cooler.actuator.sensor.fd_q10c.get_state() is False
+        unit_cooler.actuator.sensor._sensor.stop()  # ty: ignore[possibly-missing-attribute]
+        assert unit_cooler.actuator.sensor._sensor.get_state() is False  # ty: ignore[possibly-missing-attribute]
 
 
 class TestSensorFlowRange:

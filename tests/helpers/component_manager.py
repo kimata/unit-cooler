@@ -38,7 +38,7 @@ class ComponentManager:
 
     def start_controller(
         self,
-        config: Config | dict[str, Any],
+        config: Config,
         server_port: int,
         real_port: int,
         **kwargs: Any,
@@ -74,7 +74,7 @@ class ComponentManager:
 
     def start_actuator(
         self,
-        config: Config | dict[str, Any],
+        config: Config,
         server_port: int,
         log_port: int,
         **kwargs: Any,
@@ -110,7 +110,7 @@ class ComponentManager:
 
     def start_webui(
         self,
-        config: Config | dict[str, Any],
+        config: Config,
         server_port: int,
         log_port: int,
         http_port: int = 5000,
@@ -305,7 +305,7 @@ class FullSystemManager(ComponentManager):
 
     def start_full_system(
         self,
-        config: Config | dict[str, Any],
+        config: Config,
         controller_port: int,
         actuator_port: int,
         log_port: int,

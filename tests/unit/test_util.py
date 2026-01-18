@@ -230,7 +230,7 @@ class TestSafeCall:
             return True
 
         safe_func = safe_call(documented_func, "Failed")
-        assert safe_func.__name__ == "documented_func"
+        assert safe_func.__name__ == "documented_func"  # ty: ignore[unresolved-attribute]
         assert safe_func.__doc__ == "This is a docstring."
 
     def test_catches_various_exceptions(self):

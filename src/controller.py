@@ -30,15 +30,17 @@ import unit_cooler.pubsub.subscribe
 import unit_cooler.util
 from unit_cooler.config import Config, RuntimeSettings
 
+logger = logging.getLogger(__name__)
+
 SCHEMA_CONFIG = "schema/config.schema"
 
 
 def test_client(server_host: str, server_port: int) -> None:
-    logging.info("Start test client (host: %s:%d)", server_host, server_port)
+    logger.info("Start test client (host: %s:%d)", server_host, server_port)
     unit_cooler.pubsub.subscribe.start_client(
         server_host,
         server_port,
-        lambda message: logging.info("receive: %s", message),
+        lambda message: logger.info("receive: %s", message),
         1,
     )
 
@@ -56,9 +58,9 @@ def cache_proxy_start(server_host, real_port, server_port, msg_count, idle_timeo
 
 def gen_control_msg(config: Config, dummy_mode: bool, speedup: int) -> dict:
     control_msg = unit_cooler.controller.engine.gen_control_msg(config, dummy_mode, speedup)
-    my_lib.footprint.update(pathlib.Path(config.controller.liveness.file))
+    my_lib.footprint.update(config.controller.liveness.file)
 
-    return control_msg
+    return control_msg.to_dict()
 
 
 def control_server_start(
@@ -81,10 +83,10 @@ def control_server_start(
 def start(
     config: Config, settings: RuntimeSettings
 ) -> tuple[threading.Thread | None, threading.Thread | None]:
-    logging.info("Start controller (port: %d", settings.server_port)
+    logger.info("Start controller (port: %d", settings.server_port)
 
     if settings.dummy_mode:
-        logging.warning("DUMMY mode")
+        logger.warning("DUMMY mode")
         os.environ["DUMMY_MODE"] = "true"
 
     proxy_thread = None
@@ -107,7 +109,7 @@ def start(
             settings.msg_count,
         )
     except Exception:
-        logging.exception("Failed to start controller")
+        logger.exception("Failed to start controller")
         unit_cooler.util.notify_error(config, traceback.format_exc())
 
     return (control_thread, proxy_thread)
@@ -119,7 +121,7 @@ def wait_and_term(control_thread, proxy_thread):
     if control_thread is not None:
         control_thread.join()
 
-    logging.warning("Terminate cooler_controller")
+    logger.warning("Terminate cooler_controller")
 
     return 0
 

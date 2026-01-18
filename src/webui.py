@@ -34,6 +34,8 @@ import flask
 import flask_cors
 import my_lib.proc_util
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from unit_cooler.config import Config, RuntimeSettings
 
@@ -52,33 +54,33 @@ def term():
     # ワーカースレッドの終了を待つ
     for thread in worker_threads:
         if thread and thread.is_alive():
-            logging.info("Waiting for worker thread to finish...")
+            logger.info("Waiting for worker thread to finish...")
             thread.join(timeout=5)
             if thread.is_alive():
-                logging.warning("Worker thread did not finish in time")
+                logger.warning("Worker thread did not finish in time")
 
     # 子プロセスを終了
     my_lib.proc_util.kill_child()
 
     # プロセス終了
-    logging.info("Graceful shutdown completed")
+    logger.info("Graceful shutdown completed")
     sys.exit(0)
 
 
 def signal_handler(signum, _frame):
     """シグナルハンドラー: CTRL-Cや終了シグナルを受け取った際の処理"""
-    logging.info("Received signal %d, shutting down gracefully...", signum)
+    logger.info("Received signal %d, shutting down gracefully...", signum)
 
     term()
 
 
 def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
-    logging.info("Using ZMQ server of %s:%d", settings.control_host, settings.pub_port)
+    logger.info("Using ZMQ server of %s:%d", settings.control_host, settings.pub_port)
 
     import my_lib.webapp.config
 
     my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
-    my_lib.webapp.config.init(config.webui.webapp.to_webapp_config())
+    my_lib.webapp.config.init(config.webui.webapp.to_webapp_config(config.base_dir))
 
     import my_lib.webapp.base
     import my_lib.webapp.proxy
@@ -98,7 +100,7 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
             settings.control_host,
             settings.pub_port,
             message_queue,
-            pathlib.Path(config.webui.subscribe.liveness.file),
+            config.webui.subscribe.liveness.file,
             settings.msg_count,
         ),
     )
@@ -123,12 +125,9 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
 
     app = flask.Flask("unit-cooler-webui")
 
-    # NOTE: アクセスログは無効にする
-    logging.getLogger("werkzeug").setLevel(logging.ERROR)
-
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         if settings.dummy_mode:
-            logging.warning("Set dummy mode")
+            logger.warning("Set dummy mode")
             # NOTE: オプションでダミーモードが指定された場合、環境変数もそれに揃えておく
             os.environ["DUMMY_MODE"] = "true"
         else:  # pragma: no cover
@@ -165,8 +164,6 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
     )
 
     my_lib.webapp.config.show_handler_list(app)
-
-    unit_cooler.webui.webapi.cooler_stat.init(api_base_url)
 
     # app.debug = True
 
@@ -214,7 +211,7 @@ if __name__ == "__main__":
         # NOTE: スクリプトの自動リロード停止したい場合は use_reloader=False にする
         app.run(host="0.0.0.0", threaded=True, use_reloader=True, port=config.webui.webapp.port)  # noqa: S104
     except KeyboardInterrupt:
-        logging.info("Received KeyboardInterrupt, shutting down...")
+        logger.info("Received KeyboardInterrupt, shutting down...")
         signal_handler(signal.SIGINT, None)
     finally:
         term()

@@ -60,6 +60,16 @@ class StatusInfo:
 
 
 @dataclass(frozen=True)
+class CoolingModeResult:
+    """冷却モード判定結果"""
+
+    cooling_mode: int
+    cooler_status: StatusInfo
+    outdoor_status: StatusInfo
+    sense_data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ControlMessage:
     """Controller から Actuator への制御メッセージ"""
 

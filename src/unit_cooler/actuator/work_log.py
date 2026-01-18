@@ -21,6 +21,8 @@ import my_lib.webapp.log
 import unit_cooler.const
 import unit_cooler.util
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from multiprocessing import Queue
 
@@ -40,20 +42,20 @@ def init(config_: Config, event_queue_: Queue[Any]) -> None:
     event_queue = event_queue_
 
 
-def term():
+def term() -> None:
     global event_queue
     my_lib.webapp.log.term()
 
 
 # NOTE: テスト用
-def hist_clear():
+def hist_clear() -> None:
     global log_hist
 
     log_hist = []
 
 
 # NOTE: テスト用
-def hist_get():
+def hist_get() -> list[str]:
     global log_hist
 
     return log_hist
@@ -96,14 +98,14 @@ if __name__ == "__main__":
     config = Config.load(config_file)
     event_queue = multiprocessing.Queue()
 
-    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config())
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config())  # type: ignore[arg-type]
+    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))
+    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))  # type: ignore[arg-type]
     init(config, event_queue)
 
     add("Test", unit_cooler.const.LOG_LEVEL.INFO)
     add("Test", unit_cooler.const.LOG_LEVEL.WARN)
     add("Test", unit_cooler.const.LOG_LEVEL.ERROR)
 
-    logging.info(my_lib.pretty.format(hist_get()))
+    logger.info(my_lib.pretty.format(hist_get()))
 
     term()

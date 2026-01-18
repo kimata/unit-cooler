@@ -12,21 +12,22 @@ import pytest
 
 import unit_cooler.actuator.control
 from unit_cooler.const import COOLING_STATE, LOG_LEVEL
+from unit_cooler.messages import ControlMessage, DutyConfig
 
 
 class TestGenHandle:
     """gen_handle のテスト"""
 
-    def test_returns_dict_with_required_keys(self, config):
-        """必要なキーを含む dict を返す"""
+    def test_returns_control_handle_with_required_attrs(self, config):
+        """必要な属性を含む ControlHandle を返す"""
         queue = multiprocessing.Queue()
 
         handle = unit_cooler.actuator.control.gen_handle(config, queue)
 
-        assert "config" in handle
-        assert "message_queue" in handle
-        assert "receive_time" in handle
-        assert "receive_count" in handle
+        assert hasattr(handle, "config")
+        assert hasattr(handle, "message_queue")
+        assert hasattr(handle, "receive_time")
+        assert hasattr(handle, "receive_count")
 
     def test_config_is_stored(self, config):
         """config が保存される"""
@@ -34,7 +35,7 @@ class TestGenHandle:
 
         handle = unit_cooler.actuator.control.gen_handle(config, queue)
 
-        assert handle["config"] == config
+        assert handle.config == config
 
     def test_queue_is_stored(self, config):
         """queue が保存される"""
@@ -42,7 +43,7 @@ class TestGenHandle:
 
         handle = unit_cooler.actuator.control.gen_handle(config, queue)
 
-        assert handle["message_queue"] == queue
+        assert handle.message_queue == queue
 
     def test_receive_count_is_zero(self, config):
         """receive_count が 0"""
@@ -50,7 +51,7 @@ class TestGenHandle:
 
         handle = unit_cooler.actuator.control.gen_handle(config, queue)
 
-        assert handle["receive_count"] == 0
+        assert handle.receive_count == 0
 
 
 class TestHazardRegister:
@@ -85,7 +86,7 @@ class TestHazardNotify:
         mocker.patch("my_lib.footprint.elapsed", return_value=31 * 60)  # 31分
         mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
         mocker.patch("my_lib.footprint.update")
-        mocker.patch("unit_cooler.actuator.valve.set_state")
+        mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
         unit_cooler.actuator.control.hazard_notify(config, "テストメッセージ")
 
@@ -99,7 +100,7 @@ class TestHazardNotify:
         mocker.patch("my_lib.footprint.elapsed", return_value=10 * 60)  # 10分
         mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
         mocker.patch("my_lib.footprint.update")
-        mocker.patch("unit_cooler.actuator.valve.set_state")
+        mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
         unit_cooler.actuator.control.hazard_notify(config, "テストメッセージ")
 
@@ -110,13 +111,16 @@ class TestHazardNotify:
         mocker.patch("my_lib.footprint.elapsed", return_value=10 * 60)
         mocker.patch("unit_cooler.actuator.work_log.add")
         mocker.patch("my_lib.footprint.update")
-        mock_set_state = mocker.patch("unit_cooler.actuator.valve.set_state")
+        mock_controller = MagicMock()
+        mocker.patch(
+            "unit_cooler.actuator.valve_controller.get_valve_controller", return_value=mock_controller
+        )
 
         unit_cooler.actuator.control.hazard_notify(config, "テストメッセージ")
 
         from unit_cooler.const import VALVE_STATE
 
-        mock_set_state.assert_called_once_with(VALVE_STATE.CLOSE)
+        mock_controller.set_state.assert_called_once_with(VALVE_STATE.CLOSE)
 
 
 class TestHazardCheck:
@@ -128,7 +132,7 @@ class TestHazardCheck:
         mocker.patch("my_lib.footprint.elapsed", return_value=31 * 60)
         mocker.patch("unit_cooler.actuator.work_log.add")
         mocker.patch("my_lib.footprint.update")
-        mocker.patch("unit_cooler.actuator.valve.set_state")
+        mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
         result = unit_cooler.actuator.control.hazard_check(config)
 
@@ -148,7 +152,7 @@ class TestHazardCheck:
         mocker.patch("my_lib.footprint.elapsed", return_value=31 * 60)
         mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
         mocker.patch("my_lib.footprint.update")
-        mocker.patch("unit_cooler.actuator.valve.set_state")
+        mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
         unit_cooler.actuator.control.hazard_check(config)
 
@@ -165,7 +169,11 @@ class TestGetControlMessage:
 
         queue = multiprocessing.Queue()
         handle = unit_cooler.actuator.control.gen_handle(config, queue)
-        last_message = {"mode_index": 3, "state": COOLING_STATE.WORKING}
+        last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
 
         result = unit_cooler.actuator.control.get_control_message(handle, last_message)
 
@@ -177,7 +185,11 @@ class TestGetControlMessage:
         mocker.patch("my_lib.time.now", return_value=now)
         mocker.patch("unit_cooler.actuator.work_log.add")
 
-        new_message = {"mode_index": 5, "state": COOLING_STATE.WORKING}
+        new_message = ControlMessage(
+            mode_index=5,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
 
         # モックキューを使用（multiprocessing.Queue.empty() は信頼性が低い）
         # empty() は2回呼ばれる: 1回目は関数冒頭のif文、2回目はwhileループ条件
@@ -187,7 +199,11 @@ class TestGetControlMessage:
 
         handle = unit_cooler.actuator.control.gen_handle(config, mock_queue)
 
-        last_message = {"mode_index": 3, "state": COOLING_STATE.WORKING}
+        last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
         result = unit_cooler.actuator.control.get_control_message(handle, last_message)
 
         assert result == new_message
@@ -198,7 +214,11 @@ class TestGetControlMessage:
         mocker.patch("my_lib.time.now", return_value=now)
         mocker.patch("unit_cooler.actuator.work_log.add")
 
-        new_message = {"mode_index": 5, "state": COOLING_STATE.WORKING}
+        new_message = ControlMessage(
+            mode_index=5,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
 
         # モックキューを使用
         # empty() は2回呼ばれる: 1回目は関数冒頭のif文、2回目はwhileループ条件
@@ -207,13 +227,17 @@ class TestGetControlMessage:
         mock_queue.get.return_value = new_message
 
         handle = unit_cooler.actuator.control.gen_handle(config, mock_queue)
-        initial_count = handle["receive_count"]
+        initial_count = handle.receive_count
 
-        last_message = {"mode_index": 3, "state": COOLING_STATE.WORKING}
+        last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
         unit_cooler.actuator.control.get_control_message(handle, last_message)
 
-        assert handle["receive_count"] == initial_count + 1
-        assert handle["receive_time"] == now
+        assert handle.receive_count == initial_count + 1
+        assert handle.receive_time == now
 
     def test_logs_mode_change(self, config, mocker):
         """モード変更をログ"""
@@ -221,7 +245,11 @@ class TestGetControlMessage:
         mocker.patch("my_lib.time.now", return_value=now)
         mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
 
-        new_message = {"mode_index": 5, "state": COOLING_STATE.WORKING}
+        new_message = ControlMessage(
+            mode_index=5,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
 
         # モックキューを使用
         # empty() は2回呼ばれる: 1回目は関数冒頭のif文、2回目はwhileループ条件
@@ -231,7 +259,11 @@ class TestGetControlMessage:
 
         handle = unit_cooler.actuator.control.gen_handle(config, mock_queue)
 
-        last_message = {"mode_index": 3, "state": COOLING_STATE.WORKING}
+        last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
         unit_cooler.actuator.control.get_control_message(handle, last_message)
 
         mock_add.assert_called()
@@ -244,7 +276,11 @@ class TestGetControlMessage:
         mocker.patch("my_lib.time.now", return_value=datetime.datetime.now())
         mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
 
-        new_message = {"mode_index": 3, "state": COOLING_STATE.WORKING}
+        new_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
 
         # モックキューを使用
         # empty() は2回呼ばれる: 1回目は関数冒頭のif文、2回目はwhileループ条件
@@ -254,7 +290,11 @@ class TestGetControlMessage:
 
         handle = unit_cooler.actuator.control.gen_handle(config, mock_queue)
 
-        last_message = {"mode_index": -1, "state": COOLING_STATE.IDLE}
+        last_message = ControlMessage(
+            mode_index=-1,
+            state=COOLING_STATE.IDLE,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
         unit_cooler.actuator.control.get_control_message(handle, last_message)
 
         mock_add.assert_called()
@@ -269,16 +309,19 @@ class TestExecute:
         """set_cooling_state を呼ぶ"""
         mocker.patch("my_lib.footprint.exists", return_value=False)  # hazard なし
         mocker.patch("unit_cooler.metrics.get_metrics_collector", return_value=MagicMock())
-        mock_set_state = mocker.patch("unit_cooler.actuator.valve.set_cooling_state")
+        mock_controller = MagicMock()
+        mocker.patch(
+            "unit_cooler.actuator.valve_controller.get_valve_controller", return_value=mock_controller
+        )
 
-        control_message = {
-            "mode_index": 3,
-            "state": COOLING_STATE.WORKING,
-            "duty": {"enable": True, "on_sec": 100, "off_sec": 60},
-        }
+        control_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
+        )
         unit_cooler.actuator.control.execute(config, control_message)
 
-        mock_set_state.assert_called_once_with(control_message)
+        mock_controller.set_cooling_state.assert_called_once_with(control_message)
 
     def test_overrides_to_idle_when_hazard(self, config, mocker):
         """hazard 時に IDLE に上書き"""
@@ -287,20 +330,22 @@ class TestExecute:
         mocker.patch("unit_cooler.actuator.work_log.add")
         mocker.patch("my_lib.footprint.update")
         mocker.patch("unit_cooler.metrics.get_metrics_collector", return_value=MagicMock())
-        mock_set_state = mocker.patch("unit_cooler.actuator.valve.set_cooling_state")
-        mocker.patch("unit_cooler.actuator.valve.set_state")
+        mock_controller = MagicMock()
+        mocker.patch(
+            "unit_cooler.actuator.valve_controller.get_valve_controller", return_value=mock_controller
+        )
 
-        control_message = {
-            "mode_index": 3,
-            "state": COOLING_STATE.WORKING,
-            "duty": {"enable": True, "on_sec": 100, "off_sec": 60},
-        }
+        control_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
+        )
         unit_cooler.actuator.control.execute(config, control_message)
 
         # IDLE に上書きされることを確認
-        call_args = mock_set_state.call_args[0][0]
-        assert call_args["mode_index"] == 0
-        assert call_args["state"] == COOLING_STATE.IDLE
+        call_args = mock_controller.set_cooling_state.call_args[0][0]
+        assert call_args.mode_index == 0
+        assert call_args.state == COOLING_STATE.IDLE
 
     def test_collects_metrics(self, config, mocker):
         """メトリクスを収集"""
@@ -308,13 +353,13 @@ class TestExecute:
         mock_collector = MagicMock()
         # 関数が直接インポートされているので、使用場所でパッチ
         mocker.patch("unit_cooler.actuator.control.get_metrics_collector", return_value=mock_collector)
-        mocker.patch("unit_cooler.actuator.valve.set_cooling_state")
+        mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
-        control_message = {
-            "mode_index": 5,
-            "state": COOLING_STATE.WORKING,
-            "duty": {"enable": True, "on_sec": 100, "off_sec": 60},
-        }
+        control_message = ControlMessage(
+            mode_index=5,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
+        )
         unit_cooler.actuator.control.execute(config, control_message)
 
         mock_collector.update_cooling_mode.assert_called_once_with(5)
@@ -324,16 +369,20 @@ class TestExecute:
         """メトリクス例外をハンドリング"""
         mocker.patch("my_lib.footprint.exists", return_value=False)
         mocker.patch("unit_cooler.actuator.control.get_metrics_collector", side_effect=Exception("test"))
-        mock_set_state = mocker.patch("unit_cooler.actuator.valve.set_cooling_state")
+        mock_controller = MagicMock()
+        mocker.patch(
+            "unit_cooler.actuator.valve_controller.get_valve_controller", return_value=mock_controller
+        )
 
-        control_message = {
-            "mode_index": 3,
-            "state": COOLING_STATE.WORKING,
-        }
+        control_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
         # 例外が発生しても set_cooling_state は呼ばれる
         unit_cooler.actuator.control.execute(config, control_message)
 
-        mock_set_state.assert_called_once()
+        mock_controller.set_cooling_state.assert_called_once()
 
 
 class TestHazardNotifyInterval:
@@ -357,7 +406,7 @@ class TestHazardNotifyInterval:
         mocker.patch("my_lib.footprint.elapsed", return_value=elapsed_min * 60)
         mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
         mocker.patch("my_lib.footprint.update")
-        mocker.patch("unit_cooler.actuator.valve.set_state")
+        mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
         unit_cooler.actuator.control.hazard_notify(config, "テスト")
 

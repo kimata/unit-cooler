@@ -7,7 +7,7 @@ from __future__ import annotations
 import threading
 
 from unit_cooler.const import COOLING_STATE, VALVE_STATE
-from unit_cooler.messages import DutyConfig, ValveStatus
+from unit_cooler.messages import ControlMessage, DutyConfig, ValveStatus
 
 
 def create_footprint_mock(mocker):
@@ -241,23 +241,6 @@ class TestValveControllerGetStatus:
         assert status.state == VALVE_STATE.CLOSE
         assert status.duration_sec == 15.0
 
-    def test_get_status_dict(self, config, mocker):
-        """dict 形式でステータス取得"""
-        mock_gpio = mocker.patch("my_lib.rpi.gpio")
-        mock_gpio.input.return_value = 0
-        fp_mock = create_footprint_mock(mocker)
-        fp_mock["elapsed"].return_value = 20.0
-
-        from unit_cooler.actuator.valve_controller import ValveController
-
-        controller = ValveController(config=config, pin_no=17)
-        status_dict = controller.get_status_dict()
-
-        assert "state" in status_dict
-        assert "duration" in status_dict
-        assert status_dict["state"] == VALVE_STATE.CLOSE
-        assert status_dict["duration"] == 20.0
-
 
 class TestValveControllerSetCoolingWorking:
     """set_cooling_working のテスト"""
@@ -273,7 +256,7 @@ class TestValveControllerSetCoolingWorking:
         from unit_cooler.actuator.valve_controller import ValveController
 
         controller = ValveController(config=config, pin_no=17)
-        duty = {"enable": True, "on_sec": 100, "off_sec": 60}
+        duty = DutyConfig(enable=True, on_sec=100, off_sec=60)
         controller.set_cooling_working(duty)
 
         # OPEN で output が呼ばれたことを確認
@@ -484,10 +467,11 @@ class TestValveControllerSetCoolingState:
         from unit_cooler.actuator.valve_controller import ValveController
 
         controller = ValveController(config=config, pin_no=17)
-        control_message = {
-            "state": COOLING_STATE.WORKING,
-            "duty": {"enable": True, "on_sec": 100, "off_sec": 60},
-        }
+        control_message = ControlMessage(
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
+            mode_index=0,
+        )
         status = controller.set_cooling_state(control_message)
 
         assert isinstance(status, ValveStatus)
@@ -502,9 +486,11 @@ class TestValveControllerSetCoolingState:
         from unit_cooler.actuator.valve_controller import ValveController
 
         controller = ValveController(config=config, pin_no=17)
-        control_message = {
-            "state": COOLING_STATE.IDLE,
-        }
+        control_message = ControlMessage(
+            state=COOLING_STATE.IDLE,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+            mode_index=0,
+        )
         status = controller.set_cooling_state(control_message)
 
         assert status.state == VALVE_STATE.CLOSE

@@ -5,14 +5,16 @@ ActuatorStatus を ZeroMQ で配信する機能を提供します。
 
 from __future__ import annotations
 
-import datetime
 import json
 import logging
-from typing import Any
 
+import my_lib.time
 import zmq
 
-from unit_cooler.messages import ActuatorStatus, ValveStatus
+from unit_cooler.actuator.monitor import MistCondition
+from unit_cooler.messages import ActuatorStatus, ControlMessage
+
+logger = logging.getLogger(__name__)
 
 
 def create_publisher(host: str, port: int) -> zmq.Socket:
@@ -28,38 +30,30 @@ def create_publisher(host: str, port: int) -> zmq.Socket:
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
     socket.bind(f"tcp://{host}:{port}")
-    logging.info("ActuatorStatus publisher bound to %s:%d", host, port)
+    logger.info("ActuatorStatus publisher bound to %s:%d", host, port)
     return socket
 
 
 def create_status(
-    mist_condition: dict[str, Any],
-    control_message: dict[str, Any] | None,
+    mist_condition: MistCondition,
+    control_message: ControlMessage,
     hazard_detected: bool = False,
 ) -> ActuatorStatus:
     """ActuatorStatus を作成する
 
     Args:
-        mist_condition: ミスト状態 (valve, flow を含む dict)
-        control_message: 制御メッセージ (mode_index を含む dict)
+        mist_condition: ミスト状態
+        control_message: 制御メッセージ
         hazard_detected: ハザード検出フラグ
 
     Returns:
         ActuatorStatus インスタンス
     """
-    valve_data = mist_condition["valve"]
-
-    # ValveStatus を作成
-    valve_status = ValveStatus(
-        state=valve_data["state"],
-        duration_sec=valve_data["duration"],
-    )
-
     return ActuatorStatus(
-        timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
-        valve=valve_status,
-        flow_lpm=mist_condition["flow"],
-        cooling_mode_index=control_message["mode_index"] if control_message else 0,
+        timestamp=my_lib.time.now().isoformat(),
+        valve=mist_condition.valve,
+        flow_lpm=mist_condition.flow,
+        cooling_mode_index=control_message.mode_index,
         hazard_detected=hazard_detected,
     )
 
@@ -94,6 +88,6 @@ def close_publisher(socket: zmq.Socket) -> None:
     """
     try:
         socket.close()
-        logging.info("ActuatorStatus publisher closed")
+        logger.info("ActuatorStatus publisher closed")
     except Exception:
         logging.exception("Failed to close publisher")

@@ -12,16 +12,72 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+from __future__ import annotations
+
 import logging
 import pathlib
+from typing import TYPE_CHECKING
 
 import my_lib.healthz
-from my_lib.healthz import HealthzTarget
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from unit_cooler.config import Config
 
 SCHEMA_CONFIG = "schema/config.schema"
 
 
-def check_liveness(target_list: list[HealthzTarget], port: int | None = None) -> bool:
+def get_liveness_targets(config: Config, mode: str) -> list[my_lib.healthz.HealthzTarget]:
+    """モードに応じた Liveness チェック対象を取得する
+
+    Args:
+        config: アプリケーション設定
+        mode: 動作モード（CTRL, WEB, ACT）
+
+    Returns:
+        HealthzTarget のリスト
+    """
+    # コントローラーのデフォルト interval を取得
+    default_interval = config.controller.interval_sec
+
+    if mode == "CTRL":
+        return [
+            my_lib.healthz.HealthzTarget(
+                name="controller",
+                liveness_file=config.controller.liveness.file,
+                interval=config.controller.interval_sec,
+            )
+        ]
+    elif mode == "WEB":
+        return [
+            my_lib.healthz.HealthzTarget(
+                name="webui - subscribe",
+                liveness_file=config.webui.subscribe.liveness.file,
+                interval=default_interval,
+            )
+        ]
+    else:  # ACT
+        return [
+            my_lib.healthz.HealthzTarget(
+                name="actuator - subscribe",
+                liveness_file=config.actuator.subscribe.liveness.file,
+                interval=default_interval,
+            ),
+            my_lib.healthz.HealthzTarget(
+                name="actuator - control",
+                liveness_file=config.actuator.control.liveness.file,
+                interval=config.actuator.control.interval_sec,
+            ),
+            my_lib.healthz.HealthzTarget(
+                name="actuator - monitor",
+                liveness_file=config.actuator.monitor.liveness.file,
+                interval=config.actuator.monitor.interval_sec,
+            ),
+        ]
+
+
+def check_liveness(target_list: list[my_lib.healthz.HealthzTarget], port: int | None = None) -> bool:
     failed = my_lib.healthz.check_liveness_all(target_list)
     if failed:
         return False
@@ -36,9 +92,10 @@ if __name__ == "__main__":
     import sys
 
     import docopt
-    import my_lib.config
     import my_lib.logger
     import my_lib.pretty
+
+    from unit_cooler.config import Config
 
     assert __doc__ is not None  # noqa: S101
     args = docopt.docopt(__doc__)
@@ -50,35 +107,18 @@ if __name__ == "__main__":
 
     my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
 
-    config = my_lib.config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
+    config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
 
-    logging.info("Mode: %s", mode)
-    if mode == "CTRL":
-        conf_list = [["controller"]]
-        port = None
-    elif mode == "WEB":
-        conf_list = [["webui", "subscribe"]]
-    else:
-        conf_list = [["actuator", "subscribe"], ["actuator", "control"], ["actuator", "monitor"]]
+    logger.info("Mode: %s", mode)
+    if mode == "CTRL" or mode == "ACT":
         port = None
 
-    target_list = [
-        HealthzTarget(
-            name=" - ".join(conf_path),
-            liveness_file=my_lib.config.get_path(config, conf_path, ["liveness", "file"]),
-            interval=(
-                lambda x: x
-                if x is not None
-                else my_lib.config.get_data(config, ["controller"], ["interval_sec"])
-            )(my_lib.config.get_data(config, conf_path, ["interval_sec"])),
-        )
-        for conf_path in conf_list
-    ]
+    target_list = get_liveness_targets(config, mode)
 
-    logging.debug(my_lib.pretty.format(target_list))
+    logger.debug(my_lib.pretty.format(target_list))
 
     if check_liveness(target_list, port):
-        logging.info("OK.")
+        logger.info("OK.")
         sys.exit(0)
     else:
         sys.exit(-1)
