@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""設定ファイルの型定義"""
+"""設定ファイルの型定義
+
+dacite を使用して YAML → dataclass 変換を行う。
+YAML スキーマで型制約を検証済みのため、assert で型チェックを行う。
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ import pathlib
 from dataclasses import dataclass
 from typing import Any, Self
 
+import dacite
 import my_lib.config
 import my_lib.notify.slack
 import my_lib.webapp.config
@@ -90,10 +95,6 @@ class LivenessConfig:
 
     file: pathlib.Path
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(file=pathlib.Path(data["file"]))
-
 
 @dataclass(frozen=True)
 class SensorItemConfig:
@@ -102,14 +103,6 @@ class SensorItemConfig:
     name: str
     measure: str
     hostname: str
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            name=data["name"],
-            measure=data["measure"],
-            hostname=data["hostname"],
-        )
 
 
 # =============================================================================
@@ -123,15 +116,6 @@ class InfluxDBConfig:
     token: str
     org: str
     bucket: str
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            url=data["url"],
-            token=data["token"],
-            org=data["org"],
-            bucket=data["bucket"],
-        )
 
     def to_dict(self) -> dict[str, str]:
         """dict 形式に変換する（my_lib.sensor_data との互換性のため）"""
@@ -154,17 +138,6 @@ class SensorConfig:
     rain: list[SensorItemConfig]
     power: list[SensorItemConfig]
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            temp=[SensorItemConfig.parse(item) for item in data["temp"]],
-            humi=[SensorItemConfig.parse(item) for item in data["humi"]],
-            lux=[SensorItemConfig.parse(item) for item in data["lux"]],
-            solar_rad=[SensorItemConfig.parse(item) for item in data["solar_rad"]],
-            rain=[SensorItemConfig.parse(item) for item in data["rain"]],
-            power=[SensorItemConfig.parse(item) for item in data["power"]],
-        )
-
 
 @dataclass(frozen=True)
 class WateringConfig:
@@ -173,14 +146,6 @@ class WateringConfig:
     measure: str
     hostname: str
     unit_price: float
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            measure=data["measure"],
-            hostname=data["hostname"],
-            unit_price=data["unit_price"],
-        )
 
 
 @dataclass(frozen=True)
@@ -215,24 +180,6 @@ class DecisionThresholdsConfig:
     power_full: int
 
     @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            lux=data["lux"],
-            solar_rad_low=data["solar_rad_low"],
-            solar_rad_high=data["solar_rad_high"],
-            solar_rad_daytime=data["solar_rad_daytime"],
-            humi_max=data["humi_max"],
-            temp_high_h=data["temp_high_h"],
-            temp_high_l=data["temp_high_l"],
-            temp_mid=data["temp_mid"],
-            temp_cooling=data["temp_cooling"],
-            rain_max=data["rain_max"],
-            power_work=data["power_work"],
-            power_normal=data["power_normal"],
-            power_full=data["power_full"],
-        )
-
-    @classmethod
     def default(cls) -> Self:
         """デフォルト値を返す（既存動作との互換性のため）"""
         return cls(
@@ -259,10 +206,6 @@ class DecisionConfig:
     thresholds: DecisionThresholdsConfig
 
     @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(thresholds=DecisionThresholdsConfig.parse(data["thresholds"]))
-
-    @classmethod
     def default(cls) -> Self:
         """デフォルト値を返す（既存動作との互換性のため）"""
         return cls(thresholds=DecisionThresholdsConfig.default())
@@ -279,20 +222,6 @@ class ControllerConfig:
     interval_sec: int
     liveness: LivenessConfig
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        # decision は省略可能（後方互換性のため）
-        decision = DecisionConfig.parse(data["decision"]) if "decision" in data else DecisionConfig.default()
-
-        return cls(
-            influxdb=InfluxDBConfig.parse(data["influxdb"]),
-            sensor=SensorConfig.parse(data["sensor"]),
-            watering=WateringConfig.parse(data["watering"]),
-            decision=decision,
-            interval_sec=data["interval_sec"],
-            liveness=LivenessConfig.parse(data["liveness"]),
-        )
-
 
 # =============================================================================
 # Actuator 設定
@@ -303,10 +232,6 @@ class SubscribeConfig:
 
     liveness: LivenessConfig
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(liveness=LivenessConfig.parse(data["liveness"]))
-
 
 @dataclass(frozen=True)
 class ValveOnConfig:
@@ -315,20 +240,12 @@ class ValveOnConfig:
     min: float
     max: float
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(min=data["min"], max=data["max"])
-
 
 @dataclass(frozen=True)
 class ValveOffConfig:
     """バルブ OFF 時設定"""
 
     max: float
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(max=data["max"])
 
 
 @dataclass(frozen=True)
@@ -340,25 +257,12 @@ class ValveConfig:
     off: ValveOffConfig
     power_off_sec: int
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            pin_no=data["pin_no"],
-            on=ValveOnConfig.parse(data["on"]),
-            off=ValveOffConfig.parse(data["off"]),
-            power_off_sec=data["power_off_sec"],
-        )
-
 
 @dataclass(frozen=True)
 class HazardConfig:
     """ハザード設定"""
 
     file: str
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(file=data["file"])
 
 
 @dataclass(frozen=True)
@@ -370,15 +274,6 @@ class ControlConfig:
     hazard: HazardConfig
     liveness: LivenessConfig
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            valve=ValveConfig.parse(data["valve"]),
-            interval_sec=data["interval_sec"],
-            hazard=HazardConfig.parse(data["hazard"]),
-            liveness=LivenessConfig.parse(data["liveness"]),
-        )
-
 
 @dataclass(frozen=True)
 class FlowOnConfig:
@@ -387,20 +282,12 @@ class FlowOnConfig:
     min: float
     max: list[float]
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(min=data["min"], max=data["max"])
-
 
 @dataclass(frozen=True)
 class FlowOffConfig:
     """Flow OFF 時設定"""
 
     max: float
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(max=data["max"])
 
 
 @dataclass(frozen=True)
@@ -411,14 +298,6 @@ class FlowConfig:
     off: FlowOffConfig
     power_off_sec: int
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            on=FlowOnConfig.parse(data["on"]),
-            off=FlowOffConfig.parse(data["off"]),
-            power_off_sec=data["power_off_sec"],
-        )
-
 
 @dataclass(frozen=True)
 class FluentConfig:
@@ -426,20 +305,12 @@ class FluentConfig:
 
     host: str
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(host=data["host"])
-
 
 @dataclass(frozen=True)
 class SenseConfig:
     """Sense 設定"""
 
     giveup: int
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(giveup=data["giveup"])
 
 
 @dataclass(frozen=True)
@@ -452,16 +323,6 @@ class MonitorConfig:
     interval_sec: int
     liveness: LivenessConfig
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            flow=FlowConfig.parse(data["flow"]),
-            fluent=FluentConfig.parse(data["fluent"]),
-            sense=SenseConfig.parse(data["sense"]),
-            interval_sec=data["interval_sec"],
-            liveness=LivenessConfig.parse(data["liveness"]),
-        )
-
 
 @dataclass(frozen=True)
 class WebServerDataConfig:
@@ -469,20 +330,12 @@ class WebServerDataConfig:
 
     log_file_path: str
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(log_file_path=data["log_file_path"])
-
 
 @dataclass(frozen=True)
 class WebServerWebappConfig:
     """Web サーバー webapp 設定"""
 
     data: WebServerDataConfig
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(data=WebServerDataConfig.parse(data["data"]))
 
     def to_webapp_config(self, base_dir: pathlib.Path | None = None) -> my_lib.webapp.config.WebappConfig:
         """my_lib.webapp.config.WebappConfig に変換
@@ -506,23 +359,12 @@ class WebServerConfig:
 
     webapp: WebServerWebappConfig
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(webapp=WebServerWebappConfig.parse(data["webapp"]))
-
 
 @dataclass(frozen=True)
 class MetricsConfig:
     """Metrics 設定"""
 
     data: pathlib.Path
-
-    @classmethod
-    def parse(cls, data: dict[str, Any], base_dir: pathlib.Path | None = None) -> Self:
-        data_path = pathlib.Path(data["data"])
-        if base_dir and not data_path.is_absolute():
-            data_path = base_dir / data_path
-        return cls(data=data_path.resolve())
 
 
 @dataclass(frozen=True)
@@ -535,16 +377,6 @@ class ActuatorConfig:
     web_server: WebServerConfig
     metrics: MetricsConfig
 
-    @classmethod
-    def parse(cls, data: dict[str, Any], base_dir: pathlib.Path | None = None) -> Self:
-        return cls(
-            subscribe=SubscribeConfig.parse(data["subscribe"]),
-            control=ControlConfig.parse(data["control"]),
-            monitor=MonitorConfig.parse(data["monitor"]),
-            web_server=WebServerConfig.parse(data["web_server"]),
-            metrics=MetricsConfig.parse(data["metrics"], base_dir),
-        )
-
 
 # =============================================================================
 # WebUI 設定
@@ -555,13 +387,6 @@ class WebUIWebappConfig:
 
     static_dir_path: str
     port: int
-
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            static_dir_path=data["static_dir_path"],
-            port=data["port"],
-        )
 
     def to_webapp_config(self, base_dir: pathlib.Path | None = None) -> my_lib.webapp.config.WebappConfig:
         """my_lib.webapp.config.WebappConfig に変換
@@ -584,13 +409,6 @@ class WebUIConfig:
     webapp: WebUIWebappConfig
     subscribe: SubscribeConfig
 
-    @classmethod
-    def parse(cls, data: dict[str, Any]) -> Self:
-        return cls(
-            webapp=WebUIWebappConfig.parse(data["webapp"]),
-            subscribe=SubscribeConfig.parse(data["subscribe"]),
-        )
-
 
 # =============================================================================
 # アプリケーション設定
@@ -603,71 +421,76 @@ class Config:
     controller: ControllerConfig
     actuator: ActuatorConfig
     webui: WebUIConfig
+    # このプロジェクトでは error 通知のみ使用（captcha は使わない）
     slack: my_lib.notify.slack.HasErrorConfig | my_lib.notify.slack.SlackEmptyConfig
 
     @classmethod
-    def _parse_slack_config(
-        cls, raw_slack: dict[str, Any]
-    ) -> my_lib.notify.slack.HasErrorConfig | my_lib.notify.slack.SlackEmptyConfig:
-        """Slack 設定をパースする"""
-        if not raw_slack:
-            return my_lib.notify.slack.SlackEmptyConfig()
-
-        # 必須フィールドの確認
-        # from_name または from のどちらかが必要
-        from_name = raw_slack.get("from_name") or raw_slack.get("from")
-        if "bot_token" not in raw_slack or not from_name:
-            return my_lib.notify.slack.SlackEmptyConfig()
-
-        bot_token = raw_slack["bot_token"]
-
-        # error は必須（このプロジェクトでは）
-        if "error" not in raw_slack:
-            raise ValueError("Slack 設定には error が必要です")
-
-        error_data = raw_slack["error"]
-        error = my_lib.notify.slack.SlackErrorConfig(
-            channel=my_lib.notify.slack.SlackChannelConfig(
-                name=error_data["channel"]["name"],
-                id=error_data["channel"].get("id"),
-            ),
-            interval_min=error_data["interval_min"],
-        )
-
-        # info があるかどうかで返す型を決定
-        if "info" in raw_slack:
-            info_data = raw_slack["info"]
-            info = my_lib.notify.slack.SlackInfoConfig(
-                channel=my_lib.notify.slack.SlackChannelConfig(
-                    name=info_data["channel"]["name"],
-                    id=info_data["channel"].get("id"),
-                )
-            )
-            return my_lib.notify.slack.SlackErrorInfoConfig(
-                bot_token=bot_token,
-                from_name=from_name,
-                error=error,
-                info=info,
-            )
-        else:
-            return my_lib.notify.slack.SlackErrorOnlyConfig(
-                bot_token=bot_token,
-                from_name=from_name,
-                error=error,
-            )
-
-    @classmethod
     def load(cls, config_path: str, schema_path: str | pathlib.Path | None = None) -> Self:
-        """設定ファイルを読み込んで Config を生成する"""
+        """設定ファイルを読み込んで Config を生成する
+
+        YAML スキーマでバリデーション済みのため、型は保証されている。
+        dacite を使用して dict → dataclass 変換を行う。
+        """
         raw_config = my_lib.config.load(config_path, schema_path)
 
-        slack = cls._parse_slack_config(raw_config.get("slack", {}))
+        # スキーマでバリデーション済みなので、必須フィールドは存在する
+        assert "base_dir" in raw_config  # noqa: S101
+        assert "controller" in raw_config  # noqa: S101
+        assert "actuator" in raw_config  # noqa: S101
+        assert "webui" in raw_config  # noqa: S101
 
         base_dir = pathlib.Path(raw_config["base_dir"])
+
+        # Slack 設定は my_lib.notify.slack.SlackConfig.parse() で処理
+        # このプロジェクトでは error 通知のみ使用するので、
+        # SlackCaptchaOnlyConfig は SlackEmptyConfig として扱う
+        slack_parsed = my_lib.notify.slack.SlackConfig.parse(raw_config.get("slack", {}))
+        if isinstance(slack_parsed, my_lib.notify.slack.SlackCaptchaOnlyConfig):
+            slack: my_lib.notify.slack.HasErrorConfig | my_lib.notify.slack.SlackEmptyConfig = (
+                my_lib.notify.slack.SlackEmptyConfig()
+            )
+        else:
+            # SlackConfig, SlackErrorInfoConfig, SlackErrorOnlyConfig, SlackEmptyConfig
+            # これらは全て HasErrorConfig | SlackEmptyConfig を満たす
+            slack = slack_parsed  # type: ignore[assignment]
+
+        # decision がない場合のデフォルト値を設定
+        controller_data = dict(raw_config["controller"])
+        if "decision" not in controller_data:
+            controller_data["decision"] = dataclasses.asdict(DecisionConfig.default())
+
+        # actuator.metrics.data の相対パスを解決
+        actuator_data = _resolve_relative_paths(raw_config["actuator"], base_dir)
+
+        # dacite の設定
+        dacite_config = dacite.Config(
+            type_hooks={
+                pathlib.Path: pathlib.Path,
+            },
+            cast=[pathlib.Path],
+            strict=False,
+        )
+
         return cls(
             base_dir=base_dir,
-            controller=ControllerConfig.parse(raw_config["controller"]),
-            actuator=ActuatorConfig.parse(raw_config["actuator"], base_dir),
-            webui=WebUIConfig.parse(raw_config["webui"]),
+            controller=dacite.from_dict(ControllerConfig, controller_data, dacite_config),
+            actuator=dacite.from_dict(ActuatorConfig, actuator_data, dacite_config),
+            webui=dacite.from_dict(WebUIConfig, raw_config["webui"], dacite_config),
             slack=slack,
         )
+
+
+def _resolve_relative_paths(actuator_data: dict[str, Any], base_dir: pathlib.Path) -> dict[str, Any]:
+    """Actuator 設定の相対パスを解決する"""
+    result = dict(actuator_data)
+
+    # metrics.data の相対パスを解決
+    if "metrics" in result:
+        metrics = dict(result["metrics"])
+        data_path = pathlib.Path(metrics["data"])
+        if not data_path.is_absolute():
+            data_path = base_dir / data_path
+        metrics["data"] = str(data_path.resolve())
+        result["metrics"] = metrics
+
+    return result

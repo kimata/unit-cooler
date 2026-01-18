@@ -4,6 +4,7 @@
 
 import pathlib
 
+import dacite
 import pytest
 
 from unit_cooler.config import (
@@ -24,14 +25,21 @@ from unit_cooler.config import (
     WebUIWebappConfig,
 )
 
+# dacite 設定
+DACITE_CONFIG = dacite.Config(
+    type_hooks={pathlib.Path: pathlib.Path},
+    cast=[pathlib.Path],
+    strict=False,
+)
+
 
 class TestLivenessConfig:
     """LivenessConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {"file": "/tmp/liveness.txt"}
-        config = LivenessConfig.parse(data)
+        config = dacite.from_dict(LivenessConfig, data, DACITE_CONFIG)
         assert config.file == pathlib.Path("/tmp/liveness.txt")
 
     def test_frozen(self):
@@ -46,14 +54,14 @@ class TestLivenessConfig:
 class TestSensorItemConfig:
     """SensorItemConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "name": "outdoor_temp",
             "measure": "sensor.esp32",
             "hostname": "esp32-sensor",
         }
-        config = SensorItemConfig.parse(data)
+        config = dacite.from_dict(SensorItemConfig, data, DACITE_CONFIG)
         assert config.name == "outdoor_temp"
         assert config.measure == "sensor.esp32"
         assert config.hostname == "esp32-sensor"
@@ -62,15 +70,15 @@ class TestSensorItemConfig:
 class TestInfluxDBConfig:
     """InfluxDBConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "url": "http://localhost:8086",
             "token": "test-token",
             "org": "test-org",
             "bucket": "test-bucket",
         }
-        config = InfluxDBConfig.parse(data)
+        config = dacite.from_dict(InfluxDBConfig, data, DACITE_CONFIG)
         assert config.url == "http://localhost:8086"
         assert config.token == "test-token"
         assert config.org == "test-org"
@@ -96,8 +104,8 @@ class TestInfluxDBConfig:
 class TestSensorConfig:
     """SensorConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "temp": [{"name": "temp1", "measure": "m1", "hostname": "h1"}],
             "humi": [{"name": "humi1", "measure": "m2", "hostname": "h2"}],
@@ -106,7 +114,7 @@ class TestSensorConfig:
             "rain": [{"name": "rain1", "measure": "m5", "hostname": "h5"}],
             "power": [{"name": "power1", "measure": "m6", "hostname": "h6"}],
         }
-        config = SensorConfig.parse(data)
+        config = dacite.from_dict(SensorConfig, data, DACITE_CONFIG)
         assert len(config.temp) == 1
         assert config.temp[0].name == "temp1"
         assert len(config.power) == 1
@@ -115,14 +123,14 @@ class TestSensorConfig:
 class TestWateringConfig:
     """WateringConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "measure": "rasp.cooler",
             "hostname": "rasp-cooler",
             "unit_price": 0.24,
         }
-        config = WateringConfig.parse(data)
+        config = dacite.from_dict(WateringConfig, data, DACITE_CONFIG)
         assert config.measure == "rasp.cooler"
         assert config.hostname == "rasp-cooler"
         assert config.unit_price == 0.24
@@ -131,8 +139,8 @@ class TestWateringConfig:
 class TestDecisionThresholdsConfig:
     """DecisionThresholdsConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "lux": 300,
             "solar_rad_low": 200,
@@ -148,7 +156,7 @@ class TestDecisionThresholdsConfig:
             "power_normal": 500,
             "power_full": 900,
         }
-        config = DecisionThresholdsConfig.parse(data)
+        config = dacite.from_dict(DecisionThresholdsConfig, data, DACITE_CONFIG)
         assert config.lux == 300
         assert config.humi_max == 96
         assert config.rain_max == 0.01
@@ -165,8 +173,8 @@ class TestDecisionThresholdsConfig:
 class TestDecisionConfig:
     """DecisionConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "thresholds": {
                 "lux": 400,
@@ -184,7 +192,7 @@ class TestDecisionConfig:
                 "power_full": 950,
             }
         }
-        config = DecisionConfig.parse(data)
+        config = dacite.from_dict(DecisionConfig, data, DACITE_CONFIG)
         assert config.thresholds.lux == 400
 
     def test_default(self):
@@ -196,15 +204,15 @@ class TestDecisionConfig:
 class TestValveConfig:
     """ValveConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "pin_no": 17,
             "on": {"min": 2.0, "max": 10.0},
             "off": {"max": 0.5},
             "power_off_sec": 300,
         }
-        config = ValveConfig.parse(data)
+        config = dacite.from_dict(ValveConfig, data, DACITE_CONFIG)
         assert config.pin_no == 17
         assert config.on.min == 2.0
         assert config.on.max == 10.0
@@ -215,14 +223,14 @@ class TestValveConfig:
 class TestFlowConfig:
     """FlowConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "on": {"min": 0.5, "max": [5.0, 10.0]},
             "off": {"max": 0.1},
             "power_off_sec": 60,
         }
-        config = FlowConfig.parse(data)
+        config = dacite.from_dict(FlowConfig, data, DACITE_CONFIG)
         assert config.on.min == 0.5
         assert config.on.max == [5.0, 10.0]
         assert config.off.max == 0.1
@@ -232,8 +240,8 @@ class TestFlowConfig:
 class TestMonitorConfig:
     """MonitorConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "flow": {
                 "on": {"min": 0.5, "max": [5.0]},
@@ -245,7 +253,7 @@ class TestMonitorConfig:
             "interval_sec": 10,
             "liveness": {"file": "/tmp/monitor.txt"},
         }
-        config = MonitorConfig.parse(data)
+        config = dacite.from_dict(MonitorConfig, data, DACITE_CONFIG)
         assert config.flow.on.min == 0.5
         assert config.fluent.host == "localhost"
         assert config.sense.giveup == 5
@@ -255,8 +263,8 @@ class TestMonitorConfig:
 class TestControlConfig:
     """ControlConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "valve": {
                 "pin_no": 17,
@@ -268,7 +276,7 @@ class TestControlConfig:
             "hazard": {"file": "/tmp/hazard.json"},
             "liveness": {"file": "/tmp/control.txt"},
         }
-        config = ControlConfig.parse(data)
+        config = dacite.from_dict(ControlConfig, data, DACITE_CONFIG)
         assert config.valve.pin_no == 17
         assert config.interval_sec == 5
         assert config.hazard.file == "/tmp/hazard.json"
@@ -277,33 +285,33 @@ class TestControlConfig:
 class TestWebServerConfig:
     """WebServerConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {"webapp": {"data": {"log_file_path": "/tmp/log.db"}}}
-        config = WebServerConfig.parse(data)
+        config = dacite.from_dict(WebServerConfig, data, DACITE_CONFIG)
         assert config.webapp.data.log_file_path == "/tmp/log.db"
 
 
 class TestMetricsConfig:
     """MetricsConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {"data": "/tmp/metrics.db"}
-        config = MetricsConfig.parse(data)
+        config = dacite.from_dict(MetricsConfig, data, DACITE_CONFIG)
         assert config.data == pathlib.Path("/tmp/metrics.db")
 
 
 class TestWebUIWebappConfig:
     """WebUIWebappConfig のテスト"""
 
-    def test_parse(self):
-        """パース"""
+    def test_from_dict(self):
+        """dict から変換"""
         data = {
             "static_dir_path": "/var/www/static",
             "port": 5000,
         }
-        config = WebUIWebappConfig.parse(data)
+        config = dacite.from_dict(WebUIWebappConfig, data, DACITE_CONFIG)
         assert config.static_dir_path == "/var/www/static"
         assert config.port == 5000
 
