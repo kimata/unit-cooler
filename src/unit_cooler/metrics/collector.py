@@ -335,6 +335,7 @@ class MetricsCollector:
 
 # Global instance
 _metrics_collector: MetricsCollector | None = None
+_metrics_collector_lock = threading.Lock()
 
 
 def get_metrics_collector(db_path: str | pathlib.Path | None = None) -> MetricsCollector:
@@ -342,10 +343,15 @@ def get_metrics_collector(db_path: str | pathlib.Path | None = None) -> MetricsC
 
     Args:
         db_path: Path to the SQLite database file. Required for first initialization.
+
+    Note:
+        This function is thread-safe. Multiple threads can safely call this function
+        concurrently, and only one will perform the initialization.
     """
     global _metrics_collector
-    if _metrics_collector is None:
-        if db_path is None:
-            raise RuntimeError("MetricsCollector not initialized. Provide db_path for first call.")
-        _metrics_collector = MetricsCollector(db_path)
+    with _metrics_collector_lock:
+        if _metrics_collector is None:
+            if db_path is None:
+                raise RuntimeError("MetricsCollector not initialized. Provide db_path for first call.")
+            _metrics_collector = MetricsCollector(db_path)
     return _metrics_collector
