@@ -108,19 +108,26 @@ def start(config: Config, settings: RuntimeSettings) -> tuple[Any, list[Any], An
     return (executor, thread_list, log_server_handle)
 
 
-def wait_and_term(executor, thread_list, log_server_handle, terminate=True):
+def wait_and_term(executor, thread_list, log_server_handle, terminate=True, timeout=None):
     import unit_cooler.actuator.web_server
     import unit_cooler.actuator.work_log
 
     ret = 0
+
+    # 終了シグナルを送信（ワーカーに終了を通知）
+    if terminate:
+        unit_cooler.actuator.worker.term()
+
     for thread_info in thread_list:
         logger.info("Wait %s finish", thread_info["name"])
 
-        if thread_info["future"].result() != 0:
-            logger.error("Error occurred in %s", thread_info["name"])
+        try:
+            if thread_info["future"].result(timeout=timeout) != 0:
+                logger.error("Error occurred in %s", thread_info["name"])
+                ret = -1
+        except TimeoutError:
+            logger.warning("Timeout waiting for %s", thread_info["name"])
             ret = -1
-
-    unit_cooler.actuator.worker.term()
 
     logger.info("Shutdown executor")
     executor.shutdown(wait=True)

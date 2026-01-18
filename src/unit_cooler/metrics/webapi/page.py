@@ -10,6 +10,8 @@ import datetime
 import io
 import json
 import logging
+from dataclasses import dataclass
+from typing import Any
 
 import flask
 import my_lib.time
@@ -19,6 +21,29 @@ from PIL import Image, ImageDraw
 import unit_cooler.metrics.collector
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class BoxplotStats:
+    """箱ヒゲ図統計データ"""
+
+    min: float
+    q1: float
+    median: float
+    q3: float
+    max: float
+    outliers: list[float]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "min": self.min,
+            "q1": self.q1,
+            "median": self.median,
+            "q3": self.q3,
+            "max": self.max,
+            "outliers": self.outliers,
+        }
+
 
 blueprint = flask.Blueprint("metrics", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
 
@@ -299,10 +324,10 @@ def calculate_correlation(x_values: list, y_values: list) -> float:
     return numerator / denominator
 
 
-def calculate_boxplot_stats(values: list) -> dict:
+def calculate_boxplot_stats(values: list) -> BoxplotStats:
     """箱ヒゲ図用の統計データを計算"""
     if not values:
-        return {"min": 0, "q1": 0, "median": 0, "q3": 0, "max": 0, "outliers": []}
+        return BoxplotStats(min=0, q1=0, median=0, q3=0, max=0, outliers=[])
 
     values_sorted = sorted(values)
     n = len(values_sorted)
@@ -329,7 +354,7 @@ def calculate_boxplot_stats(values: list) -> dict:
     min_val = min(non_outliers) if non_outliers else values_sorted[0]
     max_val = max(non_outliers) if non_outliers else values_sorted[-1]
 
-    return {"min": min_val, "q1": q1, "median": median, "q3": q3, "max": max_val, "outliers": outliers}
+    return BoxplotStats(min=min_val, q1=q1, median=median, q3=q3, max=max_val, outliers=outliers)
 
 
 def _extract_hour_from_timestamp(timestamp: str | datetime.datetime) -> int | None:
@@ -473,15 +498,17 @@ def _prepare_boxplot_data(
 
     for hour in range(24):
         boxplot_cooling_mode.append(
-            {"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(hourly_cooling_mode[hour])}
+            {"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(hourly_cooling_mode[hour]).to_dict()}
         )
 
         # Duty比をパーセンテージに変換
         duty_ratio_percent = [d * 100 for d in hourly_duty_ratio[hour] if d is not None]
-        boxplot_duty_ratio.append({"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(duty_ratio_percent)})
+        boxplot_duty_ratio.append(
+            {"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(duty_ratio_percent).to_dict()}
+        )
 
         boxplot_valve_ops.append(
-            {"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(hourly_valve_ops[hour])}
+            {"x": f"{hour:02d}:00", "y": calculate_boxplot_stats(hourly_valve_ops[hour]).to_dict()}
         )
 
     return boxplot_cooling_mode, boxplot_duty_ratio, boxplot_valve_ops

@@ -9,10 +9,24 @@ Provides:
 
 import datetime
 import logging
+from dataclasses import dataclass
+from typing import Any
 
 import my_lib.time
 
 from . import collector
+
+
+@dataclass(frozen=True)
+class TimeSeriesPoint:
+    """時系列データポイント"""
+
+    timestamp: str
+    value: int | float | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"timestamp": self.timestamp, "value": self.value}
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +83,7 @@ class MetricsAnalyzer:
             "valve_operations_boxplot": self._calculate_hourly_boxplot(df_hourly, "valve_operations"),
         }
 
-    def get_timeseries_data(self, days: int = 7) -> dict:
+    def get_timeseries_data(self, days: int = 7) -> dict[str, list[dict[str, Any]]]:
         """Get time series data for trending analysis."""
         end_time = my_lib.time.now()
         start_time = end_time - datetime.timedelta(days=days)
@@ -79,17 +93,18 @@ class MetricsAnalyzer:
 
         return {
             "cooling_mode_timeseries": [
-                {"timestamp": row["timestamp"], "value": row["cooling_mode"]}
+                TimeSeriesPoint(timestamp=row["timestamp"], value=row["cooling_mode"]).to_dict()
                 for row in minute_data
                 if row["cooling_mode"] is not None
             ],
             "duty_ratio_timeseries": [
-                {"timestamp": row["timestamp"], "value": row["duty_ratio"]}
+                TimeSeriesPoint(timestamp=row["timestamp"], value=row["duty_ratio"]).to_dict()
                 for row in minute_data
                 if row["duty_ratio"] is not None
             ],
             "valve_operations_timeseries": [
-                {"timestamp": row["timestamp"], "value": row["valve_operations"]} for row in hourly_data
+                TimeSeriesPoint(timestamp=row["timestamp"], value=row["valve_operations"]).to_dict()
+                for row in hourly_data
             ],
         }
 

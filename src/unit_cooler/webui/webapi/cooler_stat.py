@@ -46,6 +46,26 @@ class WateringInfo:
         return {"amount": self.amount, "price": self.price}
 
 
+@dataclass(frozen=True)
+class CoolerStats:
+    """冷却システム統計情報"""
+
+    sensor: dict[str, Any]
+    mode: dict[str, Any] | None
+    cooler_status: dict[str, Any] | None
+    outdoor_status: dict[str, Any] | None
+    actuator_status: dict[str, Any] | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sensor": self.sensor,
+            "mode": self.mode,
+            "cooler_status": self.cooler_status,
+            "outdoor_status": self.outdoor_status,
+            "actuator_status": self.actuator_status,
+        }
+
+
 def watering(config: Config, day_before: int) -> WateringInfo:
     day_offset = 7 if os.environ.get("DUMMY_MODE", "false") == "true" else 0
 
@@ -81,7 +101,7 @@ def get_last_message(message_queue: Queue[ControlMessage]) -> ControlMessage | N
     return _last_message
 
 
-def get_stats(config: Config, message_queue: Queue[ControlMessage]) -> dict[str, Any]:
+def get_stats(message_queue: Queue[ControlMessage]) -> CoolerStats:
     # ZMQ 経由で Controller から受信したメッセージを使用
     control_message = get_last_message(message_queue)
 
@@ -90,33 +110,30 @@ def get_stats(config: Config, message_queue: Queue[ControlMessage]) -> dict[str,
     actuator_status_dict = actuator_status.to_dict() if actuator_status else None
 
     if control_message is None:
-        return {
-            "sensor": {},
-            "mode": None,
-            "cooler_status": None,
-            "outdoor_status": None,
-            "actuator_status": actuator_status_dict,
-        }
+        return CoolerStats(
+            sensor={},
+            mode=None,
+            cooler_status=None,
+            outdoor_status=None,
+            actuator_status=actuator_status_dict,
+        )
 
-    return {
-        "sensor": control_message.sense_data,
-        "mode": control_message.to_dict(),
-        "cooler_status": control_message.cooler_status.to_dict() if control_message.cooler_status else None,
-        "outdoor_status": control_message.outdoor_status.to_dict()
-        if control_message.outdoor_status
-        else None,
-        "actuator_status": actuator_status_dict,
-    }
+    return CoolerStats(
+        sensor=control_message.sense_data,
+        mode=control_message.to_dict(),
+        cooler_status=control_message.cooler_status.to_dict() if control_message.cooler_status else None,
+        outdoor_status=control_message.outdoor_status.to_dict() if control_message.outdoor_status else None,
+        actuator_status=actuator_status_dict,
+    )
 
 
 @blueprint.route("/api/stat", methods=["GET"])
 @my_lib.flask_util.support_jsonp
 def api_get_stats():
     try:
-        config = flask.current_app.config["CONFIG"]
         message_queue = flask.current_app.config["MESSAGE_QUEUE"]
 
-        return flask.jsonify(get_stats(config, message_queue))
+        return flask.jsonify(get_stats(message_queue).to_dict())
     except Exception as e:
         logger.exception("Error in api_get_stats")
         return flask.jsonify({"error": str(e)}), 500

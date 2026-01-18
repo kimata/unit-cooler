@@ -91,8 +91,6 @@ def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
     except Exception:
         logger.exception("Failed to initialize metrics database")
 
-    # app.debug = True
-
     return app
 
 

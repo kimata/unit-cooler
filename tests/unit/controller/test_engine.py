@@ -49,27 +49,26 @@ class TestDummyCoolingMode:
         """各テスト前に prev_mode をリセット"""
         set_dummy_prev_mode(0)
 
-    def test_returns_dict_with_cooling_mode(self):
-        """cooling_mode を含む dict を返す"""
+    def test_returns_int(self):
+        """int を返す"""
         result = dummy_cooling_mode()
-        assert "cooling_mode" in result
-        assert isinstance(result["cooling_mode"], int)
+        assert isinstance(result, int)
 
     def test_cooling_mode_is_within_bounds(self):
         """cooling_mode は有効範囲内"""
         max_mode = len(CONTROL_MESSAGE_LIST) - 1
         for _ in range(100):
             result = dummy_cooling_mode()
-            assert 0 <= result["cooling_mode"] <= max_mode
+            assert 0 <= result <= max_mode
 
     def test_mode_zero_can_only_increase(self):
         """モード 0 からは増加のみ"""
         set_dummy_prev_mode(0)
         for _ in range(20):
             result = dummy_cooling_mode()
-            if result["cooling_mode"] != 0:
+            if result != 0:
                 # 0 から変化した場合、1 になるはず
-                assert result["cooling_mode"] == 1
+                assert result == 1
                 break
 
     def test_mode_max_can_only_decrease(self):
@@ -78,16 +77,16 @@ class TestDummyCoolingMode:
         set_dummy_prev_mode(max_mode)
         for _ in range(20):
             result = dummy_cooling_mode()
-            if result["cooling_mode"] != max_mode:
+            if result != max_mode:
                 # 最大から変化した場合、1 減少するはず
-                assert result["cooling_mode"] == max_mode - 1
+                assert result == max_mode - 1
                 break
 
     def test_prev_mode_is_updated(self):
         """prev_mode が更新される"""
         set_dummy_prev_mode(0)
         result = dummy_cooling_mode()
-        assert get_dummy_prev_mode() == result["cooling_mode"]
+        assert get_dummy_prev_mode() == result
 
     def test_randomness_with_seed(self):
         """ランダム性のテスト (シード固定)"""
@@ -95,7 +94,7 @@ class TestDummyCoolingMode:
 
         random.seed(42)
         set_dummy_prev_mode(3)
-        results = [dummy_cooling_mode()["cooling_mode"] for _ in range(10)]
+        results = [dummy_cooling_mode() for _ in range(10)]
 
         # 結果の多様性を確認 (少なくとも 2 種類の値が出るはず)
         unique_results = set(results)

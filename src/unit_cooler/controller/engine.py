@@ -31,7 +31,7 @@ OFF_SEC_MIN = 5
 _dummy_prev_mode: int = 0
 
 
-def dummy_cooling_mode() -> dict[str, int]:
+def dummy_cooling_mode() -> int:
     global _dummy_prev_mode
     import random
 
@@ -63,7 +63,7 @@ def dummy_cooling_mode() -> dict[str, int]:
 
     logger.info("cooling_mode: %d (prev: %d)", cooling_mode, current_mode)
 
-    return {"cooling_mode": cooling_mode}
+    return cooling_mode
 
 
 def set_dummy_prev_mode(mode: int) -> None:
@@ -120,7 +120,7 @@ def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) 
     if dummy_mode:
         sense_data: dict[str, Any] = {}
         mode_result = CoolingModeResult(
-            cooling_mode=dummy_cooling_mode()["cooling_mode"],
+            cooling_mode=dummy_cooling_mode(),
             cooler_status=StatusInfo(status=0, message=None),
             outdoor_status=StatusInfo(status=0, message=None),
             sense_data=sense_data,

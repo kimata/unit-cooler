@@ -76,6 +76,8 @@ class TestActuatorStartup:
 
         # footprint モック
         mocker.patch("my_lib.footprint.update")
+        # webapp.log.init がブロックする問題を回避
+        mocker.patch("my_lib.webapp.log.init")
 
         # msg_count を設定して自然終了させる
         settings = RuntimeSettings.from_dict(
@@ -113,6 +115,7 @@ class TestActuatorMessageReceive:
         log_port = port_manager.find_unused_port()
 
         mocker.patch("my_lib.footprint.update")
+        mocker.patch("my_lib.webapp.log.init")
 
         # msg_count を設定して自然終了させる
         settings = RuntimeSettings.from_dict(
@@ -151,6 +154,7 @@ class TestActuatorValveControl:
         log_port = port_manager.find_unused_port()
 
         mocker.patch("my_lib.footprint.update")
+        mocker.patch("my_lib.webapp.log.init")
 
         # msg_count を設定して自然終了させる
         settings = RuntimeSettings.from_dict(
@@ -186,6 +190,7 @@ class TestActuatorWebServer:
         log_port = port_manager.find_unused_port()
 
         mocker.patch("my_lib.footprint.update")
+        mocker.patch("my_lib.webapp.log.init")
 
         # msg_count を設定して自然終了させる
         settings = RuntimeSettings.from_dict(
@@ -229,6 +234,7 @@ class TestActuatorDummyMode:
         original_dummy = os.environ.get("DUMMY_MODE")
 
         mocker.patch("my_lib.footprint.update")
+        mocker.patch("my_lib.webapp.log.init")
 
         # msg_count を設定して自然終了させる
         settings = RuntimeSettings.from_dict(

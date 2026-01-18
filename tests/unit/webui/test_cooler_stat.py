@@ -150,8 +150,8 @@ class TestGetLastMessage:
 class TestGetStats:
     """get_stats のテスト"""
 
-    def test_returns_stats_dict(self, config, mocker):
-        """統計辞書を返す"""
+    def test_returns_cooler_stats(self, mocker):
+        """CoolerStats を返す"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
@@ -167,15 +167,15 @@ class TestGetStats:
             outdoor_status=StatusInfo(status=0, message=None),
         )
 
-        result = cooler_stat.get_stats(config, queue)
+        result = cooler_stat.get_stats(queue)
 
-        assert "sensor" in result
-        assert "mode" in result
-        assert "cooler_status" in result
-        assert "outdoor_status" in result
-        assert "actuator_status" in result
+        assert hasattr(result, "sensor")
+        assert hasattr(result, "mode")
+        assert hasattr(result, "cooler_status")
+        assert hasattr(result, "outdoor_status")
+        assert hasattr(result, "actuator_status")
 
-    def test_returns_empty_data_when_no_message(self, config, mocker):
+    def test_returns_empty_data_when_no_message(self, mocker):
         """ZMQ メッセージがない場合は空データを返す"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
@@ -184,14 +184,14 @@ class TestGetStats:
         queue = multiprocessing.Queue()
         cooler_stat._last_message = None
 
-        result = cooler_stat.get_stats(config, queue)
+        result = cooler_stat.get_stats(queue)
 
-        assert result["sensor"] == {}
-        assert result["mode"] is None
-        assert result["cooler_status"] is None
-        assert result["outdoor_status"] is None
+        assert result.sensor == {}
+        assert result.mode is None
+        assert result.cooler_status is None
+        assert result.outdoor_status is None
 
-    def test_includes_actuator_status_when_available(self, config, mocker):
+    def test_includes_actuator_status_when_available(self, mocker):
         """ActuatorStatus が利用可能時に含める"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
         from unit_cooler.const import VALVE_STATE
@@ -223,10 +223,10 @@ class TestGetStats:
             outdoor_status=StatusInfo(status=0, message=None),
         )
 
-        result = cooler_stat.get_stats(config, queue)
+        result = cooler_stat.get_stats(queue)
 
-        assert result["actuator_status"] is not None
-        assert result["actuator_status"]["valve"]["state"] == VALVE_STATE.OPEN.value
+        assert result.actuator_status is not None
+        assert result.actuator_status["valve"]["state"] == VALVE_STATE.OPEN.value
 
 
 class TestApiGetStats:

@@ -53,6 +53,14 @@ if TYPE_CHECKING:
 # WorkerState: テスト同期用のイベントベース状態管理
 # =============================================================================
 @dataclass
+class WorkerDef:
+    """ワーカー定義"""
+
+    name: str
+    param: list[Any]
+
+
+@dataclass
 class WorkerState:
     """ワーカー状態管理（テスト同期用）
 
@@ -341,6 +349,7 @@ def subscribe_worker(
     message_queue: Queue[Any],
     liveness_file: pathlib.Path,
     msg_count: int = 0,
+    should_terminate: threading.Event | None = None,
 ) -> int:
     logger.info("Start actuator subscribe worker (%s:%d)", control_host, pub_port)
     ret = 0
@@ -350,6 +359,7 @@ def subscribe_worker(
             pub_port,
             lambda message: queue_put(message_queue, message, liveness_file),
             msg_count,
+            should_terminate,
         )
     except Exception:
         logger.exception("Failed to receive control message")
@@ -518,13 +528,11 @@ def control_worker(
     return ret
 
 
-def get_worker_def(
-    config: Config, message_queue: Queue[Any], settings: RuntimeSettings
-) -> list[dict[str, Any]]:
+def get_worker_def(config: Config, message_queue: Queue[Any], settings: RuntimeSettings) -> list[WorkerDef]:
     return [
-        {
-            "name": "subscribe_worker",
-            "param": [
+        WorkerDef(
+            name="subscribe_worker",
+            param=[
                 subscribe_worker,
                 config,
                 settings.control_host,
@@ -533,10 +541,10 @@ def get_worker_def(
                 config.actuator.subscribe.liveness.file,
                 settings.msg_count,
             ],
-        },
-        {
-            "name": "monitor_worker",
-            "param": [
+        ),
+        WorkerDef(
+            name="monitor_worker",
+            param=[
                 monitor_worker,
                 config,
                 config.actuator.monitor.liveness.file,
@@ -545,10 +553,10 @@ def get_worker_def(
                 settings.msg_count,
                 settings.status_pub_port,
             ],
-        },
-        {
-            "name": "control_worker",
-            "param": [
+        ),
+        WorkerDef(
+            name="control_worker",
+            param=[
                 control_worker,
                 config,
                 message_queue,
@@ -557,22 +565,26 @@ def get_worker_def(
                 settings.speedup,
                 settings.msg_count,
             ],
-        },
+        ),
     ]
 
 
-def start(executor, worker_def):
+def start(executor, worker_def: list[WorkerDef]):
     init_should_terminate()
     init_worker_states()
     thread_list = []
 
     for worker_info in worker_def:
-        future = executor.submit(*worker_info["param"])
-        thread_list.append({"name": worker_info["name"], "future": future})
+        # subscribe_worker には should_terminate を追加で渡す
+        params = list(worker_info.param)
+        if worker_info.name == "subscribe_worker":
+            params.append(get_should_terminate())
+        future = executor.submit(*params)
+        thread_list.append({"name": worker_info.name, "future": future})
 
         # LifecycleManager が設定されている場合はワーカーを登録
         if _lifecycle_manager is not None:
-            _lifecycle_manager.register_worker(worker_info["name"], future)
+            _lifecycle_manager.register_worker(worker_info.name, future)
 
     return thread_list
 
