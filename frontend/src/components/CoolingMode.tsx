@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { ApiResponse } from "../lib/ApiResponse";
+import type * as ApiResponse from "../lib/ApiResponse";
 import { useApi } from "../hooks/useApi";
 import { Loading } from "./common/Loading";
 import { AnimatedNumber } from "./common/AnimatedNumber";

@@ -1,10 +1,11 @@
 import React, { useMemo, useRef, useEffect } from "react";
-import { Chart, CategoryScale, LinearScale, BarElement, Tooltip, ChartOptions, TooltipItem } from "chart.js";
+import { Chart, CategoryScale, LinearScale, BarElement, Tooltip } from "chart.js";
+import type { ChartOptions, TooltipItem } from "chart.js";
 import { Bar } from "react-chartjs-2";
 
 Chart.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-import { ApiResponse } from "../lib/ApiResponse";
+import type * as ApiResponse from "../lib/ApiResponse";
 import { CalendarDaysIcon } from "./icons";
 
 type Props = {

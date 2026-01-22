@@ -8,7 +8,7 @@ dayjs.extend(relativeTime);
 import reactStringReplace from "react-string-replace";
 
 import { dateText } from "../lib/Util";
-import { ApiResponse } from "../lib/ApiResponse";
+import type * as ApiResponse from "../lib/ApiResponse";
 import { AnimatedNumber } from "./common/AnimatedNumber";
 import { ThermometerIcon } from "./icons";
 

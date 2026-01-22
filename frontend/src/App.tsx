@@ -14,7 +14,7 @@ dayjs.extend(localizedFormat);
 
 import { version as reactVersion } from "react";
 
-import { ApiResponse } from "./lib/ApiResponse";
+import type * as ApiResponse from "./lib/ApiResponse";
 import { useApi } from "./hooks/useApi";
 import { useEventSource } from "./hooks/useEventSource";
 import { ErrorMessage } from "./components/common/ErrorMessage";

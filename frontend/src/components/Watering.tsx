@@ -2,7 +2,7 @@ import React from "react";
 import watering_icon from "../assets/watering.png";
 import NumberFlow, { continuous } from '@number-flow/react';
 
-import { ApiResponse } from "../lib/ApiResponse";
+import type * as ApiResponse from "../lib/ApiResponse";
 import { Loading } from "./common/Loading";
 import { DropletIcon } from "./icons";
 

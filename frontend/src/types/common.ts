@@ -1,4 +1,4 @@
-import { ApiResponse } from "../lib/ApiResponse";
+import type * as ApiResponse from "../lib/ApiResponse";
 
 export interface BaseComponentProps {
     isReady: boolean;

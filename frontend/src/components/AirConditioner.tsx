@@ -7,7 +7,7 @@ extend(relativeTime);
 
 import { motion } from "framer-motion";
 import { dateText } from "../lib/Util";
-import { ApiResponse } from "../lib/ApiResponse";
+import type * as ApiResponse from "../lib/ApiResponse";
 import { Loading } from "./common/Loading";
 import { AnimatedNumber } from "./common/AnimatedNumber";
 import { BoltIcon } from "./icons";

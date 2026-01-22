@@ -9,7 +9,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 locale("ja");
 extend(relativeTime);
 
-import { ApiResponse } from "../lib/ApiResponse";
+import type * as ApiResponse from "../lib/ApiResponse";
 
 type Props = {
     isReady: boolean;
