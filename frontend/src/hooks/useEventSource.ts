@@ -54,6 +54,8 @@ export function useEventSource(url: string, options: UseEventSourceOptions = {})
                 clearTimeout(reconnectTimeoutRef.current);
             }
         };
+        // connect is intentionally excluded to prevent infinite loops
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [url]);
 
     return {

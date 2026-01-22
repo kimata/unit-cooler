@@ -44,10 +44,12 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     });
 
     // Refetch valve status when log update event occurs
+    // stat.mode?.duty?.enable is intentionally excluded to only trigger on logUpdateTrigger changes
     useEffect(() => {
         if (isReady && stat.mode?.duty?.enable) {
             refetchValveStatus();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [logUpdateTrigger, isReady, refetchValveStatus]);
 
     // Calculate remaining time

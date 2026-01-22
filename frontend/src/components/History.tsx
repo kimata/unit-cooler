@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useEffect } from "react";
-import { Chart, CategoryScale, LinearScale, BarElement, Tooltip, ChartOptions } from "chart.js";
+import { Chart, CategoryScale, LinearScale, BarElement, Tooltip, ChartOptions, TooltipItem } from "chart.js";
 import { Bar } from "react-chartjs-2";
 
 Chart.register(CategoryScale, LinearScale, BarElement, Tooltip);
@@ -16,7 +16,7 @@ const History = React.memo(({ isReady, watering }: Props) => {
     const chartRef = useRef<Chart<"bar"> | null>(null);
 
     // chartOptionsは変更されないのでメモ化
-    const chartOptions: ChartOptions<any> = useMemo(() => ({
+    const chartOptions: ChartOptions<"bar"> = useMemo(() => ({
         responsive: true,
         maintainAspectRatio: false,
         animation: {
@@ -25,7 +25,7 @@ const History = React.memo(({ isReady, watering }: Props) => {
         scales: {
             y: {
                 ticks: {
-                    callback: function (value: any) {
+                    callback: function (value: string | number) {
                         return value + " L";
                     },
                 },
@@ -38,7 +38,7 @@ const History = React.memo(({ isReady, watering }: Props) => {
         plugins: {
             tooltip: {
                 callbacks: {
-                    label: function(context: any) {
+                    label: function(context: TooltipItem<"bar">) {
                         return context.dataset.label + ': ' + context.parsed.y + ' L';
                     }
                 }
