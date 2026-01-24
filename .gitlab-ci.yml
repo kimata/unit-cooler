@@ -117,7 +117,7 @@ test-typecheck:
         - uv run mypy src/
         - uv run ty check src/
 
-test-walk-through:
+test-pytest:
     extends: .cache-base
     stage: test
     needs: []
@@ -532,7 +532,7 @@ tag-latest:
           artifacts: false
         - job: test-healthz-docker
           artifacts: false
-        - job: test-walk-through
+        - job: test-pytest
           artifacts: false
 
     before_script:
@@ -565,7 +565,7 @@ deploy:
           artifacts: false
         - job: test-healthz-docker
           artifacts: false
-        - job: test-walk-through
+        - job: test-pytest
           artifacts: false
 
     before_script: []
