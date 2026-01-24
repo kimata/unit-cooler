@@ -1272,7 +1272,7 @@ wheels = [
 [[package]]
 name = "my-lib"
 version = "0.2.0"
-source = { git = "https://github.com/kimata/my-py-lib?rev=b577dfdf6e8df235fd0e58809379a171219772b8#b577dfdf6e8df235fd0e58809379a171219772b8" }
+source = { git = "https://github.com/kimata/my-py-lib?rev=c1c1a7dea26a950e442f3dabd53033f47dd2fd40#c1c1a7dea26a950e442f3dabd53033f47dd2fd40" }
 dependencies = [
     { name = "coloredlogs" },
     { name = "dacite" },
@@ -2478,7 +2478,7 @@ requires-dist = [
     { name = "flask-cors", specifier = ">=6.0.2" },
     { name = "fluent-logger", specifier = ">=0.11.1" },
     { name = "influxdb-client", extras = ["ciso"], specifier = ">=1.49.0" },
-    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=b577dfdf6e8df235fd0e58809379a171219772b8" },
+    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=c1c1a7dea26a950e442f3dabd53033f47dd2fd40" },
     { name = "pillow", specifier = ">=12.1.0" },
     { name = "pyzmq", specifier = ">=27.1.0" },
     { name = "rpi-lgpio", specifier = ">=0.6" },
