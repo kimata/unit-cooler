@@ -10,8 +10,6 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
-from __future__ import annotations
-
 import logging
 import os
 from dataclasses import dataclass
@@ -66,7 +64,7 @@ class CoolerStats:
         }
 
 
-def watering(config: Config, day_before: int) -> WateringInfo:
+def watering(config: "Config", day_before: int) -> WateringInfo:
     day_offset = 7 if os.environ.get("DUMMY_MODE", "false") == "true" else 0
 
     amount = my_lib.sensor_data.get_day_sum(
@@ -85,7 +83,7 @@ def watering(config: Config, day_before: int) -> WateringInfo:
     )
 
 
-def watering_list(config: Config) -> list[dict[str, float]]:
+def watering_list(config: "Config") -> list[dict[str, float]]:
     return [watering(config, i).to_dict() for i in range(10)]
 
 
@@ -93,7 +91,7 @@ def watering_list(config: Config) -> list[dict[str, float]]:
 _last_message: ControlMessage | None = None
 
 
-def get_last_message(message_queue: Queue[ControlMessage]) -> ControlMessage | None:
+def get_last_message(message_queue: "Queue[ControlMessage]") -> ControlMessage | None:
     # NOTE: 現在の実際の制御モードを取得する。
     global _last_message
     while not message_queue.empty():
@@ -101,7 +99,7 @@ def get_last_message(message_queue: Queue[ControlMessage]) -> ControlMessage | N
     return _last_message
 
 
-def get_stats(message_queue: Queue[ControlMessage]) -> CoolerStats:
+def get_stats(message_queue: "Queue[ControlMessage]") -> CoolerStats:
     # ZMQ 経由で Controller から受信したメッセージを使用
     control_message = get_last_message(message_queue)
 

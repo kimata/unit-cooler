@@ -4,8 +4,6 @@
 冷却モード、Duty比、環境要因の統計情報とグラフを表示するWebページを提供します。
 """
 
-from __future__ import annotations
-
 import datetime
 import io
 import json

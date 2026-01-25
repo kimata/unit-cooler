@@ -603,6 +603,19 @@ wheels = [
 ]
 
 [[package]]
+name = "flask-pydantic"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flask" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/03/8b/05c91742c72740fb98e18bc4b0a7645e5df4c0ef9fec868e7343aaea0504/flask_pydantic-0.14.0.tar.gz", hash = "sha256:eb27fa6fd62d952b421df05c72349b5b1dc6fadacbd52879aac80cc519e4eab6", size = 12177, upload-time = "2025-12-22T02:58:52.575Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/60/cab2b0005e076875d869f74dd452cfd81b82a926c52bfff49c401bba0880/flask_pydantic-0.14.0-py3-none-any.whl", hash = "sha256:82a5914d90983f21976c39f97ea2901eba54536ac4b24850e9d52a0676448301", size = 10909, upload-time = "2025-12-22T02:58:51.211Z" },
+]
+
+[[package]]
 name = "fluent-logger"
 version = "0.11.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1271,8 +1284,8 @@ wheels = [
 
 [[package]]
 name = "my-lib"
-version = "0.2.0"
-source = { git = "https://github.com/kimata/my-py-lib?rev=8688ffae66fb0629415e117455e79c0c692f37fe#8688ffae66fb0629415e117455e79c0c692f37fe" }
+version = "0.2.1"
+source = { git = "https://github.com/kimata/my-py-lib?rev=103d48606b4f613bfdbe128440709aad0bc51523#103d48606b4f613bfdbe128440709aad0bc51523" }
 dependencies = [
     { name = "coloredlogs" },
     { name = "dacite" },
@@ -1284,6 +1297,7 @@ dependencies = [
     { name = "line-bot-sdk" },
     { name = "lxml" },
     { name = "psutil" },
+    { name = "pydantic" },
     { name = "pyserial" },
     { name = "pytz" },
     { name = "pyyaml" },
@@ -2439,6 +2453,7 @@ dependencies = [
     { name = "docopt-ng" },
     { name = "flask" },
     { name = "flask-cors" },
+    { name = "flask-pydantic" },
     { name = "fluent-logger" },
     { name = "influxdb-client", extra = ["ciso"] },
     { name = "my-lib" },
@@ -2476,9 +2491,10 @@ requires-dist = [
     { name = "docopt-ng", specifier = ">=0.9.0" },
     { name = "flask", specifier = ">=3.1.2" },
     { name = "flask-cors", specifier = ">=6.0.2" },
+    { name = "flask-pydantic", specifier = ">=0.12.0" },
     { name = "fluent-logger", specifier = ">=0.11.1" },
     { name = "influxdb-client", extras = ["ciso"], specifier = ">=1.49.0" },
-    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=8688ffae66fb0629415e117455e79c0c692f37fe" },
+    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=103d48606b4f613bfdbe128440709aad0bc51523" },
     { name = "pillow", specifier = ">=12.1.0" },
     { name = "pyzmq", specifier = ">=27.1.0" },
     { name = "rpi-lgpio", specifier = ">=0.6" },
