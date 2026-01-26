@@ -754,6 +754,13 @@ mode_index = raw_message["mode_index"]  # dict アクセス
 
 ## 開発ワークフロー規約
 
+### リポジトリ構成
+
+- **プライマリリポジトリ**: GitLab (`gitlab.green-rabbit.net`)
+- **ミラーリポジトリ**: GitHub (`github.com/kimata/unit-cooler`)
+
+GitLab にプッシュすると、自動的に GitHub にミラーリングされます。GitHub への直接プッシュは不要です。
+
 ### コミット時の注意
 
 - 今回のセッションで作成し、プロジェクトが機能するのに必要なファイル以外は git add しないこと
@@ -770,3 +777,23 @@ mode_index = raw_message["mode_index"]  # dict アクセス
 - 関連するテストも修正すること
 - 関連するドキュメントも更新すること
 - mypy, pyright, ty がパスすることを確認すること
+
+### リリース（タグ作成）時
+
+リリースタグを作成する際は、以下の手順に従うこと：
+
+1. **CHANGELOG.md を更新する**
+    - 新しいバージョンのセクションを追加
+    - 含まれる変更を以下のカテゴリで記載：
+        - `Added`: 新機能
+        - `Changed`: 既存機能の変更
+        - `Fixed`: バグ修正
+        - `Removed`: 削除された機能
+        - `Security`: セキュリティ関連の修正
+    - [Keep a Changelog](https://keepachangelog.com/) 形式を参考にする
+
+2. **タグを作成する**
+    ```bash
+    git tag -a v1.x.x -m "バージョン説明"
+    git push origin v1.x.x
+    ```
