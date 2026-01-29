@@ -67,8 +67,7 @@ class MetricsCollector:
             conn.execute("PRAGMA wal_autocheckpoint=100")
 
             # スキーマファイルからテーブルとインデックスを作成
-            schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
-            conn.executescript(schema_sql)
+            my_lib.sqlite_util.exec_schema_from_file(conn, SCHEMA_PATH)
 
     @contextmanager
     def _get_db_connection(self):

@@ -77,17 +77,6 @@ def get_liveness_targets(config: Config, mode: str) -> list[my_lib.healthz.Healt
         ]
 
 
-def check_liveness(target_list: list[my_lib.healthz.HealthzTarget], port: int | None = None) -> bool:
-    failed = my_lib.healthz.check_liveness_all(target_list)
-    if failed:
-        return False
-
-    if port is not None:
-        return my_lib.healthz.check_http_port(port)
-    else:
-        return True
-
-
 if __name__ == "__main__":
     import sys
 
@@ -117,7 +106,12 @@ if __name__ == "__main__":
 
     logger.debug(my_lib.pretty.format(target_list))
 
-    if check_liveness(target_list, port):
+    failed_targets = my_lib.healthz.check_liveness_all_with_ports(
+        target_list,
+        http_port=port,
+    )
+
+    if not failed_targets:
         logger.info("OK.")
         sys.exit(0)
     else:
