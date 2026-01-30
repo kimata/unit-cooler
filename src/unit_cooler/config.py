@@ -346,7 +346,11 @@ class WebServerWebappConfig:
         log_path = pathlib.Path(self.data.log_file_path)
         if base_dir and not log_path.is_absolute():
             log_path = base_dir / log_path
+        static_path = pathlib.Path()
+        if base_dir:
+            static_path = base_dir
         return my_lib.webapp.config.WebappConfig(
+            static_dir_path=static_path.resolve(),
             data=my_lib.webapp.config.WebappDataConfig(
                 log_file_path=log_path.resolve(),
             ),
