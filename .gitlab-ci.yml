@@ -40,7 +40,7 @@ build-frontend:
 
     script:
         - cd frontend
-        - npm ci --cache .npm --prefer-offline
+        - npm ci --cache .npm --prefer-offline --no-audit --no-fund
         - npm run build
 
     artifacts:
@@ -116,6 +116,16 @@ test-typecheck:
         - uv run python -m pyright
         - uv run mypy src/
         - uv run ty check src/
+
+    cache:
+        - key:
+              files:
+                  - uv.lock
+          fallback_keys:
+              - uv-cache-${CI_PROJECT_ID}
+          paths:
+              - ${UV_CACHE_DIR}
+              - .mypy_cache/
 
 test-pytest:
     extends: .cache-base
