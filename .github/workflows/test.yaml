@@ -103,7 +103,7 @@ jobs:
                   path-to-lcov: reports/coverage.lcov
 
             - name: Publish Test Results
-              uses: dorny/test-reporter@v1
+              uses: dorny/test-reporter@3d76b34a4535afbd0600d347b09a6ee5deb3ed7f # v2
               if: success() || failure()
               with:
                   name: test results (${{ matrix.python-version }})
