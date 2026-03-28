@@ -15,7 +15,7 @@ dependencies = [
     "flask-cors>=6.0.2",
     "docopt-ng>=0.9.0",
     "influxdb-client[ciso]>=1.49.0",
-    "my-lib @ git+https://github.com/kimata/my-py-lib@ce3072d5366b9d86e1217d8bf2f07a24f5d3b483",
+    "my-lib @ git+https://github.com/kimata/my-py-lib@3db13bd92e445b2a20382163cb6846a82fc55d30",
     "flask-pydantic>=0.12.0",
     "spidev>=3.8",
     "fluent-logger>=0.11.1",
@@ -61,6 +61,7 @@ source = "uv-dynamic-versioning"
 
 [tool.uv]
 default-groups = ["dev"]
+exclude-newer = "1 week"
 
 [tool.uv-dynamic-versioning]
 vcs = "git"
