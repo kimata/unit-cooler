@@ -16,15 +16,11 @@ from pathlib import Path
 class TestMetricsView:
     """metrics_view エンドポイントのテスト"""
 
-    def test_returns_html_response_with_data(self, config, mocker):
+    def test_returns_html_response_with_data(self, mocker):
         """データがある場合に HTML レスポンスを返す"""
         import flask
-        import my_lib.webapp.config
 
         import unit_cooler.metrics.webapi.page as page
-
-        # URL_PREFIX を設定
-        my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
 
         app = flask.Flask(__name__)
         app.register_blueprint(page.blueprint, url_prefix="/unit-cooler")
@@ -76,14 +72,11 @@ class TestMetricsView:
         # クリーンアップ
         tmp_path.unlink(missing_ok=True)
 
-    def test_returns_503_when_db_not_found(self, config, mocker):
+    def test_returns_503_when_db_not_found(self, mocker):
         """データベースが存在しない場合に 503 を返す"""
         import flask
-        import my_lib.webapp.config
 
         import unit_cooler.metrics.webapi.page as page
-
-        my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
 
         app = flask.Flask(__name__)
         app.register_blueprint(page.blueprint, url_prefix="/unit-cooler")
@@ -116,7 +109,7 @@ class TestMetricsView:
         # data は pathlib.Path
         assert isinstance(config.actuator.metrics.data, Path)
 
-    def test_endpoint_with_real_config_catches_dict_access(self, config, mocker):
+    def test_endpoint_with_real_config_catches_dict_access(self, config):
         """実際の Config dataclass を使用してエンドポイントをテスト
 
         このテストは config.get() のような dict スタイルのアクセスが残っている場合に
@@ -125,11 +118,8 @@ class TestMetricsView:
         これは今回のバグ（config.get() を使用していた）を検出するための回帰テストです。
         """
         import flask
-        import my_lib.webapp.config
 
         import unit_cooler.metrics.webapi.page as page
-
-        my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
 
         app = flask.Flask(__name__)
         app.register_blueprint(page.blueprint, url_prefix="/unit-cooler")
@@ -150,14 +140,11 @@ class TestMetricsView:
 class TestFavicon:
     """favicon エンドポイントのテスト"""
 
-    def test_returns_ico_response(self, config, mocker):
+    def test_returns_ico_response(self, config):
         """ICO レスポンスを返す"""
         import flask
-        import my_lib.webapp.config
 
         import unit_cooler.metrics.webapi.page as page
-
-        my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
 
         app = flask.Flask(__name__)
         app.register_blueprint(page.blueprint, url_prefix="/unit-cooler")

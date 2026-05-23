@@ -22,7 +22,9 @@ class TestMetricsCollectorInit:
         db_path = tmp_path / "metrics.db"
         collector = MetricsCollector(db_path)
 
-        assert db_path.exists()
+        # pytest-xdist 並列実行時はワーカー固有のサフィックスが付くため、
+        # MetricsCollector が解決したパスを参照する
+        assert collector.db_path.exists()
         collector.close()
 
     def test_creates_parent_directory(self, tmp_path):

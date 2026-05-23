@@ -18,6 +18,7 @@ import threading
 from collections.abc import Callable
 from contextlib import contextmanager
 
+import my_lib.pytest_util
 import my_lib.sqlite_util
 import my_lib.time
 
@@ -46,7 +47,9 @@ class MetricsCollector:
                        Defaults to my_lib.time.now().
                        Used for testing time-dependent behavior.
         """
-        self.db_path = pathlib.Path(db_path)
+        # pytest-xdist 並列実行時にワーカー間で DB が共有されないようにする
+        # (PYTEST_XDIST_WORKER が未設定の本番では元のパスが返る)
+        self.db_path = my_lib.pytest_util.get_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_database()
         self._lock = threading.Lock()
