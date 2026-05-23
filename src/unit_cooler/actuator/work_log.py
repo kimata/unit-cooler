@@ -68,7 +68,7 @@ def add(message: str, level: unit_cooler.const.LOG_LEVEL = unit_cooler.const.LOG
 
     if event_queue is not None:
         event_queue.put(my_lib.webapp.event.EVENT_TYPE.LOG)
-    my_lib.webapp.log.add(message, level)  # type: ignore[arg-type]
+    my_lib.webapp.log.add(message, level)
 
     log_hist.append(message)
 
@@ -85,6 +85,7 @@ if __name__ == "__main__":
     import my_lib.pretty
     import my_lib.webapp.config
 
+    import unit_cooler.const
     from unit_cooler.config import Config
 
     assert __doc__ is not None  # noqa: S101
@@ -98,8 +99,11 @@ if __name__ == "__main__":
     config = Config.load(config_file)
     event_queue = multiprocessing.Queue()
 
-    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))  # type: ignore[arg-type]
+    webapp_config = config.actuator.web_server.webapp.to_webapp_config(config.base_dir)
+    my_lib.webapp.config.build_environment(webapp_config, url_prefix=unit_cooler.const.URL_PREFIX)
+    assert webapp_config.data is not None  # noqa: S101
+    assert webapp_config.data.log_file_path is not None  # noqa: S101
+    my_lib.webapp.log.init(config.slack, webapp_config.data.log_file_path)
     init(config, event_queue)
 
     add("Test", unit_cooler.const.LOG_LEVEL.INFO)

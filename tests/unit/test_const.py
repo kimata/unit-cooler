@@ -103,9 +103,11 @@ class TestLogLevel:
         """ERROR が定義されている"""
         assert LOG_LEVEL.ERROR is not None
 
-    def test_ordering(self):
-        """重大度の順序が正しい"""
-        assert LOG_LEVEL.INFO < LOG_LEVEL.WARN < LOG_LEVEL.ERROR
+    def test_is_my_lib_alias(self):
+        """unit_cooler.const.LOG_LEVEL は my_lib.webapp.log.LOG_LEVEL の再エクスポート"""
+        import my_lib.webapp.log
+
+        assert LOG_LEVEL is my_lib.webapp.log.LOG_LEVEL
 
 
 class TestPubSubCh:

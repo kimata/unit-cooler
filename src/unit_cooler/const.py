@@ -4,12 +4,10 @@ import enum
 import my_lib.webapp.log
 
 PUBSUB_CH = "unit_cooler"
+URL_PREFIX = "/unit-cooler"
 
-
-class LOG_LEVEL(enum.IntEnum):
-    INFO = my_lib.webapp.log.LOG_LEVEL.INFO.value
-    WARN = my_lib.webapp.log.LOG_LEVEL.WARN.value
-    ERROR = my_lib.webapp.log.LOG_LEVEL.ERROR.value
+# my_lib の LOG_LEVEL を再エクスポート
+LOG_LEVEL = my_lib.webapp.log.LOG_LEVEL
 
 
 class VALVE_STATE(enum.IntEnum):

@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING, Any
 
 import flask
 import flask_cors
-import my_lib.webapp.base
 import my_lib.webapp.config
 import my_lib.webapp.event
 import my_lib.webapp.log
@@ -29,6 +28,7 @@ import werkzeug.serving
 
 import unit_cooler.actuator.webapi.flow_status
 import unit_cooler.actuator.webapi.valve_status
+import unit_cooler.const
 import unit_cooler.metrics.webapi.page
 from unit_cooler.metrics import get_metrics_collector
 
@@ -49,8 +49,8 @@ class WebServerHandle:
 
 
 def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
-    my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
-    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))
+    webapp_config = config.actuator.web_server.webapp.to_webapp_config(config.base_dir)
+    my_lib.webapp.config.build_environment(webapp_config, url_prefix=unit_cooler.const.URL_PREFIX)
 
     # NOTE: アクセスログは無効にする
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -64,22 +64,22 @@ def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
 
     app.json.compat = True  # type: ignore[attr-defined]
 
-    app.register_blueprint(my_lib.webapp.log.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
-    app.register_blueprint(my_lib.webapp.event.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
-    app.register_blueprint(my_lib.webapp.util.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
+    app.register_blueprint(my_lib.webapp.log.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
+    app.register_blueprint(my_lib.webapp.event.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
+    app.register_blueprint(my_lib.webapp.util.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
     app.register_blueprint(
-        unit_cooler.actuator.webapi.valve_status.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX
+        unit_cooler.actuator.webapi.valve_status.blueprint, url_prefix=unit_cooler.const.URL_PREFIX
     )
     app.register_blueprint(
-        unit_cooler.actuator.webapi.flow_status.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX
+        unit_cooler.actuator.webapi.flow_status.blueprint, url_prefix=unit_cooler.const.URL_PREFIX
     )
-    app.register_blueprint(
-        unit_cooler.metrics.webapi.page.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX
-    )
+    app.register_blueprint(unit_cooler.metrics.webapi.page.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
 
     my_lib.webapp.config.show_handler_list(app, True)
 
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))  # type: ignore[arg-type]
+    assert webapp_config.data is not None  # noqa: S101
+    assert webapp_config.data.log_file_path is not None  # noqa: S101
+    my_lib.webapp.log.init(config.slack, webapp_config.data.log_file_path)
     my_lib.webapp.event.start(event_queue)
 
     # メトリクスデータベースの初期化

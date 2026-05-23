@@ -614,6 +614,7 @@ if __name__ == "__main__":
     import my_lib.webapp.log
 
     import unit_cooler.actuator.valve_controller
+    import unit_cooler.const
     from unit_cooler.config import Config, RuntimeSettings
 
     assert __doc__ is not None  # noqa: S101
@@ -634,8 +635,11 @@ if __name__ == "__main__":
 
     os.environ["DUMMY_MODE"] = "true"
 
-    my_lib.webapp.config.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))
-    my_lib.webapp.log.init(config.actuator.web_server.webapp.to_webapp_config(config.base_dir))  # type: ignore[arg-type]
+    webapp_config = config.actuator.web_server.webapp.to_webapp_config(config.base_dir)
+    my_lib.webapp.config.build_environment(webapp_config, url_prefix=unit_cooler.const.URL_PREFIX)
+    assert webapp_config.data is not None  # noqa: S101
+    assert webapp_config.data.log_file_path is not None  # noqa: S101
+    my_lib.webapp.log.init(config.slack, webapp_config.data.log_file_path)
     unit_cooler.actuator.work_log.init(config, event_queue)
 
     unit_cooler.actuator.valve_controller.init_valve_controller(config, config.actuator.control.valve.pin_no)

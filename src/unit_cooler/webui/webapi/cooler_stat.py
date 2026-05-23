@@ -68,7 +68,7 @@ def watering(config: "Config", day_before: int) -> WateringInfo:
     day_offset = 7 if os.environ.get("DUMMY_MODE", "false") == "true" else 0
 
     amount = my_lib.sensor_data.get_day_sum(
-        config.controller.influxdb.to_dict(),  # type: ignore[arg-type]
+        config.controller.influxdb,
         config.controller.watering.measure,
         config.controller.watering.hostname,
         "flow",

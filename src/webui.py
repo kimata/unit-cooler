@@ -77,17 +77,19 @@ def signal_handler(signum, _frame):
 def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
     logger.info("Using ZMQ server of %s:%d", settings.control_host, settings.pub_port)
 
-    import my_lib.webapp.config
-
-    my_lib.webapp.config.URL_PREFIX = "/unit-cooler"
-    my_lib.webapp.config.init(config.webui.webapp.to_webapp_config(config.base_dir))
-
     import my_lib.webapp.base
+    import my_lib.webapp.config
     import my_lib.webapp.proxy
     import my_lib.webapp.util
 
+    import unit_cooler.const
     import unit_cooler.webui.webapi.cooler_stat
     import unit_cooler.webui.worker
+
+    environment = my_lib.webapp.config.build_environment(
+        config.webui.webapp.to_webapp_config(config.base_dir),
+        url_prefix=unit_cooler.const.URL_PREFIX,
+    )
 
     message_queue = multiprocessing.Manager().Queue(10)
     global worker_threads
@@ -155,12 +157,17 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
     api_base_url = f"http://{settings.actuator_host}:{settings.log_port}/unit-cooler"
     my_lib.webapp.proxy.init(api_base_url)
 
-    app.register_blueprint(my_lib.webapp.base.blueprint_default)
-    app.register_blueprint(my_lib.webapp.base.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
-    app.register_blueprint(my_lib.webapp.proxy.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
-    app.register_blueprint(my_lib.webapp.util.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX)
     app.register_blueprint(
-        unit_cooler.webui.webapi.cooler_stat.blueprint, url_prefix=my_lib.webapp.config.URL_PREFIX
+        my_lib.webapp.base.create_root_redirect_blueprint(url_prefix=unit_cooler.const.URL_PREFIX)
+    )
+    app.register_blueprint(
+        my_lib.webapp.base.create_static_blueprint(environment=environment),
+        url_prefix=unit_cooler.const.URL_PREFIX,
+    )
+    app.register_blueprint(my_lib.webapp.proxy.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
+    app.register_blueprint(my_lib.webapp.util.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
+    app.register_blueprint(
+        unit_cooler.webui.webapi.cooler_stat.blueprint, url_prefix=unit_cooler.const.URL_PREFIX
     )
 
     my_lib.webapp.config.show_handler_list(app)

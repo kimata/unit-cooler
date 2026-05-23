@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: S101, S105, S106, S108
+# ruff: noqa: S101, S105, S108
 """unit_cooler.config のテスト"""
 
 import pathlib
@@ -84,21 +84,11 @@ class TestInfluxDBConfig:
         assert config.org == "test-org"
         assert config.bucket == "test-bucket"
 
-    def test_to_dict(self):
-        """dict 変換"""
-        config = InfluxDBConfig(
-            url="http://localhost:8086",
-            token="token",
-            org="org",
-            bucket="bucket",
-        )
-        d = config.to_dict()
-        assert d == {
-            "url": "http://localhost:8086",
-            "token": "token",
-            "org": "org",
-            "bucket": "bucket",
-        }
+    def test_is_my_lib_alias(self):
+        """unit_cooler.config.InfluxDBConfig は my_lib.sensor_data.InfluxDBConfig の再エクスポート"""
+        import my_lib.sensor_data
+
+        assert InfluxDBConfig is my_lib.sensor_data.InfluxDBConfig
 
 
 class TestSensorConfig:
@@ -356,13 +346,11 @@ class TestConfigLoad:
         assert config.controller.decision is not None
         assert config.controller.decision.thresholds is not None
 
-    def test_influxdb_to_dict(self, config):
-        """InfluxDB 設定の dict 変換"""
-        d = config.controller.influxdb.to_dict()
-        assert "url" in d
-        assert "token" in d
-        assert "org" in d
-        assert "bucket" in d
+    def test_influxdb_is_my_lib_type(self, config):
+        """InfluxDB 設定は my_lib.sensor_data.InfluxDBConfig のインスタンス"""
+        import my_lib.sensor_data
+
+        assert isinstance(config.controller.influxdb, my_lib.sensor_data.InfluxDBConfig)
 
     def test_webapp_to_webapp_config(self, config):
         """webapp 設定の変換"""

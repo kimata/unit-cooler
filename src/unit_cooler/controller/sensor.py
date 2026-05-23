@@ -318,12 +318,7 @@ def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
         stop = "now()"
 
     zoneinfo = my_lib.time.get_zoneinfo()
-    influxdb_config = my_lib.sensor_data.InfluxDBConfig(
-        url=config.controller.influxdb.url,
-        token=config.controller.influxdb.token,
-        org=config.controller.influxdb.org,
-        bucket=config.controller.influxdb.bucket,
-    )
+    influxdb_config = config.controller.influxdb
 
     # センサー種別とセンサーリストのマッピング
     sensor_kinds = {
@@ -354,9 +349,7 @@ def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
             request_info.append((kind, sensor))
 
     # 並列でデータ取得
-    results = asyncio.run(
-        my_lib.sensor_data.fetch_data_parallel(influxdb_config, requests)  # type: ignore[arg-type]
-    )
+    results = asyncio.run(my_lib.sensor_data.fetch_data_parallel(influxdb_config, requests))
 
     # 結果を元の構造に再構築
     sense_data: dict[str, list[dict[str, Any]]] = {kind: [] for kind in sensor_kinds}

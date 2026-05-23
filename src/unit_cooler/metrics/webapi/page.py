@@ -13,9 +13,9 @@ from typing import Any
 
 import flask
 import my_lib.time
-import my_lib.webapp.config
 from PIL import Image, ImageDraw
 
+import unit_cooler.const
 import unit_cooler.metrics.collector
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class BoxplotStats:
         }
 
 
-blueprint = flask.Blueprint("metrics", __name__, url_prefix=my_lib.webapp.config.URL_PREFIX)
+blueprint = flask.Blueprint("metrics", __name__, url_prefix=unit_cooler.const.URL_PREFIX)
 
 TOKYO_TZ = my_lib.time.get_zoneinfo()
 
@@ -542,8 +542,7 @@ def generate_metrics_html(
     chart_data = prepare_chart_data(minute_data, hourly_data)
     chart_data_json = json.dumps(chart_data)
 
-    # URL_PREFIXを取得してfaviconパスを構築
-    favicon_path = f"{my_lib.webapp.config.URL_PREFIX}/favicon.ico"
+    favicon_path = f"{unit_cooler.const.URL_PREFIX}/favicon.ico"
 
     return f"""
 <!DOCTYPE html>

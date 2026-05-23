@@ -15,6 +15,7 @@ from typing import Any, Self
 import dacite
 import my_lib.config
 import my_lib.notify.slack
+import my_lib.sensor_data
 import my_lib.webapp.config
 
 
@@ -108,23 +109,8 @@ class SensorItemConfig:
 # =============================================================================
 # Controller 設定
 # =============================================================================
-@dataclass(frozen=True)
-class InfluxDBConfig:
-    """InfluxDB 接続設定"""
-
-    url: str
-    token: str
-    org: str
-    bucket: str
-
-    def to_dict(self) -> dict[str, str]:
-        """dict 形式に変換する（my_lib.sensor_data との互換性のため）"""
-        return {
-            "url": self.url,
-            "token": self.token,
-            "org": self.org,
-            "bucket": self.bucket,
-        }
+# my_lib の InfluxDBConfig を再エクスポート
+InfluxDBConfig = my_lib.sensor_data.InfluxDBConfig
 
 
 @dataclass(frozen=True)
@@ -426,7 +412,7 @@ class Config:
     actuator: ActuatorConfig
     webui: WebUIConfig
     # このプロジェクトでは error 通知のみ使用（captcha は使わない）
-    slack: my_lib.notify.slack.HasErrorConfig | my_lib.notify.slack.SlackEmptyConfig
+    slack: my_lib.notify.slack.SlackErrorOnlyConfig | my_lib.notify.slack.SlackEmptyConfig
 
     @classmethod
     def load(cls, config_path: str, schema_path: str | pathlib.Path | None = None) -> Self:
@@ -445,18 +431,7 @@ class Config:
 
         base_dir = pathlib.Path(raw_config["base_dir"])
 
-        # Slack 設定は my_lib.notify.slack.SlackConfig.parse() で処理
-        # このプロジェクトでは error 通知のみ使用するので、
-        # SlackCaptchaOnlyConfig は SlackEmptyConfig として扱う
-        slack_parsed = my_lib.notify.slack.SlackConfig.parse(raw_config.get("slack", {}))
-        if isinstance(slack_parsed, my_lib.notify.slack.SlackCaptchaOnlyConfig):
-            slack: my_lib.notify.slack.HasErrorConfig | my_lib.notify.slack.SlackEmptyConfig = (
-                my_lib.notify.slack.SlackEmptyConfig()
-            )
-        else:
-            # SlackConfig, SlackErrorInfoConfig, SlackErrorOnlyConfig, SlackEmptyConfig
-            # これらは全て HasErrorConfig | SlackEmptyConfig を満たす
-            slack = slack_parsed  # type: ignore[assignment]
+        slack = _parse_slack(raw_config.get("slack"))
 
         # decision がない場合のデフォルト値を設定
         controller_data = dict(raw_config["controller"])
@@ -482,6 +457,22 @@ class Config:
             webui=dacite.from_dict(WebUIConfig, raw_config["webui"], dacite_config),
             slack=slack,
         )
+
+
+def _parse_slack(
+    data: dict[str, Any] | None,
+) -> my_lib.notify.slack.SlackErrorOnlyConfig | my_lib.notify.slack.SlackEmptyConfig:
+    """Slack 設定をパースする (error 通知のみ対応)
+
+    YAML スキーマで error セクションが必須のため、bot_token があれば必ず
+    SlackErrorOnlyConfig が返る。
+    """
+    parsed = my_lib.notify.slack.SlackConfig.parse(data or {})
+    assert isinstance(  # noqa: S101
+        parsed,
+        my_lib.notify.slack.SlackErrorOnlyConfig | my_lib.notify.slack.SlackEmptyConfig,
+    ), f"Unexpected slack config type: {type(parsed).__name__}"
+    return parsed
 
 
 def _resolve_relative_paths(actuator_data: dict[str, Any], base_dir: pathlib.Path) -> dict[str, Any]:
