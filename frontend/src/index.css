@@ -38,7 +38,7 @@
     }
 
     .sensor-number {
-        @apply text-right min-w-[4.5em];
+        @apply text-right text-xl min-w-[4.5em];
     }
 
     .sensor-unit {

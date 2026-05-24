@@ -58,7 +58,7 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                         </div>
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-2 pl-2">{date ? date.fromNow() : <span className="text-gray-400">—</span>}</td>
+                <td className="text-left w-2/12 py-2 pl-2"><small>{date ? date.fromNow() : <span className="text-gray-400">—</span>}</small></td>
                 <td className="text-left w-3/12 whitespace-nowrap py-2 pl-2">
                     <small>{date ? dateText(date) : <span className="text-gray-400">—</span>}</small>
                 </td>
