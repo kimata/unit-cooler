@@ -75,7 +75,7 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                                     <span className="text-gray-400">—</span>
                                 )}
                             </b>
-                            <span className="sensor-unit"><small>W</small></span>
+                            <small className="ml-2 text-sm">W</small>
                         </div>
                     </div>
                 </td>
