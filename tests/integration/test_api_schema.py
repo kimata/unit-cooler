@@ -403,6 +403,8 @@ class TestApiStatSchema:
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
+        # NOTE: _last_message はモジュールグローバルで他テストの値が残るため明示的にリセット
+        mocker.patch.object(cooler_stat, "_last_message", None)
 
         app = flask.Flask(__name__)
         app.register_blueprint(cooler_stat.blueprint)
