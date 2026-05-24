@@ -27,10 +27,13 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
     };
 
     const sensorRow = (label: string, sensorData: ApiResponse.SensorData, unit: React.JSX.Element) => {
-        let date = dayjs(sensorData.time);
+        const value = sensorData.value;
+        const hasValue = value != null;
+        const hasTime = sensorData.time != null;
+        const date = hasTime ? dayjs(sensorData.time) : null;
 
         // 照度・日射量の場合は値に応じて小数点桁数を調整
-        const decimals = (label === "lux" && sensorData.value >= 10) || (label === "solar_rad" && sensorData.value >= 10) ? 0 : 1;
+        const decimals = hasValue && ((label === "lux" && value >= 10) || (label === "solar_rad" && value >= 10)) ? 0 : 1;
 
         return (
             <tr className="flex" key={label}>
@@ -39,11 +42,15 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                     <div className="sensor-value" style={{whiteSpace: 'nowrap'}}>
                         <div className="sensor-number digit">
                             <b>
-                                <AnimatedNumber
-                                    value={sensorData.value || 0}
-                                    decimals={decimals}
-                                    useComma={label === "lux"}
-                                />
+                                {hasValue ? (
+                                    <AnimatedNumber
+                                        value={value}
+                                        decimals={decimals}
+                                        useComma={label === "lux"}
+                                    />
+                                ) : (
+                                    <span className="text-gray-400">—</span>
+                                )}
                             </b>
                         </div>
                         <div className="sensor-unit" style={{whiteSpace: 'nowrap'}}>
@@ -51,9 +58,9 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                         </div>
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-2 pl-2">{date.fromNow()}</td>
+                <td className="text-left w-2/12 py-2 pl-2">{date ? date.fromNow() : <span className="text-gray-400">—</span>}</td>
                 <td className="text-left w-3/12 whitespace-nowrap py-2 pl-2">
-                    <small>{dateText(date)}</small>
+                    <small>{date ? dateText(date) : <span className="text-gray-400">—</span>}</small>
                 </td>
             </tr>
         );

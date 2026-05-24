@@ -33,15 +33,18 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
 
     type AirconRowProps = { airconData: ApiResponse.SensorData };
     const AirconRow: React.FC<AirconRowProps> = React.memo((props) => {
-        const [previousValue, setPreviousValue] = useState(props.airconData.value || 0);
-        const currentWidth = (100.0 * props.airconData.value) / 1500;
+        const hasValue = props.airconData.value != null;
+        const hasTime = props.airconData.time != null;
+        const currentValue = hasValue ? props.airconData.value! : 0;
+        const [previousValue, setPreviousValue] = useState(currentValue);
+        const currentWidth = (100.0 * currentValue) / 1500;
         const previousWidth = (100.0 * previousValue) / 1500;
 
         useEffect(() => {
-            setPreviousValue(props.airconData.value || 0);
-        }, [props.airconData.value]);
+            setPreviousValue(currentValue);
+        }, [currentValue]);
 
-        let date = dayjs(props.airconData.time);
+        const date = hasTime ? dayjs(props.airconData.time) : null;
 
         return (
             <tr key="{index}" className="flex items-center">
@@ -62,19 +65,23 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                         </div>
                         <div className="progress-label digit">
                             <b>
-                                <AnimatedNumber
-                                    value={props.airconData.value || 0}
-                                    decimals={0}
-                                    useComma={true}
-                                />
+                                {hasValue ? (
+                                    <AnimatedNumber
+                                        value={props.airconData.value!}
+                                        decimals={0}
+                                        useComma={true}
+                                    />
+                                ) : (
+                                    <span className="text-gray-400">—</span>
+                                )}
                             </b>
                             <small className="ml-2">W</small>
                         </div>
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-2 pl-2 flex items-center h-10">{date.fromNow()}</td>
+                <td className="text-left w-2/12 py-2 pl-2 flex items-center h-10">{date ? date.fromNow() : <span className="text-gray-400">—</span>}</td>
                 <td className="text-left w-3/12 whitespace-nowrap py-2 flex items-center h-10">
-                    <small>{dateText(date)}</small>
+                    <small>{date ? dateText(date) : <span className="text-gray-400">—</span>}</small>
                 </td>
             </tr>
         );

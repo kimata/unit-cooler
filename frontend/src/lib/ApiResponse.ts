@@ -31,8 +31,8 @@ export interface OutdoorStatus {
 
 export interface SensorData {
     name: string;
-    time: string;
-    value: number;
+    time?: string;
+    value: number | null;
 }
 
 export interface Watering {
