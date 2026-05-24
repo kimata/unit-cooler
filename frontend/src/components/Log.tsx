@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Loading } from "./common/Loading";
 import { Pagination } from "./common/Pagination";
 import { XCircleIcon, SunIcon, AdjustmentsHorizontalIcon, ToggleOnIcon, ToggleOffIcon, ClipboardDocumentListIcon } from "./icons";
 
@@ -23,14 +24,6 @@ const Log = React.memo(({ isReady, log }: Props) => {
     const handlePageChange = useCallback((page: number) => {
         setPage(page);
     }, []);
-
-    const loading = () => {
-        return (
-            <span className="text-6xl font-light align-middle ml-4">
-                <span className="text-4xl font-light">Loading...</span>
-            </span>
-        );
-    };
 
     const messageIcon = (message: string) => {
         if (message.match(/故障/)) {
@@ -150,7 +143,7 @@ const Log = React.memo(({ isReady, log }: Props) => {
                             作動ログ
                         </h4>
                     </div>
-                    <div className="card-body flex flex-col">{isReady ? logData(log.data) : loading()}</div>
+                    <div className="card-body flex flex-col">{isReady ? logData(log.data) : <Loading size="large" />}</div>
                 </div>
             </div>
         </div>

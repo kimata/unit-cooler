@@ -10,6 +10,7 @@ import reactStringReplace from "react-string-replace";
 import { dateText } from "../lib/Util";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { AnimatedNumber } from "./common/AnimatedNumber";
+import { Loading } from "./common/Loading";
 import { ThermometerIcon } from "./icons";
 
 type Props = {
@@ -18,14 +19,6 @@ type Props = {
 };
 
 const Sensor = React.memo(({ isReady, stat }: Props) => {
-    const loading = () => {
-        return (
-            <span className="text-6xl font-light align-middle ml-4">
-                <span className="text-4xl font-light">Loading...</span>
-            </span>
-        );
-    };
-
     const sensorRow = (label: string, sensorData: ApiResponse.SensorData, unit: React.JSX.Element) => {
         const value = sensorData.value;
         const hasValue = value != null;
@@ -124,7 +117,7 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                             センサー値
                         </h4>
                     </div>
-                    <div className="card-body">{isReady || (stat.sensor.temp?.length ?? 0) > 0 ? sensorInfo(stat) : loading()}</div>
+                    <div className="card-body">{isReady || (stat.sensor.temp?.length ?? 0) > 0 ? sensorInfo(stat) : <Loading size="large" />}</div>
                 </div>
             </div>
         </div>

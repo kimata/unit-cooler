@@ -6,6 +6,7 @@ import { Bar } from "react-chartjs-2";
 Chart.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 import type * as ApiResponse from "../lib/ApiResponse";
+import { Loading } from "./common/Loading";
 import { CalendarDaysIcon } from "./icons";
 
 type Props = {
@@ -84,16 +85,6 @@ const History = React.memo(({ isReady, watering }: Props) => {
             </div>
         );
     };
-    const loading = () => {
-        return (
-            <div className="card-body">
-                <span className="text-6xl font-light align-middle ml-4">
-                    <span className="text-4xl font-light">Loading...</span>
-                </span>
-            </div>
-        );
-    };
-
     return (
         <div>
             <div className="text-center h-full">
@@ -104,7 +95,7 @@ const History = React.memo(({ isReady, watering }: Props) => {
                             散水履歴
                         </h4>
                     </div>
-                    {isReady || (watering?.length ?? 0) > 0 ? history() : loading()}
+                    {isReady || (watering?.length ?? 0) > 0 ? history() : <div className="card-body"><Loading size="large" /></div>}
                 </div>
             </div>
         </div>
