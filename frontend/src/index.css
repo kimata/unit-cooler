@@ -42,7 +42,7 @@
     }
 
     .sensor-unit {
-        @apply ml-1 min-w-[2.5em] text-left text-sm;
+        @apply ml-1 min-w-[2.5em] text-left text-xs;
     }
 
     .progress-label-container {
