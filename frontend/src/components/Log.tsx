@@ -1,16 +1,19 @@
 import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+
+import dayjs from "../lib/dayjs";
+import type * as ApiResponse from "../lib/ApiResponse";
+import { Card, CardBody, CardHeader } from "./common/Card";
 import { Loading } from "./common/Loading";
 import { Pagination } from "./common/Pagination";
-import { XCircleIcon, SunIcon, AdjustmentsHorizontalIcon, ToggleOnIcon, ToggleOffIcon, ClipboardDocumentListIcon } from "./icons";
-
-import "dayjs/locale/ja";
-import dayjs, { locale, extend } from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-locale("ja");
-extend(relativeTime);
-
-import type * as ApiResponse from "../lib/ApiResponse";
+import {
+    AdjustmentsHorizontalIcon,
+    ClipboardDocumentListIcon,
+    SunIcon,
+    ToggleOffIcon,
+    ToggleOnIcon,
+    XCircleIcon,
+} from "./icons";
 
 type Props = {
     isReady: boolean;
@@ -65,14 +68,12 @@ const Log = React.memo(({ isReady, log }: Props) => {
         }
     };
 
-    const formatMessage = (message: string) => {
-        return (
-            <span>
-                {messageIcon(message)}
-                {message}
-            </span>
-        );
-    };
+    const formatMessage = (message: string) => (
+        <span>
+            {messageIcon(message)}
+            {message}
+        </span>
+    );
 
     const logData = (log: ApiResponse.LogEntry[]) => {
         if (log.length === 0) {
@@ -89,10 +90,10 @@ const Log = React.memo(({ isReady, log }: Props) => {
             <div className="flex flex-col h-full">
                 <div className="text-left flex-1 mb-4" data-testid="log">
                     <AnimatePresence initial={false}>
-                        {log.slice((page - 1) * size, page * size).map((entry: ApiResponse.LogEntry, index: number) => {
-                            let date = dayjs(entry.date);
-                            let log_date = date.format("M月D日(ddd) HH:mm");
-                            let log_fromNow = date.fromNow();
+                        {log.slice((page - 1) * size, page * size).map((entry, index) => {
+                            const date = dayjs(entry.date);
+                            const log_date = date.format("M月D日(ddd) HH:mm");
+                            const log_fromNow = date.fromNow();
                             const isLast = index === Math.min(size, log.length - (page - 1) * size) - 1;
 
                             return (
@@ -102,18 +103,15 @@ const Log = React.memo(({ isReady, log }: Props) => {
                                     initial={{ opacity: 0, height: 0, y: -20 }}
                                     animate={{ opacity: 1, height: "auto", y: 0 }}
                                     exit={{ opacity: 0, height: 0, y: -20 }}
-                                    transition={{
-                                        duration: 0.3,
-                                        ease: "easeOut"
-                                    }}
+                                    transition={{ duration: 0.3, ease: "easeOut" }}
                                     layout
                                 >
                                     <div className="w-full font-bold">
                                         {log_date}
                                         <small className="text-gray-500 ml-2">({log_fromNow})</small>
                                     </div>
-                                    <div className="w-full log-message mb-2">{formatMessage(entry.message)}</div>
-                                    {!isLast && <hr className="dashed-hr" />}
+                                    <div className="w-full mb-2">{formatMessage(entry.message)}</div>
+                                    {!isLast && <hr className="border-t-2 border-dashed border-gray-300 my-3" />}
                                 </motion.div>
                             );
                         })}
@@ -134,22 +132,22 @@ const Log = React.memo(({ isReady, log }: Props) => {
     };
 
     return (
-        <div>
-            <div className="text-center h-full">
-                <div className="card shadow-sm h-full">
-                    <div className="card-header">
-                        <h4 className="my-0 font-normal">
-                            <ClipboardDocumentListIcon className="size-5 text-gray-500" />
-                            作動ログ
-                        </h4>
-                    </div>
-                    <div className="card-body flex flex-col">{isReady ? logData(log.data) : <Loading size="large" />}</div>
-                </div>
+        <div className="flex flex-col h-full">
+            <div className="flex-1 flex flex-col text-center">
+                <Card>
+                    <CardHeader>
+                        <ClipboardDocumentListIcon className="size-5 text-gray-500" />
+                        作動ログ
+                    </CardHeader>
+                    <CardBody className="flex flex-col">
+                        {isReady ? logData(log.data) : <Loading size="large" />}
+                    </CardBody>
+                </Card>
             </div>
         </div>
     );
 });
 
-Log.displayName = 'Log';
+Log.displayName = "Log";
 
 export { Log };

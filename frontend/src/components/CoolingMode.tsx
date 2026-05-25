@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+
 import type * as ApiResponse from "../lib/ApiResponse";
 import { useApi } from "../hooks/useApi";
-import { Loading } from "./common/Loading";
 import { AnimatedNumber } from "./common/AnimatedNumber";
+import { Card, CardBody, CardHeader } from "./common/Card";
+import { Loading } from "./common/Loading";
+import { Unit } from "./common/Unit";
 import { AdjustmentsVerticalIcon } from "./icons";
 
 type Props = {
@@ -31,17 +34,14 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
         data: valveStatus,
         loading: valveLoading,
         error: valveError,
-        refetch: refetchValveStatus
-    } = useApi(`${API_ENDPOINT}/proxy/json/api/valve_status`, emptyValveStatus, {
-        immediate: isReady
-    });
+        refetch: refetchValveStatus,
+    } = useApi(`${API_ENDPOINT}/proxy/json/api/valve_status`, emptyValveStatus, { immediate: isReady });
 
-    const {
-        data: flowStatus,
-        refetch: refetchFlowStatus
-    } = useApi(`${API_ENDPOINT}/proxy/json/api/get_flow`, emptyFlowStatus, {
-        immediate: false
-    });
+    const { data: flowStatus, refetch: refetchFlowStatus } = useApi(
+        `${API_ENDPOINT}/proxy/json/api/get_flow`,
+        emptyFlowStatus,
+        { immediate: false }
+    );
 
     // Refetch valve status when log update event occurs
     // stat.mode?.duty?.enable is intentionally excluded to only trigger on logUpdateTrigger changes
@@ -72,7 +72,7 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
         if (remainingTime <= 0) return;
 
         const timer = setInterval(() => {
-            setRemainingTime(prev => Math.max(0, prev - 1));
+            setRemainingTime((prev) => Math.max(0, prev - 1));
         }, 1000);
 
         return () => clearInterval(timer);
@@ -81,14 +81,10 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     // Update flow when valve is OPEN or when CLOSE but flow > 0
     useEffect(() => {
         if (valveStatus.state === "OPEN" || (valveStatus.state === "CLOSE" && currentFlow > 0)) {
-            // Initial fetch
             refetchFlowStatus();
-
-            // Update every second while OPEN or CLOSE with flow > 0
             const flowTimer = setInterval(() => {
                 refetchFlowStatus();
             }, 1000);
-
             return () => clearInterval(flowTimer);
         }
     }, [valveStatus.state, refetchFlowStatus, currentFlow]);
@@ -103,35 +99,33 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     const formatTime = useCallback((seconds: number): string => {
         const minutes = Math.floor(seconds / 60);
         const secs = Math.floor(seconds) % 60;
-        return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        return `${minutes}:${secs.toString().padStart(2, "0")}`;
     }, []);
 
-    const dutyInfo = (mode: ApiResponse.Mode) => {
-        return (
-            <div className="w-full">
-                <div className="flex">
-                    <div className="w-1/2">
-                        <span className="mr-1">Open:</span>
-                        <AnimatedNumber
-                            value={Math.round((mode.duty?.on_sec ?? 0) / 60)}
-                            decimals={0}
-                            className="text-3xl font-light digit"
-                        />
-                        <span className="ml-1">min</span>
-                    </div>
-                    <div className="w-1/2">
-                        <span className="mr-1">Close:</span>
-                        <AnimatedNumber
-                            value={Math.round((mode.duty?.off_sec ?? 0) / 60)}
-                            decimals={0}
-                            className="text-3xl font-light digit"
-                        />
-                        <span className="ml-1">min</span>
-                    </div>
+    const dutyInfo = (mode: ApiResponse.Mode) => (
+        <div className="w-full">
+            <div className="flex">
+                <div className="w-1/2">
+                    <span className="mr-1">Open:</span>
+                    <AnimatedNumber
+                        value={Math.round((mode.duty?.on_sec ?? 0) / 60)}
+                        decimals={0}
+                        className="text-3xl font-light digit"
+                    />
+                    <Unit>min</Unit>
+                </div>
+                <div className="w-1/2">
+                    <span className="mr-1">Close:</span>
+                    <AnimatedNumber
+                        value={Math.round((mode.duty?.off_sec ?? 0) / 60)}
+                        decimals={0}
+                        className="text-3xl font-light digit"
+                    />
+                    <Unit>min</Unit>
                 </div>
             </div>
-        );
-    };
+        </div>
+    );
 
     const valveStatusDisplay = () => {
         if (valveLoading || valveError || !stat.mode?.duty?.enable) {
@@ -148,22 +142,15 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                 <div className="flex items-center mb-2">
                     <div className="w-full text-center">
                         <span
-                            className="inline-flex items-center justify-center gap-2 px-3 py-1 rounded text-sm"
-                            style={{
-                                backgroundColor: isOpen ? '#5e7e9b' : '#adb5bd',
-                                color: '#ffffff'
-                            }}
+                            className={`inline-flex items-center justify-center gap-2 px-3 py-1 rounded text-sm text-white ${
+                                isOpen ? "bg-[#5e7e9b]" : "bg-gray-400"
+                            }`}
                         >
                             <span>{valveStatus.state}</span>
                             {(isOpen || currentFlow > 0) && (
                                 <span className="font-normal text-sm">
-                                    <AnimatedNumber
-                                        value={currentFlow}
-                                        decimals={2}
-                                        duration={0.9}
-                                        className=""
-                                    />
-                                    <span className="ml-1">L/min</span>
+                                    <AnimatedNumber value={currentFlow} decimals={2} duration={0.9} />
+                                    <Unit>L/min</Unit>
                                 </span>
                             )}
                         </span>
@@ -173,11 +160,11 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                 {/* Progress Bar */}
                 <div className="flex items-center mb-1">
                     <div className="w-full">
-                        <div className="progress-label-container">
-                            <div className="progress" style={{ height: "2em" }}>
+                        <div className="relative">
+                            <div className="w-full bg-gray-200 rounded overflow-hidden h-8">
                                 <motion.div
                                     key={`${valveStatus.state}-${maxDuration}-${valveStatus.duration}`}
-                                    className="progress-bar bg-gray-500"
+                                    className="h-full bg-gray-500 transition-all duration-500"
                                     role="progressbar"
                                     initial={{ width: "0%" }}
                                     animate={{ width: `${Math.max(0, progress)}%` }}
@@ -187,11 +174,9 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                                     aria-valuemax={100}
                                 />
                             </div>
-                            <div className="progress-label digit">
-                                <small style={{ color: '#adb5bd' }} className="mr-2">残り</small>
-                                <b style={{ color: '#adb5bd' }}>
-                                    {formatTime(remainingTime)}
-                                </b>
+                            <div className="absolute top-1/2 -translate-y-1/2 right-[5%] text-xl digit text-gray-400">
+                                <small className="mr-2">残り</small>
+                                <b>{formatTime(remainingTime)}</b>
                             </div>
                         </div>
                     </div>
@@ -215,11 +200,7 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
         return (
             <div data-testid="cooling-info">
                 <div className="text-6xl font-light align-middle ml-1">
-                    <AnimatedNumber
-                        value={mode.mode_index}
-                        decimals={0}
-                        className="font-bold digit"
-                    />
+                    <AnimatedNumber value={mode.mode_index} decimals={0} className="font-bold digit" />
                 </div>
                 {dutyInfo(mode)}
                 {valveStatusDisplay()}
@@ -228,22 +209,22 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     };
 
     return (
-        <div>
-            <div className="text-center h-full">
-                <div className="card shadow-sm h-full">
-                    <div className="card-header">
-                        <h4 className="my-0 font-normal">
-                            <AdjustmentsVerticalIcon className="size-5 text-gray-500" />
-                            現在の冷却モード
-                        </h4>
-                    </div>
-                    <div className="card-body">{isReady || (stat.mode?.mode_index ?? 0) !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}</div>
-                </div>
+        <div className="flex flex-col h-full">
+            <div className="flex-1 flex flex-col text-center">
+                <Card>
+                    <CardHeader>
+                        <AdjustmentsVerticalIcon className="size-5 text-gray-500" />
+                        現在の冷却モード
+                    </CardHeader>
+                    <CardBody>
+                        {isReady || (stat.mode?.mode_index ?? 0) !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}
+                    </CardBody>
+                </Card>
             </div>
         </div>
     );
 });
 
-CoolingMode.displayName = 'CoolingMode';
+CoolingMode.displayName = "CoolingMode";
 
 export { CoolingMode };

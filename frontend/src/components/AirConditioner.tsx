@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
-import "dayjs/locale/ja";
-import dayjs, { locale, extend } from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-locale("ja");
-extend(relativeTime);
-
 import { motion } from "framer-motion";
-import { dateText } from "../lib/Util";
+import type { Dayjs } from "dayjs";
+
+import dayjs from "../lib/dayjs";
 import type * as ApiResponse from "../lib/ApiResponse";
-import { Loading } from "./common/Loading";
 import { AnimatedNumber } from "./common/AnimatedNumber";
+import { Card, CardBody, CardHeader } from "./common/Card";
+import { DateDisplay } from "./common/DateDisplay";
+import { EmptyValue } from "./common/EmptyValue";
+import { Loading } from "./common/Loading";
+import { Unit } from "./common/Unit";
 import { BoltIcon } from "./icons";
 
 type Props = {
@@ -18,24 +18,11 @@ type Props = {
 };
 
 const AirConditioner = React.memo(({ isReady, stat }: Props) => {
-
-    const valueInt = (value: number | null) => {
-        if (value == null) {
-            return 0;
-        }
-
-        if (typeof value === "string") {
-            return parseInt(value);
-        } else {
-            return value;
-        }
-    };
-
     type AirconRowProps = { airconData: ApiResponse.SensorData };
     const AirconRow: React.FC<AirconRowProps> = React.memo((props) => {
-        const hasValue = props.airconData.value != null;
-        const hasTime = props.airconData.time != null;
-        const currentValue = hasValue ? props.airconData.value! : 0;
+        const value = props.airconData.value;
+        const hasValue = value != null;
+        const currentValue = value ?? 0;
         const [previousValue, setPreviousValue] = useState(currentValue);
         const currentWidth = (100.0 * currentValue) / 1500;
         const previousWidth = (100.0 * previousValue) / 1500;
@@ -44,48 +31,48 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
             setPreviousValue(currentValue);
         }, [currentValue]);
 
-        const date = hasTime ? dayjs(props.airconData.time) : null;
+        const date: Dayjs | null = props.airconData.time != null ? dayjs(props.airconData.time) : null;
 
         return (
-            <tr key="{index}" className="flex items-center">
+            <tr className="flex items-center">
                 <td className="text-left w-2/12 whitespace-nowrap py-2 flex items-center h-10">{props.airconData.name}</td>
                 <td className="text-right w-5/12 py-2 pr-3 flex items-center">
-                    <div className="progress-label-container w-full">
-                        <div className="progress" style={{ height: "2em" }}>
+                    <div className="relative w-full">
+                        <div className="w-full bg-gray-200 rounded overflow-hidden h-8">
                             <motion.div
-                                className="progress-bar bg-gray-500"
+                                className="h-full bg-gray-500 transition-all duration-500"
                                 role="progressbar"
-                                aria-valuenow={valueInt(props.airconData.value)}
+                                aria-valuenow={currentValue}
                                 aria-valuemin={0}
                                 aria-valuemax={1200}
                                 initial={{ width: previousWidth + "%" }}
                                 animate={{ width: currentWidth + "%" }}
                                 transition={{ duration: 30.0, ease: "easeOut" }}
-                            ></motion.div>
+                            />
                         </div>
-                        <div className="progress-label digit">
+                        <div className="absolute top-1/2 -translate-y-1/2 right-[5%] text-xl digit">
                             <b>
                                 {hasValue ? (
-                                    <AnimatedNumber
-                                        value={props.airconData.value!}
-                                        decimals={0}
-                                        useComma={true}
-                                    />
+                                    <AnimatedNumber value={value} decimals={0} useComma={true} />
                                 ) : (
-                                    <span className="text-gray-400">—</span>
+                                    <EmptyValue />
                                 )}
                             </b>
-                            <small className="ml-2 text-xs">W</small>
+                            <Unit>W</Unit>
                         </div>
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-2 pl-2 flex items-center h-10"><small>{date ? date.fromNow() : <span className="text-gray-400">—</span>}</small></td>
+                <td className="text-left w-2/12 py-2 pl-2 flex items-center h-10">
+                    <DateDisplay date={date} format="relative" />
+                </td>
                 <td className="text-left w-3/12 whitespace-nowrap py-2 flex items-center h-10">
-                    <small>{date ? dateText(date) : <span className="text-gray-400">—</span>}</small>
+                    <DateDisplay date={date} format="absolute" />
                 </td>
             </tr>
         );
     });
+    AirconRow.displayName = "AirconRow";
+
     const coolerStatus = (stat: ApiResponse.Stat) => {
         if (stat.cooler_status.message != null) {
             return <div>{stat.cooler_status.message}</div>;
@@ -100,13 +87,11 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                         <tr className="flex border-b border-gray-200">
                             <th className="w-2/12 text-left py-2">エアコン</th>
                             <th className="w-5/12 text-left py-2 pr-3">値</th>
-                            <th colSpan={2} className="w-5/12 text-left py-2 pl-2">
-                                最新更新日時
-                            </th>
+                            <th colSpan={2} className="w-5/12 text-left py-2 pl-2">最新更新日時</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {(stat.sensor.power ?? []).map((airconData: ApiResponse.SensorData, index: number) => (
+                        {(stat.sensor.power ?? []).map((airconData, index) => (
                             <AirconRow airconData={airconData} key={index} />
                         ))}
                     </tbody>
@@ -117,22 +102,22 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
     };
 
     return (
-        <div>
-            <div className="text-center h-full">
-                <div className="card shadow-sm h-full">
-                    <div className="card-header">
-                        <h4 className="my-0 font-normal">
-                            <BoltIcon className="size-5 text-gray-500" />
-                            エアコン稼働状況
-                        </h4>
-                    </div>
-                    <div className="card-body">{isReady || (stat.sensor.power?.length ?? 0) > 0 ? sensorInfo(stat) : <Loading size="large" />}</div>
-                </div>
+        <div className="flex flex-col h-full">
+            <div className="flex-1 flex flex-col text-center">
+                <Card>
+                    <CardHeader>
+                        <BoltIcon className="size-5 text-gray-500" />
+                        エアコン稼働状況
+                    </CardHeader>
+                    <CardBody>
+                        {isReady || (stat.sensor.power?.length ?? 0) > 0 ? sensorInfo(stat) : <Loading size="large" />}
+                    </CardBody>
+                </Card>
             </div>
         </div>
     );
 });
 
-AirConditioner.displayName = 'AirConditioner';
+AirConditioner.displayName = "AirConditioner";
 
 export { AirConditioner };

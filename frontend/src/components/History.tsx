@@ -6,6 +6,7 @@ import { Bar } from "react-chartjs-2";
 Chart.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 import type * as ApiResponse from "../lib/ApiResponse";
+import { Card, CardBody, CardHeader } from "./common/Card";
 import { Loading } from "./common/Loading";
 import { CalendarDaysIcon } from "./icons";
 
@@ -18,90 +19,81 @@ const History = React.memo(({ isReady, watering }: Props) => {
     const chartRef = useRef<Chart<"bar"> | null>(null);
 
     // chartOptionsは変更されないのでメモ化
-    const chartOptions: ChartOptions<"bar"> = useMemo(() => ({
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-            duration: 400, // 軽いアニメーションで値の変化を表現
-        },
-        scales: {
-            y: {
-                ticks: {
-                    callback: function (value: string | number) {
-                        return value + " L";
+    const chartOptions: ChartOptions<"bar"> = useMemo(
+        () => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 400 },
+            scales: {
+                y: {
+                    ticks: { callback: (value: string | number) => value + " L" },
+                    title: { text: "散水量", display: true },
+                },
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: (context: TooltipItem<"bar">) =>
+                            context.dataset.label + ": " + context.parsed.y + " L",
                     },
                 },
-                title: {
-                    text: "散水量",
-                    display: true,
-                },
             },
-        },
-        plugins: {
-            tooltip: {
-                callbacks: {
-                    label: function(context: TooltipItem<"bar">) {
-                        return context.dataset.label + ': ' + context.parsed.y + ' L';
-                    }
-                }
-            }
-        },
-    }), []);
+        }),
+        []
+    );
 
     // 初期データ
-    const initialChartData = useMemo(() => ({
-        labels: Array.from(Array(10), (_, i) => (i == 9 ? "本日" : 9 - i + "日前")),
-        datasets: [
-            {
-                label: "散水量",
-                data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                backgroundColor: "rgba(128, 128, 128, 0.6)",
-            },
-        ],
-    }), []);
+    const initialChartData = useMemo(
+        () => ({
+            labels: Array.from(Array(10), (_, i) => (i == 9 ? "本日" : 9 - i + "日前")),
+            datasets: [
+                {
+                    label: "散水量",
+                    data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    backgroundColor: "rgba(128, 128, 128, 0.6)",
+                },
+            ],
+        }),
+        []
+    );
 
     // データが更新された時にチャートを更新
     useEffect(() => {
         if (chartRef.current && isReady && watering && (watering?.length ?? 0) >= 10) {
             const chart = chartRef.current;
             const newData = watering.map((w) => parseFloat(w["amount"].toFixed(1))).reverse();
-
-            // データセットのデータのみ更新
             chart.data.datasets[0].data = newData;
-            chart.update('none'); // アニメーションなしで更新
+            chart.update("none");
         }
     }, [isReady, watering]);
 
-    const history = () => {
-        return (
-            <div className="card-body">
-                <div className="w-full" data-testid="history-info" style={{ height: '250px', position: 'relative' }}>
-                    <Bar
-                        ref={chartRef}
-                        options={chartOptions}
-                        data={initialChartData}
-                    />
-                </div>
+    const history = () => (
+        <CardBody>
+            <div className="w-full relative h-[250px]" data-testid="history-info">
+                <Bar ref={chartRef} options={chartOptions} data={initialChartData} />
             </div>
-        );
-    };
+        </CardBody>
+    );
+
     return (
-        <div>
-            <div className="text-center h-full">
-                <div className="card shadow-sm h-full">
-                    <div className="card-header">
-                        <h4 className="my-0 font-normal">
-                            <CalendarDaysIcon className="size-5 text-gray-500" />
-                            散水履歴
-                        </h4>
-                    </div>
-                    {isReady || (watering?.length ?? 0) > 0 ? history() : <div className="card-body"><Loading size="large" /></div>}
-                </div>
+        <div className="flex flex-col h-full">
+            <div className="flex-1 flex flex-col text-center">
+                <Card>
+                    <CardHeader>
+                        <CalendarDaysIcon className="size-5 text-gray-500" />
+                        散水履歴
+                    </CardHeader>
+                    {isReady || (watering?.length ?? 0) > 0 ? history() : (
+                        <CardBody>
+                            <Loading size="large" />
+                        </CardBody>
+                    )}
+                </Card>
             </div>
         </div>
     );
 });
 
-History.displayName = 'History';
+History.displayName = "History";
 
 export { History };

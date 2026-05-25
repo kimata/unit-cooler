@@ -1,16 +1,8 @@
 import { useState, useMemo, useCallback } from "react";
-import "./App.css";
 
 import { GitHubIcon, ChartBarIcon } from "./components/icons";
 
-import "dayjs/locale/ja";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import localizedFormat from "dayjs/plugin/localizedFormat";
-
-dayjs.locale("ja");
-dayjs.extend(relativeTime);
-dayjs.extend(localizedFormat);
+import dayjs from "./lib/dayjs";
 
 import { version as reactVersion } from "react";
 
