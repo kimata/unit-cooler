@@ -36,7 +36,7 @@ jobs:
               working-directory: ./react
 
             - name: Upload built file
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               with:
                   name: react-dist
                   path: react/dist
@@ -61,7 +61,7 @@ jobs:
                   python-version: ${{ matrix.python-version }}
 
             - name: Download react built files
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
               with:
                   name: react-dist
                   path: react/dist
@@ -111,7 +111,7 @@ jobs:
                   reporter: java-junit
 
             - name: Upload coverage file
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               if: always()
               with:
                   name: pytest-${{ matrix.python-version }}
@@ -139,7 +139,7 @@ jobs:
                   python-version: "3.12"
 
             - name: Download react built files
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
               with:
                   name: react-dist
                   path: react/dist
