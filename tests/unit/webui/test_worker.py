@@ -82,7 +82,6 @@ class TestQueuePut:
         import unit_cooler.webui.worker
 
         mocker.patch("my_lib.footprint.update")
-        mocker.patch.object(unit_cooler.webui.worker, "_notify_state_manager_subscribe_processed")
 
         queue = multiprocessing.Queue(maxsize=10)
         duty_dict = {"enable": True, "on_sec": 100, "off_sec": 60}
@@ -101,7 +100,6 @@ class TestQueuePut:
         import unit_cooler.webui.worker
 
         mocker.patch("my_lib.footprint.update")
-        mocker.patch.object(unit_cooler.webui.worker, "_notify_state_manager_subscribe_processed")
 
         queue = multiprocessing.Queue(maxsize=10)
         duty_dict = {"enable": False, "on_sec": 0, "off_sec": 0}
@@ -119,7 +117,6 @@ class TestQueuePut:
         import unit_cooler.webui.worker
 
         mocker.patch("my_lib.footprint.update")
-        mocker.patch.object(unit_cooler.webui.worker, "_notify_state_manager_subscribe_processed")
 
         # maxsize=1 で満杯になるキューを作成
         queue = multiprocessing.Queue(maxsize=1)
@@ -139,38 +136,6 @@ class TestQueuePut:
         result = queue.get(timeout=1)
         assert result.state == COOLING_STATE.IDLE
         assert result.mode_index == 2
-
-
-class TestNotifyStateManagerSubscribeProcessed:
-    """_notify_state_manager_subscribe_processed のテスト"""
-
-    def test_notifies_state_manager(self, mocker):
-        """StateManager に通知"""
-        import unit_cooler.webui.worker
-
-        mock_state_manager = mocker.MagicMock()
-        # 動的インポートされるので state_manager モジュール側をパッチ
-        mocker.patch(
-            "unit_cooler.state_manager.get_state_manager",
-            return_value=mock_state_manager,
-        )
-
-        unit_cooler.webui.worker._notify_state_manager_subscribe_processed()
-
-        mock_state_manager.notify_subscribe_processed.assert_called_once()
-
-    def test_handles_exception_gracefully(self, mocker):
-        """例外を適切に処理"""
-        import unit_cooler.webui.worker
-
-        # 動的インポートされるので state_manager モジュール側をパッチ
-        mocker.patch(
-            "unit_cooler.state_manager.get_state_manager",
-            side_effect=Exception("StateManager not available"),
-        )
-
-        # 例外が発生しても関数はエラーを投げない
-        unit_cooler.webui.worker._notify_state_manager_subscribe_processed()
 
 
 class TestSubscribeWorker:

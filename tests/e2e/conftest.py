@@ -24,6 +24,19 @@ def port(request):
     return request.config.getoption("--port")
 
 
+@pytest.fixture
+def page(page):
+    """Playwright ページ fixture"""
+    from playwright.sync_api import expect
+
+    timeout = 30000
+    page.set_default_navigation_timeout(timeout)
+    page.set_default_timeout(timeout)
+    expect.set_options(timeout=timeout)
+
+    return page
+
+
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
     """Playwright ブラウザコンテキスト引数"""

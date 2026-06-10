@@ -35,6 +35,12 @@ def server_port(port_manager: PortManager) -> int:
 
 
 @pytest.fixture
+def real_port(port_manager: PortManager) -> int:
+    """ZeroMQ 実サーバー用のポートを取得"""
+    return port_manager.find_unused_port()
+
+
+@pytest.fixture
 def actuator_port(port_manager: PortManager) -> int:
     """Actuator 用のポートを取得"""
     return port_manager.find_unused_port()

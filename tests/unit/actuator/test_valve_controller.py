@@ -377,46 +377,6 @@ class TestValveControllerSetCoolingWorking:
         assert status.state == VALVE_STATE.CLOSE
 
 
-class TestValveControllerNotifyStateManager:
-    """_notify_state_manager のテスト"""
-
-    def test_notifies_state_manager(self, config, mocker):
-        """StateManager に通知"""
-        mock_gpio = mocker.patch("my_lib.rpi.gpio")
-        mock_gpio.input.return_value = 0
-        create_footprint_mock(mocker)
-
-        mock_state_manager = mocker.MagicMock()
-        mocker.patch(
-            "unit_cooler.state_manager.get_state_manager",
-            return_value=mock_state_manager,
-        )
-
-        from unit_cooler.actuator.valve_controller import ValveController
-
-        controller = ValveController(config=config, pin_no=17)
-        controller._notify_state_manager(VALVE_STATE.OPEN)
-
-        mock_state_manager.notify_valve_state_changed.assert_called_once_with(VALVE_STATE.OPEN)
-
-    def test_handles_exception_gracefully(self, config, mocker):
-        """例外を適切に処理"""
-        mock_gpio = mocker.patch("my_lib.rpi.gpio")
-        mock_gpio.input.return_value = 0
-        create_footprint_mock(mocker)
-
-        mocker.patch(
-            "unit_cooler.state_manager.get_state_manager",
-            side_effect=Exception("StateManager not available"),
-        )
-
-        from unit_cooler.actuator.valve_controller import ValveController
-
-        controller = ValveController(config=config, pin_no=17)
-        # 例外が発生しても関数はエラーを投げない
-        controller._notify_state_manager(VALVE_STATE.OPEN)
-
-
 class TestValveControllerSetCoolingIdle:
     """set_cooling_idle のテスト"""
 
