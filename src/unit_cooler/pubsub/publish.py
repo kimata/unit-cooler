@@ -72,23 +72,31 @@ def start_server(
     wait_first_client(socket)
 
     send_count = 0
-    try:
-        while True:
-            # 購読イベントをチェック（ノンブロッキング）
-            try:
-                event = socket.recv(zmq.NOBLOCK)
-                if event[0] == 0:  # 購読解除
-                    logger.debug("Client unsubscribed.")
-                elif event[0] == 1:  # 購読開始
-                    logger.debug("New client subscribed.")
-                # イベントを転送
-                socket.send(event)
-            except zmq.Again:
-                pass  # イベントなし
+    while True:
+        # 購読イベントをチェック（ノンブロッキング）
+        try:
+            event = socket.recv(zmq.NOBLOCK)
+            if event[0] == 0:  # 購読解除
+                logger.debug("Client unsubscribed.")
+            elif event[0] == 1:  # 購読開始
+                logger.debug("New client subscribed.")
+            # イベントを転送
+            socket.send(event)
+        except zmq.Again:
+            pass  # イベントなし
 
-            start_time = time.monotonic()
+        start_time = time.monotonic()
+
+        # NOTE: func() の一過性の失敗（センサーデータ欠損等）でサーバーを止めないため、
+        # 例外はループ内で処理して配信を継続する。ソケット異常のみ復旧不能として終了する。
+        try:
             socket.send_string(f"{unit_cooler.const.PUBSUB_CH} {my_lib.json_util.dumps(func())}")
-
+        except zmq.ZMQError:
+            logger.exception("ZMQ socket error, stopping server")
+            break
+        except Exception:
+            logger.exception("Failed to generate control message")
+        else:
             if msg_count != 0:
                 send_count += 1
                 logger.debug("(send_count, msg_count) = (%d, %d)", send_count, msg_count)
@@ -97,11 +105,9 @@ def start_server(
                     logger.info("Terminate, because the specified number of times has been reached.")
                     break
 
-            sleep_sec = max(interval_sec - (time.monotonic() - start_time), 0.5)
-            logger.debug("Sleep %.1f sec...", sleep_sec)
-            time.sleep(sleep_sec)
-    except Exception:
-        logger.exception("Server failed")
+        sleep_sec = max(interval_sec - (time.monotonic() - start_time), 0.5)
+        logger.debug("Sleep %.1f sec...", sleep_sec)
+        time.sleep(sleep_sec)
 
     socket.close()
     context.destroy()

@@ -65,6 +65,18 @@ spec:
             nodeSelector:
                 kubernetes.io/hostname: hems
 ---
+kind: Service
+apiVersion: v1
+metadata:
+    name: unit-cooler-actuator
+    namespace: hems
+spec:
+    selector:
+        app: unit-cooler-actuator
+    ports:
+        - port: 5001
+          targetPort: 5001
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -98,7 +110,7 @@ spec:
                   imagePullPolicy: Always
                   command: ["./src/actuator.py"]
                   env:
-                      - name: HEMS_SERVER_HOST
+                      - name: HEMS_CONTROL_HOST
                         value: unit-cooler-controller.hems.svc.cluster.local
                       - name: NODE_HOSTNAME
                         value: rasp-cooler-1
@@ -172,8 +184,10 @@ spec:
                   ports:
                       - containerPort: 5000
                   env:
-                      - name: HEMS_SERVER_HOST
+                      - name: HEMS_CONTROL_HOST
                         value: unit-cooler-controller.hems.svc.cluster.local
+                      - name: HEMS_ACTUATOR_HOST
+                        value: unit-cooler-actuator.hems.svc.cluster.local
                   resources:
                       requests:
                           memory: 128Mi

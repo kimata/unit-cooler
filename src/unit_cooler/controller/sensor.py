@@ -113,27 +113,21 @@ def get_outdoor_status(
     solar_rad_low = th["solar_rad_low"]
     lux = th["lux"]
 
-    temp_str = (
-        f"{sense_data['temp'][0]['value']:.1f}" if sense_data["temp"][0]["value"] is not None else "？",
-    )
-    humi_str = (
-        f"{sense_data['humi'][0]['value']:.1f}" if sense_data["humi"][0]["value"] is not None else "？",
-    )
+    temp_str = f"{sense_data['temp'][0]['value']:.1f}" if sense_data["temp"][0]["value"] is not None else "？"
+    humi_str = f"{sense_data['humi'][0]['value']:.1f}" if sense_data["humi"][0]["value"] is not None else "？"
     solar_rad_str = (
         f"{sense_data['solar_rad'][0]['value']:,.0f}"
         if sense_data["solar_rad"][0]["value"] is not None
-        else "？",
+        else "？"
     )
-    lux_str = (
-        f"{sense_data['lux'][0]['value']:,.0f}" if sense_data["lux"][0]["value"] is not None else "？",
-    )
+    lux_str = f"{sense_data['lux'][0]['value']:,.0f}" if sense_data["lux"][0]["value"] is not None else "？"
 
     logger.info(
         "気温: %s ℃, 湿度: %s %%, 日射量: %s W/m^2, 照度: %s LUX", temp_str, humi_str, solar_rad_str, lux_str
     )
 
     is_senser_valid = all(
-        sense_data[key][0]["value"] is not None for key in ["temp", "humi", "solar_rad", "lux"]
+        sense_data[key][0]["value"] is not None for key in ["temp", "humi", "solar_rad", "lux", "rain"]
     )
 
     if not is_senser_valid:

@@ -107,6 +107,13 @@ class TestGetOutdoorStatus:
         result = get_outdoor_status(sense_data, DEFAULT_THRESHOLDS)
         assert result.status == -10
 
+    def test_missing_rain_data_stops_cooling(self):
+        """雨量データ欠損でも TypeError にならず冷却停止 (status=-10)"""
+        sense_data = create_sense_data()
+        sense_data["rain"][0]["value"] = None  # データ欠損
+        result = get_outdoor_status(sense_data, DEFAULT_THRESHOLDS)
+        assert result.status == -10
+
     @pytest.mark.parametrize(
         "temp,humi,solar_rad,lux,rain,expected_status",
         [

@@ -63,6 +63,8 @@ class RuntimeSettings:
         - 文字列の数値 → int
         """
         valid_fields = {f.name for f in dataclasses.fields(cls)}
+        # NOTE: `from __future__ import annotations` の影響で f.type は文字列になるため、
+        # 型オブジェクトと文字列の両方に対応する
         field_types = {f.name: f.type for f in dataclasses.fields(cls)}
         filtered: dict[str, Any] = {}
 
@@ -73,13 +75,13 @@ class RuntimeSettings:
             expected_type = field_types[k]
 
             # bool 型フィールドの変換
-            if expected_type is bool:
+            if expected_type in (bool, "bool"):
                 if isinstance(v, str):
                     filtered[k] = v.lower() in ("true", "1", "yes")
                 else:
                     filtered[k] = bool(v)
             # int 型フィールドの変換
-            elif expected_type is int:
+            elif expected_type in (int, "int"):
                 filtered[k] = int(v) if v is not None else 0
             else:
                 filtered[k] = v

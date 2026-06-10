@@ -17,6 +17,7 @@ from unit_cooler.config import (
     LivenessConfig,
     MetricsConfig,
     MonitorConfig,
+    RuntimeSettings,
     SensorConfig,
     SensorItemConfig,
     ValveConfig,
@@ -31,6 +32,43 @@ DACITE_CONFIG = dacite.Config(
     cast=[pathlib.Path],
     strict=False,
 )
+
+
+class TestRuntimeSettings:
+    """RuntimeSettings のテスト"""
+
+    def test_from_dict_converts_bool_strings(self):
+        """環境変数由来の文字列 "false"/"true" が bool に変換される"""
+        settings = RuntimeSettings.from_dict({"dummy_mode": "false"})
+        assert settings.dummy_mode is False
+
+        settings = RuntimeSettings.from_dict({"dummy_mode": "true"})
+        assert settings.dummy_mode is True
+
+        settings = RuntimeSettings.from_dict({"dummy_mode": "0"})
+        assert settings.dummy_mode is False
+
+    def test_from_dict_keeps_native_bool(self):
+        """bool 値はそのまま"""
+        settings = RuntimeSettings.from_dict({"dummy_mode": True, "debug_mode": False})
+        assert settings.dummy_mode is True
+        assert settings.debug_mode is False
+
+    def test_from_dict_converts_int_strings(self):
+        """環境変数由来の文字列数値が int に変換される"""
+        settings = RuntimeSettings.from_dict({"pub_port": "2222", "speedup": "2"})
+        assert settings.pub_port == 2222
+        assert settings.speedup == 2
+
+    def test_from_dict_none_int_becomes_zero(self):
+        """int フィールドの None は 0 になる"""
+        settings = RuntimeSettings.from_dict({"msg_count": None})
+        assert settings.msg_count == 0
+
+    def test_from_dict_ignores_unknown_keys(self):
+        """未知のキーは無視される"""
+        settings = RuntimeSettings.from_dict({"unknown_key": "value", "control_host": "example.com"})
+        assert settings.control_host == "example.com"
 
 
 class TestLivenessConfig:
