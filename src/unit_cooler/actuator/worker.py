@@ -44,8 +44,6 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from multiprocessing import Queue
 
-    from my_lib.lifecycle import LifecycleManager
-
     from unit_cooler.config import Config, RuntimeSettings
 
 
@@ -140,26 +138,12 @@ _control_messages: dict[str, ControlMessage] = {}
 _should_terminate: dict[str, threading.Event] = {}
 _worker_states: dict[str, dict[str, WorkerState]] = {}
 
-# LifecycleManager インスタンス（オプション）
-_lifecycle_manager: LifecycleManager | None = None
-
 # メッセージの初期値
 MESSAGE_INIT = ControlMessage(
     state=unit_cooler.const.COOLING_STATE.IDLE,
     duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
     mode_index=0,
 )
-
-
-def set_lifecycle_manager(manager: LifecycleManager | None) -> None:
-    """LifecycleManager を設定する"""
-    global _lifecycle_manager
-    _lifecycle_manager = manager
-
-
-def get_lifecycle_manager() -> LifecycleManager | None:
-    """LifecycleManager を取得する"""
-    return _lifecycle_manager
 
 
 def get_worker_id() -> str:
@@ -181,26 +165,12 @@ def set_last_control_message(message: ControlMessage) -> None:
 
 
 def get_should_terminate() -> threading.Event | None:
-    """終了イベントを取得する
-
-    LifecycleManager が設定されている場合はその termination_event を返し、
-    そうでない場合はグローバル辞書から取得する。
-    """
-    if _lifecycle_manager is not None:
-        return _lifecycle_manager.termination_event
+    """終了イベントを取得する"""
     return _should_terminate.get(get_worker_id(), None)
 
 
 def init_should_terminate() -> None:
-    """終了イベントを初期化する
-
-    LifecycleManager が設定されている場合は reset() を呼び、
-    そうでない場合はグローバル辞書に新しいイベントを作成する。
-    """
-    if _lifecycle_manager is not None:
-        _lifecycle_manager.reset()
-        return
-
+    """終了イベントを初期化する"""
     should_terminate = _should_terminate.get(get_worker_id())
 
     if should_terminate is None:
@@ -237,16 +207,6 @@ def init_worker_states() -> None:
             state.reset()
     else:
         _worker_states[worker_id] = {}
-
-
-def wait_for_control_process(timeout: float = 1.0) -> bool:
-    """control_worker の処理完了を待機する（テスト用便利関数）"""
-    return get_worker_state("control_worker").wait_for_process(timeout)
-
-
-def wait_for_monitor_process(timeout: float = 1.0) -> bool:
-    """monitor_worker の処理完了を待機する（テスト用便利関数）"""
-    return get_worker_state("monitor_worker").wait_for_process(timeout)
 
 
 # =============================================================================
@@ -582,26 +542,15 @@ def start(executor, worker_def: list[WorkerDef]):
         future = executor.submit(*params)
         thread_list.append({"name": worker_info.name, "future": future})
 
-        # LifecycleManager が設定されている場合はワーカーを登録
-        if _lifecycle_manager is not None:
-            _lifecycle_manager.register_worker(worker_info.name, future)
-
     return thread_list
 
 
 def term() -> None:
-    """終了をリクエストする
-
-    LifecycleManager が設定されている場合は request_termination() を呼び、
-    そうでない場合はグローバルイベントを set する。
-    """
+    """終了をリクエストする"""
     logger.info("Terminate actuator worker")
-    if _lifecycle_manager is not None:
-        _lifecycle_manager.request_termination()
-    else:
-        event = get_should_terminate()
-        if event is not None:
-            event.set()
+    event = get_should_terminate()
+    if event is not None:
+        event.set()
 
 
 if __name__ == "__main__":

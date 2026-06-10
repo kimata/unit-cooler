@@ -290,38 +290,6 @@ def generate_statistics(minute_data: list[dict], hourly_data: list[dict], error_
     }
 
 
-def calculate_correlation(x_values: list, y_values: list) -> float:
-    """ピアソンの相関係数を計算"""
-    if not x_values or not y_values or len(x_values) != len(y_values):
-        return 0.0
-
-    # None値を除外
-    valid_pairs = [
-        (x, y) for x, y in zip(x_values, y_values, strict=False) if x is not None and y is not None
-    ]
-    if len(valid_pairs) < 2:
-        return 0.0
-
-    x_vals, y_vals = zip(*valid_pairs, strict=False)
-    n = len(x_vals)
-
-    # 平均を計算
-    x_mean = sum(x_vals) / n
-    y_mean = sum(y_vals) / n
-
-    # 分子と分母を計算
-    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_vals, y_vals, strict=False))
-    x_variance = sum((x - x_mean) ** 2 for x in x_vals)
-    y_variance = sum((y - y_mean) ** 2 for y in y_vals)
-
-    denominator = (x_variance * y_variance) ** 0.5
-
-    if denominator == 0:
-        return 0.0
-
-    return numerator / denominator
-
-
 def calculate_boxplot_stats(values: list) -> BoxplotStats:
     """箱ヒゲ図用の統計データを計算"""
     if not values:

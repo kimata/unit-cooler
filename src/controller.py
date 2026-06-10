@@ -26,23 +26,12 @@ import my_lib.footprint
 
 import unit_cooler.controller.engine
 import unit_cooler.pubsub.publish
-import unit_cooler.pubsub.subscribe
 import unit_cooler.util
 from unit_cooler.config import Config, RuntimeSettings
 
 logger = logging.getLogger(__name__)
 
 SCHEMA_CONFIG = "schema/config.schema"
-
-
-def test_client(server_host: str, server_port: int) -> None:
-    logger.info("Start test client (host: %s:%d)", server_host, server_port)
-    unit_cooler.pubsub.subscribe.start_client(
-        server_host,
-        server_port,
-        lambda message: logger.info("receive: %s", message),
-        1,
-    )
 
 
 # NOTE: Last Value Caching Proxy

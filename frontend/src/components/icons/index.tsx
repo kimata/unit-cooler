@@ -4,7 +4,6 @@ import {
     SunIcon,
     AdjustmentsHorizontalIcon,
     AdjustmentsVerticalIcon,
-    BeakerIcon,
     CalendarDaysIcon,
     BoltIcon,
     ClipboardDocumentListIcon,
@@ -38,15 +37,6 @@ export const DropletIcon = ({ className = "size-6" }: { className?: string }) =>
     </svg>
 );
 
-// カスタム雪の結晶アイコン（冷却モード用）
-export const SnowflakeIcon = ({ className = "size-6" }: { className?: string }) => (
-    <svg className={className} fill="currentColor" viewBox="0 0 16 16">
-        <path d="M8 0a.5.5 0 0 1 .5.5v1.293l1.146-1.147a.5.5 0 0 1 .708.708L9.207 2.5H10.5a.5.5 0 0 1 0 1H9.207l1.147 1.146a.5.5 0 0 1-.708.708L8.5 4.207V5.5a.5.5 0 0 1-1 0V4.207L6.354 5.354a.5.5 0 1 1-.708-.708L6.793 3.5H5.5a.5.5 0 0 1 0-1h1.293L5.646 1.354a.5.5 0 1 1 .708-.708L7.5 1.793V.5A.5.5 0 0 1 8 0z" />
-        <path d="M8 5a.5.5 0 0 1 .5.5v1.293l1.146-1.147a.5.5 0 0 1 .708.708L9.207 7.5H10.5a.5.5 0 0 1 0 1H9.207l1.147 1.146a.5.5 0 0 1-.708.708L8.5 9.207V10.5a.5.5 0 0 1-1 0V9.207l-1.146 1.147a.5.5 0 0 1-.708-.708L6.793 8.5H5.5a.5.5 0 0 1 0-1h1.293L5.646 6.354a.5.5 0 1 1 .708-.708L7.5 6.793V5.5A.5.5 0 0 1 8 5z" />
-        <path d="M8 10a.5.5 0 0 1 .5.5v1.293l1.146-1.147a.5.5 0 0 1 .708.708L9.207 12.5H10.5a.5.5 0 0 1 0 1H9.207l1.147 1.146a.5.5 0 0 1-.708.708L8.5 14.207V15.5a.5.5 0 0 1-1 0v-1.293l-1.146 1.147a.5.5 0 0 1-.708-.708L6.793 13.5H5.5a.5.5 0 0 1 0-1h1.293l-1.147-1.146a.5.5 0 0 1 .708-.708L7.5 11.793V10.5A.5.5 0 0 1 8 10z" />
-    </svg>
-);
-
 // カスタム温度計アイコン（センサー値用）
 export const ThermometerIcon = ({ className = "size-6" }: { className?: string }) => (
     <svg className={className} fill="currentColor" viewBox="0 0 16 16">
@@ -62,7 +52,6 @@ export {
     SunIcon,
     AdjustmentsHorizontalIcon,
     AdjustmentsVerticalIcon,
-    BeakerIcon,
     CalendarDaysIcon,
     BoltIcon,
     ClipboardDocumentListIcon,

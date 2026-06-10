@@ -249,9 +249,3 @@ def get_valve_controller() -> ValveController:
     if _instance is None:
         raise RuntimeError("ValveController not initialized. Call init_valve_controller() first.")
     return _instance
-
-
-def clear_valve_controller() -> None:
-    """テスト用: シングルトンインスタンスをクリア"""
-    global _instance
-    _instance = None
