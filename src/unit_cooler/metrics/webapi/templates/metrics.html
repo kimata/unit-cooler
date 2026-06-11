@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>室外機冷却システム メトリクス ダッシュボード</title>
+        <link rel="icon" type="image/x-icon" href="{{ url_for('metrics.favicon') }}" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css" />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+        <link rel="stylesheet" href="{{ url_for('metrics.static', filename='metrics.css') }}" />
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot"></script>
+        <script src="{{ url_for('metrics.static', filename='metrics.js') }}" defer></script>
+    </head>
+
+    {% macro permalink_icon(anchor) -%}
+    <span class="permalink-icon" data-permalink="{{ anchor }}"><i class="fas fa-link"></i></span>
+    {%- endmacro %} {% macro section_header(anchor, icon, title) -%}
+    <h2 class="title is-4 permalink-header" id="{{ anchor }}">
+        <span class="icon"><i class="fas {{ icon }}"></i></span> {{ title }} {{ permalink_icon(anchor) }}
+    </h2>
+    {%- endmacro %} {% macro chart_card(card) -%}
+    <div class="card metrics-card">
+        <div class="card-header">
+            <p class="card-header-title permalink-header" id="{{ card.anchor }}">
+                {{ card.title }} {{ permalink_icon(card.anchor) }}
+            </p>
+        </div>
+        <div class="card-content">
+            <div class="chart-container">
+                <canvas id="{{ card.canvas }}"></canvas>
+            </div>
+        </div>
+    </div>
+    {%- endmacro %} {% macro stat_item(heading, value, color) -%}
+    <div class="column is-one-third">
+        <div class="has-text-centered">
+            <p class="heading">{{ heading }}</p>
+            <p class="stat-number has-text-{{ color }}">{{ value }}</p>
+        </div>
+    </div>
+    {%- endmacro %} {% set hourly_cards = [ {"anchor": "cooling-mode-hourly", "title": "❄️
+    冷却モードの時間別分布", "canvas": "coolingModeHourlyChart"}, {"anchor": "duty-ratio-hourly", "title": "⚡
+    Duty比の時間別分布", "canvas": "dutyRatioHourlyChart"}, {"anchor": "valve-ops-hourly", "title": "🔧
+    バルブ操作回数の時間別分布", "canvas": "valveOpsHourlyChart"}, ] %} {% set timeseries_cards = [ {"anchor":
+    "cooling-duty-timeseries", "title": "📈 冷却モードとDuty比の時系列推移", "canvas":
+    "coolingDutyTimeseriesChart"}, {"anchor": "environment-timeseries", "title": "🌡️ 環境データの時系列推移",
+    "canvas": "environmentTimeseriesChart"}, ] %} {% set correlation_cards = [ {"anchor":
+    "temp-cooling-correlation", "title": "🌡️❄️ 気温 vs 冷却モード", "canvas": "tempCoolingCorrelationChart"},
+    {"anchor": "humidity-duty-correlation", "title": "💧⚡ 湿度 vs Duty比", "canvas":
+    "humidityDutyCorrelationChart"}, {"anchor": "solar-cooling-correlation", "title": "☀️❄️ 日射量 vs
+    冷却モード", "canvas": "solarCoolingCorrelationChart"}, {"anchor": "lux-duty-correlation", "title": "💡⚡
+    照度 vs Duty比", "canvas": "luxDutyCorrelationChart"}, ] %}
+
+    <body class="japanese-font" data-api-url="{{ data_url }}">
+        <div class="container is-fluid" style="padding: 0.5rem">
+            <section class="section" style="padding: 1rem 0.5rem">
+                <div class="container" style="max-width: 100%; padding: 0">
+                    <h1 class="title is-2 has-text-centered">
+                        <span class="icon is-large"><i class="fas fa-snowflake"></i></span>
+                        室外機冷却システム メトリクス ダッシュボード
+                    </h1>
+                    <p class="subtitle has-text-centered">{{ period_text }}</p>
+
+                    <!-- 基本統計 -->
+                    <div class="section">
+                        {{ section_header("basic-stats", "fa-chart-bar", "基本統計") }}
+                        <div class="columns">
+                            <div class="column">
+                                <div class="card metrics-card">
+                                    <div class="card-header">
+                                        <p class="card-header-title">システム稼働状況</p>
+                                    </div>
+                                    <div class="card-content">
+                                        <div class="columns is-multiline">
+                                            {{ stat_item("❄️ 冷却モード平均", stats.cooling_mode_avg, "info")
+                                            }} {{ stat_item("⚡ Duty比平均", stats.duty_ratio_avg, "success")
+                                            }} {{ stat_item("🔧 バルブ操作回数", stats.valve_operations_total,
+                                            "warning") }} {{ stat_item("❌ エラー数", stats.error_total,
+                                            "danger") }} {{ stat_item("📊 データポイント数",
+                                            stats.data_points, "primary") }} {{ stat_item("📅 データ収集日数",
+                                            stats.total_days, "primary") }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 時間別分布分析 -->
+                    <div class="section">
+                        {{ section_header("hourly-analysis", "fa-clock", "時間別分布分析") }} {% for card in
+                        hourly_cards %}
+                        <div class="columns">
+                            <div class="column">{{ chart_card(card) }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- 時系列データ分析 -->
+                    <div class="section">
+                        {{ section_header("timeseries", "fa-chart-line", "時系列推移分析") }} {% for card in
+                        timeseries_cards %}
+                        <div class="columns">
+                            <div class="column">{{ chart_card(card) }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- 環境要因相関分析 -->
+                    <div class="section">
+                        {{ section_header("correlation", "fa-project-diagram", "環境要因相関分析") }} {% for
+                        row in correlation_cards | batch(2) %}
+                        <div class="columns">
+                            {% for card in row %}
+                            <div class="column is-half">{{ chart_card(card) }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,87 @@
+/* メトリクスダッシュボードのスタイル */
+.metrics-card {
+    margin-bottom: 1rem;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.chart-container {
+    position: relative;
+    height: 350px;
+    margin: 0.5rem 0;
+}
+
+@media (max-width: 768px) {
+    .metrics-card {
+        margin-bottom: 0.75rem;
+    }
+
+    .chart-container {
+        height: 300px;
+        margin: 0.25rem 0;
+    }
+
+    .container.is-fluid {
+        padding: 0.25rem !important;
+    }
+
+    .section {
+        padding: 0.5rem 0.25rem !important;
+    }
+
+    .card {
+        margin-bottom: 1rem !important;
+    }
+
+    .columns {
+        margin: 0 !important;
+    }
+
+    .column {
+        padding: 0.25rem !important;
+    }
+}
+
+.japanese-font {
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Yu Gothic", sans-serif;
+}
+
+.permalink-header {
+    position: relative;
+    display: inline-block;
+}
+
+.permalink-icon {
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    cursor: pointer;
+    color: #4a90e2;
+    margin-left: 0.5rem;
+    font-size: 0.8em;
+}
+
+.permalink-header:hover .permalink-icon {
+    opacity: 1;
+}
+
+.permalink-icon:hover {
+    color: #357abd;
+}
+
+.copy-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #23d160;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 4px;
+    z-index: 1000;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: opacity 0.3s ease-in-out;
+}

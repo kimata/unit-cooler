@@ -61,6 +61,18 @@ def hist_get() -> list[str]:
     return log_hist
 
 
+def _record_error_metrics(message: str) -> None:
+    """エラーイベントをメトリクス DB に記録する"""
+    assert config is not None  # noqa: S101
+
+    try:
+        from unit_cooler.metrics import get_metrics_collector
+
+        get_metrics_collector(config.actuator.metrics.data).record_error(message)
+    except Exception:
+        logger.debug("Failed to record error metrics")
+
+
 def add(message: str, level: unit_cooler.const.LOG_LEVEL = unit_cooler.const.LOG_LEVEL.INFO) -> None:
     global log_hist
     global config
@@ -74,3 +86,4 @@ def add(message: str, level: unit_cooler.const.LOG_LEVEL = unit_cooler.const.LOG
 
     if level == unit_cooler.const.LOG_LEVEL.ERROR and config is not None:
         unit_cooler.util.notify_error(config, message)
+        _record_error_metrics(message)

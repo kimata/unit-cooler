@@ -123,6 +123,19 @@ def collect_environmental_metrics(config: Config, current_message: ControlMessag
         logger.exception("Failed to collect environmental metrics")
 
 
+def collect_flow_metrics(config: Config, mist_condition: unit_cooler.actuator.monitor.MistCondition) -> None:
+    """バルブ ON 中の流量をメトリクスに記録する"""
+    if mist_condition.valve.state != unit_cooler.const.VALVE_STATE.OPEN or mist_condition.flow is None:
+        return
+
+    from unit_cooler.metrics import get_metrics_collector
+
+    try:
+        get_metrics_collector(config.actuator.metrics.data).update_flow_value(mist_condition.flow)
+    except Exception:
+        logger.exception("Failed to collect flow metrics")
+
+
 def sleep_until_next_iter(start_time, interval_sec):
     sleep_sec = max(interval_sec - (time.monotonic() - start_time), 0.5)
     logger.debug("Sleep %.1f sec...", sleep_sec)
@@ -200,6 +213,7 @@ def monitor_worker(
             unit_cooler.actuator.monitor.send_mist_condition(
                 handle, mist_condition, get_last_control_message(), dummy_mode
             )
+            collect_flow_metrics(config, mist_condition)
 
             # ActuatorStatus を ZeroMQ で配信
             if status_socket is not None:

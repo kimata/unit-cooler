@@ -7,6 +7,7 @@
 Raspberry Pi を使用したエアコン室外機の自動冷却システム。InfluxDB からの電力データを監視し、エアコン稼働を検知すると自動的にミスト噴射を制御する省エネソリューション。
 
 ## 重要な注意事項
+
 ### 共通運用ルール
 
 - 変更前に意図と影響範囲を説明し、ユーザー確認を取る
@@ -17,7 +18,6 @@ Raspberry Pi を使用したエアコン室外機の自動冷却システム。I
 - Union 型が 3 箇所以上で出現する場合は `TypeAlias` を定義
 - `except Exception` は避け、具体的な例外型を指定する
 - ミラー運用がある場合は primary リポジトリにのみ push する
-
 
 ### コード変更時のドキュメント更新
 
@@ -122,7 +122,7 @@ uv run python ./src/actuator.py -c config.yaml -d
 
 ```bash
 # 依存関係インストール
-cd react && npm ci
+cd frontend && npm ci
 
 # 開発サーバー起動（localhost:3000）
 npm start
@@ -146,35 +146,47 @@ src/
 ├── controller.py              # Controller エントリーポイント
 ├── actuator.py                # Actuator エントリーポイント
 ├── webui.py                   # Web UI エントリーポイント
+├── healthz.py                 # Liveness チェック（k8s probe 用）
 └── unit_cooler/
-    ├── config.py              # 型付き設定クラス（frozen dataclass）
+    ├── cli.py                 # エントリポイント共通処理（docopt + logger + Config）
+    ├── config.py              # 型付き設定クラス（frozen dataclass）+ RuntimeSettings
+    ├── const.py               # 定数・Enum 定義
+    ├── messages.py            # メッセージスキーマ（ControlMessage, SenseData 等）
+    ├── util.py                # エラー通知ユーティリティ
+    │
+    ├── pubsub/                # ZeroMQ Pub/Sub 基盤
+    │   ├── publish.py         # パブリッシャー + Last Value Caching Proxy
+    │   └── subscribe.py       # サブスクライバー + 購読ワーカー共通実装
     │
     ├── controller/            # Controller コンポーネント
-    │   ├── app.py             # メインループ
-    │   ├── influxdb_query.py  # InfluxDB クエリ
-    │   └── zmq_publisher.py   # ZeroMQ パブリッシャー
+    │   ├── engine.py          # 冷却モード判定
+    │   ├── sensor.py          # InfluxDB センサーデータ取得
+    │   └── message.py         # 制御メッセージ定義
     │
     ├── actuator/              # Actuator コンポーネント
-    │   ├── app.py             # メインループ
-    │   ├── worker.py          # Duty 制御ワーカー
-    │   ├── control.py         # GPIO 制御ロジック
-    │   ├── flow_sensor.py     # 流量センサー制御
-    │   └── zmq_subscriber.py  # ZeroMQ サブスクライバー
+    │   ├── worker.py          # subscribe / monitor / control ワーカー
+    │   ├── control.py         # 制御メッセージ処理・ハザード管理
+    │   ├── valve_controller.py # 電磁弁制御（GPIO・Duty サイクル）
+    │   ├── monitor.py         # 流量監視・異常検知
+    │   ├── sensor.py          # 流量センサー（FD-Q10C）制御
+    │   ├── work_log.py        # 作動ログ記録
+    │   ├── web_server.py      # ログ提供用 Flask サーバー
+    │   ├── status_publisher.py # ActuatorStatus 配信
+    │   └── webapi/            # 流量・バルブ状態 API
     │
     ├── webui/                 # Web UI コンポーネント
-    │   ├── app.py             # Flask アプリケーション
-    │   ├── zmq_subscriber.py  # ZeroMQ サブスクライバー
-    │   └── webapi/            # REST API エンドポイント
-    │       ├── server.py      # Flask ブループリント
-    │       └── page.py        # API ハンドラ
+    │   ├── worker.py          # ZeroMQ サブスクライバーワーカー
+    │   └── webapi/
+    │       └── cooler_stat.py # /api/stat, /api/watering
     │
     └── metrics/               # メトリクス収集・可視化
-        ├── collector.py       # データ収集
-        ├── storage.py         # SQLite 永続化
-        └── webapi/            # メトリクス API
-            └── page.py        # ダッシュボード
+        ├── collector.py       # データ収集・SQLite 永続化
+        └── webapi/
+            ├── page.py        # ダッシュボードルート + データ準備
+            ├── templates/     # Jinja2 テンプレート
+            └── static/        # ダッシュボード JS/CSS/favicon
 
-frontend/                         # React フロントエンド
+frontend/                      # React フロントエンド
 ├── src/
 │   ├── App.tsx                # メインコンポーネント
 │   ├── components/            # UI コンポーネント
@@ -185,24 +197,19 @@ frontend/                         # React フロントエンド
 │   │   ├── History.tsx        # 散水履歴
 │   │   ├── Log.tsx            # アクティビティログ
 │   │   ├── common/            # 共通コンポーネント
-│   │   │   ├── Loading.tsx
-│   │   │   ├── ErrorMessage.tsx
-│   │   │   ├── AnimatedNumber.tsx
-│   │   │   └── Pagination.tsx
-│   │   └── icons/             # アイコンコンポーネント
-│   │       └── index.tsx      # Heroicons + カスタム SVG
-│   ├── hooks/                 # カスタムフック
-│   │   └── useApi.ts          # API フェッチフック
-│   └── lib/                   # ユーティリティ
-│       └── ApiResponse.ts     # API レスポンス型定義
+│   │   └── icons/             # Heroicons + カスタム SVG
+│   ├── hooks/                 # カスタムフック（useApi, useEventSource）
+│   └── lib/                   # ユーティリティ（ApiResponse 型定義等）
 
 tests/
 ├── conftest.py                # 共通フィクスチャ
+├── helpers/                   # ComponentManager, PortManager
 ├── unit/                      # ユニットテスト
 │   ├── controller/
 │   ├── actuator/
 │   ├── webui/
-│   └── metrics/
+│   ├── metrics/
+│   └── pubsub/
 ├── integration/               # 統合テスト
 └── e2e/                       # E2E テスト（Playwright）
 ```
@@ -268,7 +275,7 @@ db_path = config.get("actuator", {}).get("metrics", {}).get("data")
 
 ```bash
 # フロントエンドビルド
-cd react && npm ci && npm run build && cd ..
+cd frontend && npm ci && npm run build && cd ..
 
 # Docker Compose 起動
 docker-compose up -d

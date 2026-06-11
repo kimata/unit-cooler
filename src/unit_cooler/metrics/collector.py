@@ -17,6 +17,7 @@ import sqlite3
 import threading
 from collections.abc import Callable
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 import my_lib.pytest_util
 import my_lib.sqlite_util
@@ -29,6 +30,22 @@ import my_lib.time
 SCHEMA_PATH = pathlib.Path(__file__).parent.parent.parent.parent / "schema" / "sqlite.schema"
 
 logger = logging.getLogger(__name__)
+
+# get_hourly_values で許可するカラムと対応テーブル（SQL インジェクション防止のホワイトリスト）
+_HOURLY_VALUE_TABLES = {
+    "cooling_mode": "minute_metrics",
+    "duty_ratio": "minute_metrics",
+    "valve_operations": "hourly_metrics",
+}
+
+
+@dataclass(frozen=True)
+class PeriodSummary:
+    """データ収集期間のサマリー"""
+
+    start: datetime.datetime | None
+    end: datetime.datetime | None
+    total_days: int  # データが存在する日数（重複なし）
 
 
 class MetricsCollector:
@@ -72,6 +89,24 @@ class MetricsCollector:
             # スキーマファイルからテーブルとインデックスを作成
             my_lib.sqlite_util.exec_schema_from_file(conn, SCHEMA_PATH)
 
+            self._migrate_timestamps(conn)
+
+    @staticmethod
+    def _migrate_timestamps(conn: sqlite3.Connection) -> None:
+        """旧形式タイムスタンプの 1 回限りのマイグレーション
+
+        以前は sqlite3 のデフォルトアダプタ経由でスペース区切り
+        ("2026-06-15 12:30:00+09:00") で保存されていたため、
+        ISO 8601 (T 区切り) に変換する。
+        """
+        for table in ("minute_metrics", "hourly_metrics", "error_events"):
+            cursor = conn.execute(
+                f"UPDATE {table} SET timestamp = REPLACE(timestamp, ' ', 'T') "  # noqa: S608
+                "WHERE timestamp LIKE '% %'"
+            )
+            if cursor.rowcount > 0:
+                logger.info("Migrated %d timestamps in %s to ISO 8601", cursor.rowcount, table)
+
     @contextmanager
     def _get_db_connection(self):
         """Get database connection with proper error handling."""
@@ -87,15 +122,17 @@ class MetricsCollector:
     def update_cooling_mode(self, cooling_mode: int) -> None:
         """Update current cooling mode value."""
         with self._lock:
-            self._current_minute_data["cooling_mode"] = cooling_mode
+            # NOTE: 境界チェックは状態更新の前に行う。後に行うと、新しい期間の
+            # 最初の値が前の期間のタイムスタンプで保存されてしまう
             self._check_minute_boundary()
+            self._current_minute_data["cooling_mode"] = cooling_mode
 
     def update_duty_ratio(self, on_time: float, total_time: float) -> None:
         """Update duty ratio (ON time / total time)."""
         with self._lock:
+            self._check_minute_boundary()
             if total_time > 0:
                 self._current_minute_data["duty_ratio"] = on_time / total_time
-            self._check_minute_boundary()
 
     def update_environmental_data(
         self,
@@ -107,6 +144,7 @@ class MetricsCollector:
     ) -> None:
         """Update environmental sensor data."""
         with self._lock:
+            self._check_minute_boundary()
             if temperature is not None:
                 self._current_minute_data["temperature"] = temperature
             if humidity is not None:
@@ -117,19 +155,18 @@ class MetricsCollector:
                 self._current_minute_data["solar_radiation"] = solar_radiation
             if rain_amount is not None:
                 self._current_minute_data["rain_amount"] = rain_amount
-            self._check_minute_boundary()
 
     def update_flow_value(self, flow_value: float) -> None:
         """Update flow value when valve is ON."""
         with self._lock:
-            self._current_minute_data["flow_value"] = flow_value
             self._check_minute_boundary()
+            self._current_minute_data["flow_value"] = flow_value
 
     def record_valve_operation(self) -> None:
         """Record a valve operation for hourly counting."""
         with self._lock:
-            self._current_hour_data["valve_operations"] += 1
             self._check_hour_boundary()
+            self._current_hour_data["valve_operations"] += 1
 
     def record_error(self, error_type: str, error_message: str | None = None) -> None:
         """Record an error event."""
@@ -142,7 +179,7 @@ class MetricsCollector:
                     INSERT INTO error_events (timestamp, error_type, error_message)
                     VALUES (?, ?, ?)
                 """,
-                    (now, error_type, error_message),
+                    (now.isoformat(), error_type, error_message),
                 )
                 logger.info("Recorded error: %s", error_type)
         except Exception:
@@ -184,7 +221,7 @@ class MetricsCollector:
 
         try:
             data = (
-                timestamp,
+                timestamp.isoformat(),
                 self._current_minute_data.get("cooling_mode"),
                 self._current_minute_data.get("duty_ratio"),
                 self._current_minute_data.get("temperature"),
@@ -220,7 +257,7 @@ class MetricsCollector:
                     (timestamp, valve_operations)
                     VALUES (?, ?)
                 """,
-                    (timestamp, self._current_hour_data["valve_operations"]),
+                    (timestamp.isoformat(), self._current_hour_data["valve_operations"]),
                 )
                 logger.debug("Saved hourly metrics for %s", timestamp)
         except Exception:
@@ -236,17 +273,17 @@ class MetricsCollector:
         """テーブルから期間・件数を指定してレコードを取得する"""
         with self._get_db_connection() as conn:
             query = f"SELECT * FROM {table}"  # noqa: S608  # table はクラス内の固定値のみ
-            params: list[datetime.datetime | int] = []
+            params: list[str | int] = []
 
             if start_time or end_time:
                 query += " WHERE"
                 conditions = []
                 if start_time:
                     conditions.append(" timestamp >= ?")
-                    params.append(start_time)
+                    params.append(start_time.isoformat())
                 if end_time:
                     conditions.append(" timestamp <= ?")
-                    params.append(end_time)
+                    params.append(end_time.isoformat())
                 query += " AND".join(conditions)
 
             query += " ORDER BY timestamp DESC"
@@ -282,6 +319,51 @@ class MetricsCollector:
     ) -> list[dict]:
         """Get error events data."""
         return self._query("error_events", start_time, end_time, limit)
+
+    def get_hourly_values(self, column: str) -> list[tuple[int, float]]:
+        """時間帯 (0-23) と値のペアを全件取得する
+
+        Note:
+            strftime('%H', ...) はタイムゾーン付き ISO 8601 を UTC に変換してしまうため、
+            ローカル時刻の時間を保持するよう substr で抽出している。
+        """
+        table = _HOURLY_VALUE_TABLES.get(column)
+        if table is None:
+            raise ValueError(f"Unsupported column: {column}")
+
+        with self._get_db_connection() as conn:
+            rows = conn.execute(
+                f"SELECT CAST(substr(timestamp, 12, 2) AS INTEGER) AS hour, {column} AS value "  # noqa: S608
+                f"FROM {table} WHERE {column} IS NOT NULL"
+            ).fetchall()
+            return [(row["hour"], row["value"]) for row in rows]
+
+    def count_errors(self) -> int:
+        """エラーイベントの総数を取得する"""
+        with self._get_db_connection() as conn:
+            return conn.execute("SELECT COUNT(*) FROM error_events").fetchone()[0]
+
+    def get_period_summary(self) -> PeriodSummary:
+        """データ収集期間（開始・終了・日数）を取得する
+
+        Note:
+            date(timestamp) はタイムゾーン付き ISO 8601 を UTC に変換してしまうため、
+            ローカル日付を保持するよう substr で日付部分を抽出している。
+        """
+        with self._get_db_connection() as conn:
+            row = conn.execute(
+                "SELECT MIN(timestamp), MAX(timestamp), COUNT(DISTINCT substr(timestamp, 1, 10)) "
+                "FROM (SELECT timestamp FROM minute_metrics UNION ALL SELECT timestamp FROM hourly_metrics)"
+            ).fetchone()
+
+        if row[0] is None:
+            return PeriodSummary(start=None, end=None, total_days=0)
+
+        return PeriodSummary(
+            start=datetime.datetime.fromisoformat(row[0]),
+            end=datetime.datetime.fromisoformat(row[1]),
+            total_days=row[2],
+        )
 
     def close(self) -> None:
         """Clean shutdown of metrics collector."""

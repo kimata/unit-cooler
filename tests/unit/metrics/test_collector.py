@@ -181,10 +181,11 @@ class TestMetricsCollectorHourBoundary:
         collector.record_valve_operation()
 
         # データが保存されたことを確認
-        # 注: 現在の実装では、境界をトリガーする操作も含めてカウントされる
+        # NOTE: 境界チェックは状態更新の前に行われるため、境界をトリガーした操作は
+        # 新しい時間帯にカウントされる
         data = collector.get_hourly_data()
         assert len(data) == 1
-        assert data[0]["valve_operations"] == 3
+        assert data[0]["valve_operations"] == 2
 
         collector.close()
 
@@ -239,7 +240,7 @@ class TestMetricsCollectorGetData:
                     INSERT INTO minute_metrics (timestamp, cooling_mode, duty_ratio)
                     VALUES (?, ?, ?)
                     """,
-                    (timestamp, i, i * 0.1),
+                    (timestamp.isoformat(), i, i * 0.1),
                 )
 
             for i in range(3):
@@ -249,7 +250,7 @@ class TestMetricsCollectorGetData:
                     INSERT INTO hourly_metrics (timestamp, valve_operations)
                     VALUES (?, ?)
                     """,
-                    (timestamp, i * 10),
+                    (timestamp.isoformat(), i * 10),
                 )
 
         yield collector
