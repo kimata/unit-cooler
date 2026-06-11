@@ -7,7 +7,14 @@ import json
 import pytest
 
 from unit_cooler.const import COOLING_STATE, VALVE_STATE
-from unit_cooler.messages import ActuatorStatus, ControlMessage, DutyConfig, ValveStatus
+from unit_cooler.messages import (
+    ActuatorStatus,
+    ControlMessage,
+    DutyConfig,
+    SenseData,
+    SensorReading,
+    ValveStatus,
+)
 
 
 class TestDutyConfig:
@@ -63,12 +70,15 @@ class TestControlMessage:
         assert msg.state == COOLING_STATE.WORKING
         assert msg.duty == duty
         assert msg.mode_index == 2
-        assert msg.sense_data == {}
+        assert msg.sense_data is None
 
     def test_with_sense_data(self):
         """sense_data 付きの作成"""
         duty = DutyConfig(enable=True, on_sec=60, off_sec=30)
-        sense_data = {"temp": 30.5, "humi": 60}
+        sense_data = SenseData(
+            temp=[SensorReading(name="temp", value=30.5)],
+            humi=[SensorReading(name="humi", value=60.0)],
+        )
         msg = ControlMessage(
             state=COOLING_STATE.IDLE,
             duty=duty,
@@ -84,13 +94,13 @@ class TestControlMessage:
             state=COOLING_STATE.WORKING,
             duty=duty,
             mode_index=3,
-            sense_data={"temp": 25},
+            sense_data=SenseData(temp=[SensorReading(name="temp", value=25.0)]),
         )
         d = msg.to_dict()
         assert d["state"] == COOLING_STATE.WORKING.value
         assert d["duty"] == {"enable": True, "on_sec": 60, "off_sec": 30}
         assert d["mode_index"] == 3
-        assert d["sense_data"] == {"temp": 25}
+        assert d["sense_data"]["temp"] == [{"name": "temp", "value": 25.0, "time": None}]
 
     def test_to_json(self):
         """JSON 変換"""
@@ -111,13 +121,13 @@ class TestControlMessage:
             "state": 1,
             "duty": {"enable": False, "on_sec": 90, "off_sec": 45},
             "mode_index": 2,
-            "sense_data": {"power": 500},
+            "sense_data": {"power": [{"name": "aircon", "value": 500}]},
         }
         msg = ControlMessage.from_dict(data)
         assert msg.state == COOLING_STATE.WORKING
         assert msg.duty.enable is False
         assert msg.mode_index == 2
-        assert msg.sense_data == {"power": 500}
+        assert msg.sense_data == SenseData(power=[SensorReading(name="aircon", value=500)])
 
     def test_from_dict_without_sense_data(self):
         """sense_data なしの dict からの作成"""
@@ -127,7 +137,7 @@ class TestControlMessage:
             "mode_index": 0,
         }
         msg = ControlMessage.from_dict(data)
-        assert msg.sense_data == {}
+        assert msg.sense_data is None
 
     def test_from_json(self):
         """JSON からの作成"""
@@ -143,7 +153,10 @@ class TestControlMessage:
             state=COOLING_STATE.WORKING,
             duty=duty,
             mode_index=5,
-            sense_data={"temp": 35, "power": 800},
+            sense_data=SenseData(
+                temp=[SensorReading(name="temp", value=35.0)],
+                power=[SensorReading(name="aircon", value=800.0)],
+            ),
         )
         restored = ControlMessage.from_json(original.to_json())
         assert restored.state == original.state

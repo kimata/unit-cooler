@@ -2,9 +2,6 @@
 # ruff: noqa: S101
 """unit_cooler.controller.engine のテスト"""
 
-import dataclasses
-
-from unit_cooler.config import DecisionThresholdsConfig
 from unit_cooler.const import COOLING_STATE
 from unit_cooler.controller.engine import (
     OFF_SEC_MIN,
@@ -16,30 +13,29 @@ from unit_cooler.controller.engine import (
     set_dummy_prev_mode,
 )
 from unit_cooler.controller.message import CONTROL_MESSAGE_LIST
-
-DEFAULT_THRESHOLDS = dataclasses.asdict(DecisionThresholdsConfig.default())
+from unit_cooler.messages import SenseData, SensorReading
 
 
 def create_sense_data(
-    temp: float = 30.0,
-    humi: float = 50.0,
-    solar_rad: float = 400.0,
-    lux: float = 500.0,
-    rain: float = 0.0,
-    powers: list[float] | None = None,
-) -> dict:
+    temp: float | None = 30.0,
+    humi: float | None = 50.0,
+    solar_rad: float | None = 400.0,
+    lux: float | None = 500.0,
+    rain: float | None = 0.0,
+    powers: list[float | None] | None = None,
+) -> SenseData:
     """テスト用センサーデータを作成"""
     if powers is None:
         powers = [600.0, 300.0]
 
-    return {
-        "temp": [{"name": "temp", "value": temp}],
-        "humi": [{"name": "humi", "value": humi}],
-        "solar_rad": [{"name": "solar_rad", "value": solar_rad}],
-        "lux": [{"name": "lux", "value": lux}],
-        "rain": [{"name": "rain", "value": rain}],
-        "power": [{"name": f"power_{i}", "value": p} for i, p in enumerate(powers)],
-    }
+    return SenseData(
+        temp=[SensorReading(name="temp", value=temp)],
+        humi=[SensorReading(name="humi", value=humi)],
+        solar_rad=[SensorReading(name="solar_rad", value=solar_rad)],
+        lux=[SensorReading(name="lux", value=lux)],
+        rain=[SensorReading(name="rain", value=rain)],
+        power=[SensorReading(name=f"power_{i}", value=p) for i, p in enumerate(powers)],
+    )
 
 
 class TestDummyCoolingMode:
@@ -140,8 +136,7 @@ class TestJudgeCoolingMode:
 
     def test_handles_sensor_error(self, config, caplog):
         """センサーエラーをハンドリング"""
-        sense_data = create_sense_data()
-        sense_data["temp"][0]["value"] = None  # 外気温なし
+        sense_data = create_sense_data(temp=None)  # 外気温なし
         result = judge_cooling_mode(config, sense_data)
         # エラー時は cooling_mode=0
         assert result.cooling_mode == 0
@@ -224,8 +219,7 @@ class TestGenControlMsg:
 
         result = gen_control_msg(config, dummy_mode=False, speedup=1).to_dict()
 
-        assert "sense_data" in result
-        assert result["sense_data"] == mock_sense_data
+        assert result["sense_data"] == mock_sense_data.to_dict()
 
     def test_idle_state_is_zero(self, config):
         """IDLE state は 0"""

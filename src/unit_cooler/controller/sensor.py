@@ -11,12 +11,10 @@ Options:
 """
 
 import asyncio
-import dataclasses
 import logging
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
 import my_lib.sensor_data
 import my_lib.time
@@ -24,12 +22,9 @@ import my_lib.time
 import unit_cooler.const
 import unit_cooler.util
 from unit_cooler.config import Config, DecisionThresholdsConfig, SensorItemConfig
-from unit_cooler.messages import StatusInfo
+from unit_cooler.messages import SenseData, SensorReading, StatusInfo
 
 logger = logging.getLogger(__name__)
-
-# デフォルト閾値（config.yaml で指定がない場合に使用）
-_DEFAULT_THRESHOLDS: dict[str, Any] = dataclasses.asdict(DecisionThresholdsConfig.default())
 
 
 @dataclass(frozen=True)
@@ -89,8 +84,8 @@ COOLER_ACTIVITY_LIST: list[CoolerActivityCondition] = [
 # NOTE: 外部環境の状況を評価する。
 # (数字が大きいほど冷却を強める)
 def get_outdoor_status(
-    sense_data: dict[str, list[dict[str, Any]]],
-    thresholds: dict[str, Any] | None = None,
+    sense_data: SenseData,
+    thresholds: DecisionThresholdsConfig | None = None,
 ) -> StatusInfo:
     """外部環境の状況を評価する
 
@@ -102,43 +97,47 @@ def get_outdoor_status(
         外部環境の状況（StatusInfo dataclass）
     """
     # 閾値を取得（指定がない場合はデフォルト値）
-    th = thresholds if thresholds else _DEFAULT_THRESHOLDS
-    rain_max = th["rain_max"]
-    humi_max = th["humi_max"]
-    temp_high_h = th["temp_high_h"]
-    temp_high_l = th["temp_high_l"]
-    temp_mid = th["temp_mid"]
-    solar_rad_daytime = th["solar_rad_daytime"]
-    solar_rad_high = th["solar_rad_high"]
-    solar_rad_low = th["solar_rad_low"]
-    lux = th["lux"]
+    th = thresholds if thresholds else DecisionThresholdsConfig.default()
 
-    temp_str = f"{sense_data['temp'][0]['value']:.1f}" if sense_data["temp"][0]["value"] is not None else "？"
-    humi_str = f"{sense_data['humi'][0]['value']:.1f}" if sense_data["humi"][0]["value"] is not None else "？"
-    solar_rad_str = (
-        f"{sense_data['solar_rad'][0]['value']:,.0f}"
-        if sense_data["solar_rad"][0]["value"] is not None
-        else "？"
-    )
-    lux_str = f"{sense_data['lux'][0]['value']:,.0f}" if sense_data["lux"][0]["value"] is not None else "？"
+    temp_val = sense_data.first_value("temp")
+    humi_val = sense_data.first_value("humi")
+    solar_rad_val = sense_data.first_value("solar_rad")
+    lux_val = sense_data.first_value("lux")
+    rain_val = sense_data.first_value("rain")
 
     logger.info(
-        "気温: %s ℃, 湿度: %s %%, 日射量: %s W/m^2, 照度: %s LUX", temp_str, humi_str, solar_rad_str, lux_str
+        "気温: %s ℃, 湿度: %s %%, 日射量: %s W/m^2, 照度: %s LUX",
+        f"{temp_val:.1f}" if temp_val is not None else "？",
+        f"{humi_val:.1f}" if humi_val is not None else "？",
+        f"{solar_rad_val:,.0f}" if solar_rad_val is not None else "？",
+        f"{lux_val:,.0f}" if lux_val is not None else "？",
     )
 
-    is_senser_valid = all(
-        sense_data[key][0]["value"] is not None for key in ["temp", "humi", "solar_rad", "lux", "rain"]
+    # NOTE: チェック対象を SenseData のフィールド定義から導出することで、
+    # センサー追加時のチェック漏れを防ぐ
+    is_sensor_valid = all(
+        sense_data.first_value(key) is not None for key in SenseData.environment_field_names()
     )
 
-    if not is_senser_valid:
+    if not is_sensor_valid:
         return StatusInfo(status=-10, message="センサーデータが欠落していますので、冷却を停止します。")
 
-    # 各条件をチェック（閾値を使用）
-    rain_val = sense_data["rain"][0]["value"]
-    humi_val = sense_data["humi"][0]["value"]
-    temp_val = sense_data["temp"][0]["value"]
-    solar_rad_val = sense_data["solar_rad"][0]["value"]
-    lux_val = sense_data["lux"][0]["value"]
+    # 型の絞り込み（is_sensor_valid チェック済みのため None ではない）
+    assert temp_val is not None  # noqa: S101
+    assert humi_val is not None  # noqa: S101
+    assert solar_rad_val is not None  # noqa: S101
+    assert lux_val is not None  # noqa: S101
+    assert rain_val is not None  # noqa: S101
+
+    rain_max = th.rain_max
+    humi_max = th.humi_max
+    temp_high_h = th.temp_high_h
+    temp_high_l = th.temp_high_l
+    temp_mid = th.temp_mid
+    solar_rad_daytime = th.solar_rad_daytime
+    solar_rad_high = th.solar_rad_high
+    solar_rad_low = th.solar_rad_low
+    lux = th.lux
 
     if rain_val > rain_max:
         return StatusInfo(
@@ -218,8 +217,8 @@ def get_outdoor_status(
 # NOTE: クーラーの稼働状況を評価する。
 # (数字が大きいほど稼働状況が活発)
 def get_cooler_activity(
-    sense_data: dict[str, list[dict[str, Any]]],
-    thresholds: dict[str, Any] | None = None,
+    sense_data: SenseData,
+    thresholds: DecisionThresholdsConfig | None = None,
 ) -> StatusInfo:
     """クーラーの稼働状況を評価する
 
@@ -235,8 +234,8 @@ def get_cooler_activity(
     for mode in unit_cooler.const.AIRCON_MODE:
         mode_map[mode] = 0
 
-    temp = sense_data["temp"][0]["value"]
-    for aircon_power in sense_data["power"]:
+    temp = sense_data.first_value("temp")
+    for aircon_power in sense_data.power:
         mode = get_cooler_state(aircon_power, temp, thresholds)
         mode_map[mode] += 1
 
@@ -252,9 +251,9 @@ def get_cooler_activity(
 
 
 def get_cooler_state(
-    aircon_power: dict[str, Any],
+    aircon_power: SensorReading,
     temp: float | None,
-    thresholds: dict[str, Any] | None = None,
+    thresholds: DecisionThresholdsConfig | None = None,
 ) -> unit_cooler.const.AIRCON_MODE:
     """エアコンの動作モードを判定する
 
@@ -267,35 +266,31 @@ def get_cooler_state(
         エアコンの動作モード
     """
     # 閾値を取得（指定がない場合はデフォルト値）
-    th = thresholds if thresholds else _DEFAULT_THRESHOLDS
-    temp_cooling = th["temp_cooling"]
-    power_full = th["power_full"]
-    power_normal = th["power_normal"]
-    power_work = th["power_work"]
+    th = thresholds if thresholds else DecisionThresholdsConfig.default()
 
     mode = unit_cooler.const.AIRCON_MODE.OFF
     if temp is None:
         # NOTE: 外気温がわからないと暖房と冷房の区別がつかないので、致命的エラー扱いにする
         raise RuntimeError("外気温が不明のため、エアコン動作モードを判断できません。")
 
-    if aircon_power["value"] is None:
+    if aircon_power.value is None:
         logger.warning(
-            "%s の消費電力が不明のため、動作モードを判断できません。OFFとみなします。", aircon_power["name"]
+            "%s の消費電力が不明のため、動作モードを判断できません。OFFとみなします。", aircon_power.name
         )
         return unit_cooler.const.AIRCON_MODE.OFF
 
-    if temp >= temp_cooling:
-        if aircon_power["value"] > power_full:
+    if temp >= th.temp_cooling:
+        if aircon_power.value > th.power_full:
             mode = unit_cooler.const.AIRCON_MODE.FULL
-        elif aircon_power["value"] > power_normal:
+        elif aircon_power.value > th.power_normal:
             mode = unit_cooler.const.AIRCON_MODE.NORMAL
-        elif aircon_power["value"] > power_work:
+        elif aircon_power.value > th.power_work:
             mode = unit_cooler.const.AIRCON_MODE.IDLE
 
     logger.info(
         "%s: %s W, 外気温: %.1f ℃  (mode: %s)",
-        aircon_power["name"],
-        f"{aircon_power['value']:,.0f}",
+        aircon_power.name,
+        f"{aircon_power.value:,.0f}",
         temp,
         mode,
     )
@@ -303,7 +298,7 @@ def get_cooler_state(
     return mode
 
 
-def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
+def get_sense_data(config: Config) -> SenseData:
     if os.environ.get("DUMMY_MODE", "false") == "true":
         start = "-169h"
         stop = "-168h"
@@ -346,28 +341,28 @@ def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
     results = asyncio.run(my_lib.sensor_data.fetch_data_parallel(influxdb_config, requests))
 
     # 結果を元の構造に再構築
-    sense_data: dict[str, list[dict[str, Any]]] = {kind: [] for kind in sensor_kinds}
+    readings: dict[str, list[SensorReading]] = {kind: [] for kind in sensor_kinds}
     failed_sensors: list[str] = []
 
     for (kind, sensor), result in zip(request_info, results, strict=True):
         if isinstance(result, BaseException):
             logger.warning("Failed to fetch %s data for %s: %s", kind, sensor.name, result)
-            sense_data[kind].append({"name": sensor.name, "value": None})
+            readings[kind].append(SensorReading(name=sensor.name, value=None))
             failed_sensors.append(sensor.name)
         elif result.valid:
             value = result.value[0]
             if kind == "rain":
                 # NOTE: 観測している雨量は1分間の降水量なので、1時間雨量に換算
                 value *= 60
-            sense_data[kind].append(
-                {
-                    "name": sensor.name,
-                    "time": result.time[0].replace(tzinfo=zoneinfo),
-                    "value": value,
-                }
+            readings[kind].append(
+                SensorReading(
+                    name=sensor.name,
+                    value=value,
+                    time=result.time[0].replace(tzinfo=zoneinfo),
+                )
             )
         else:
-            sense_data[kind].append({"name": sensor.name, "value": None})
+            readings[kind].append(SensorReading(name=sensor.name, value=None))
             failed_sensors.append(sensor.name)
 
     # まとめてエラー通知
@@ -378,4 +373,4 @@ def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
             f"次のセンサーのデータを取得できませんでした: {sensor_names}",
         )
 
-    return sense_data
+    return SenseData(**readings)

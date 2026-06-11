@@ -84,7 +84,7 @@ def print_control_msg() -> None:
             total = on_sec + off_sec
             on_ratio = 100.0 * on_sec / total if total != 0 else 0
 
-            logging.info(
+            logger.info(
                 "state: %s, on_se_sec: %s sec, off_sec: %s sec, on_ratio: %.1f%%",
                 control_msg.state.name,
                 f"{on_sec:,}",
@@ -92,4 +92,4 @@ def print_control_msg() -> None:
                 on_ratio,
             )
         else:
-            logging.info("state: %s", control_msg.state.name)
+            logger.info("state: %s", control_msg.state.name)

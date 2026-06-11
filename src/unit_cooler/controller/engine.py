@@ -10,15 +10,13 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
-import dataclasses
 import logging
-from typing import Any
 
 import unit_cooler.controller.message
 import unit_cooler.controller.sensor
 import unit_cooler.util
 from unit_cooler.config import Config
-from unit_cooler.messages import ControlMessage, CoolingModeResult, DutyConfig, StatusInfo
+from unit_cooler.messages import ControlMessage, CoolingModeResult, DutyConfig, SenseData, StatusInfo
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +75,11 @@ def get_dummy_prev_mode() -> int:
     return _dummy_prev_mode
 
 
-def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> CoolingModeResult:
+def judge_cooling_mode(config: Config, sense_data: SenseData) -> CoolingModeResult:
     logger.info("Judge cooling mode")
 
     # 閾値を config から取得
-    thresholds = dataclasses.asdict(config.controller.decision.thresholds)
+    thresholds = config.controller.decision.thresholds
 
     try:
         cooler_activity = unit_cooler.controller.sensor.get_cooler_activity(sense_data, thresholds)
@@ -118,12 +116,11 @@ def judge_cooling_mode(config: Config, sense_data: dict[str, Any]) -> CoolingMod
 
 def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) -> ControlMessage:
     if dummy_mode:
-        sense_data: dict[str, Any] = {}
         mode_result = CoolingModeResult(
             cooling_mode=dummy_cooling_mode(),
             cooler_status=StatusInfo(status=0, message=None),
             outdoor_status=StatusInfo(status=0, message=None),
-            sense_data=sense_data,
+            sense_data=None,
         )
     else:
         sense_data = unit_cooler.controller.sensor.get_sense_data(config)

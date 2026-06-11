@@ -121,7 +121,7 @@ def start(config: Config, event_queue: Queue[Any], port: int) -> WebServerHandle
 def term(handle: WebServerHandle) -> None:
     import my_lib.webapp.event
 
-    logging.warning("Stop web server")
+    logger.warning("Stop web server")
 
     my_lib.webapp.event.term()
 

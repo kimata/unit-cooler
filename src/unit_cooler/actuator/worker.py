@@ -106,43 +106,19 @@ def collect_environmental_metrics(config: Config, current_message: ControlMessag
     """環境データのメトリクス収集"""
     from unit_cooler.metrics import get_metrics_collector
 
+    sense_data = current_message.sense_data
+    if sense_data is None:
+        return
+
     try:
-        metrics_db_path = config.actuator.metrics.data
-        metrics_collector = get_metrics_collector(metrics_db_path)
-
-        # current_messageのsense_dataからセンサーデータを取得
-        sense_data = current_message.sense_data
-
-        if sense_data:
-            # 各センサーデータの最新値を取得
-            temperature = None
-            humidity = None
-            lux = None
-            solar_radiation = None
-            rain_amount = None
-
-            if sense_data.get("temp") and len(sense_data["temp"]) > 0:
-                temperature = sense_data["temp"][0].get("value")
-            if sense_data.get("humi") and len(sense_data["humi"]) > 0:
-                humidity = sense_data["humi"][0].get("value")
-            if sense_data.get("lux") and len(sense_data["lux"]) > 0:
-                lux = sense_data["lux"][0].get("value")
-            if sense_data.get("solar_rad") and len(sense_data["solar_rad"]) > 0:
-                solar_radiation = sense_data["solar_rad"][0].get("value")
-                logger.debug("Solar radiation data found: %s W/m²", solar_radiation)
-            else:
-                logger.debug(
-                    "No solar radiation data in sense_data: %s",
-                    list(sense_data.keys()) if sense_data else "empty",
-                )
-            if sense_data.get("rain") and len(sense_data["rain"]) > 0:
-                rain_amount = sense_data["rain"][0].get("value")
-
-            # 環境データをメトリクスに記録
-            metrics_collector.update_environmental_data(
-                temperature, humidity, lux, solar_radiation, rain_amount
-            )
-
+        metrics_collector = get_metrics_collector(config.actuator.metrics.data)
+        metrics_collector.update_environmental_data(
+            temperature=sense_data.first_value("temp"),
+            humidity=sense_data.first_value("humi"),
+            lux=sense_data.first_value("lux"),
+            solar_radiation=sense_data.first_value("solar_rad"),
+            rain_amount=sense_data.first_value("rain"),
+        )
     except Exception:
         logger.exception("Failed to collect environmental metrics")
 

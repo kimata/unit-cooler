@@ -73,10 +73,10 @@ def publish_status(socket: zmq.Socket, status: ActuatorStatus) -> bool:
         topic = "actuator_status"
         message = json.dumps(status.to_dict())
         socket.send_string(f"{topic} {message}")
-        logging.debug("Published ActuatorStatus: %s", message)
+        logger.debug("Published ActuatorStatus: %s", message)
         return True
     except Exception:
-        logging.exception("Failed to publish ActuatorStatus")
+        logger.exception("Failed to publish ActuatorStatus")
         return False
 
 
@@ -90,4 +90,4 @@ def close_publisher(socket: zmq.Socket) -> None:
         socket.close()
         logger.info("ActuatorStatus publisher closed")
     except Exception:
-        logging.exception("Failed to close publisher")
+        logger.exception("Failed to close publisher")

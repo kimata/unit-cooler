@@ -7,7 +7,7 @@ from __future__ import annotations
 import multiprocessing
 
 from unit_cooler.const import COOLING_STATE
-from unit_cooler.messages import ControlMessage, DutyConfig, StatusInfo
+from unit_cooler.messages import ControlMessage, DutyConfig, SenseData, SensorReading, StatusInfo
 
 
 class TestWatering:
@@ -162,7 +162,7 @@ class TestGetStats:
             mode_index=3,
             state=COOLING_STATE.IDLE,
             duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
-            sense_data={"outdoor": {"temp": 30}},
+            sense_data=SenseData(temp=[SensorReading(name="temp", value=30.0)]),
             cooler_status=StatusInfo(status=1, message=None),
             outdoor_status=StatusInfo(status=0, message=None),
         )

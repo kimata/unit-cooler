@@ -61,7 +61,7 @@ class MetricsCollector:
         self._last_minute: datetime.datetime | None = None
         self._last_hour: datetime.datetime | None = None
 
-    def _init_database(self):
+    def _init_database(self) -> None:
         """Initialize database tables from schema file."""
         with self._get_db_connection() as conn:
             # WALモードを設定（分散ストレージに適している）
@@ -84,13 +84,13 @@ class MetricsCollector:
             logger.exception("Database error")
             raise
 
-    def update_cooling_mode(self, cooling_mode: int):
+    def update_cooling_mode(self, cooling_mode: int) -> None:
         """Update current cooling mode value."""
         with self._lock:
             self._current_minute_data["cooling_mode"] = cooling_mode
             self._check_minute_boundary()
 
-    def update_duty_ratio(self, on_time: float, total_time: float):
+    def update_duty_ratio(self, on_time: float, total_time: float) -> None:
         """Update duty ratio (ON time / total time)."""
         with self._lock:
             if total_time > 0:
@@ -104,7 +104,7 @@ class MetricsCollector:
         lux: float | None = None,
         solar_radiation: float | None = None,
         rain_amount: float | None = None,
-    ):
+    ) -> None:
         """Update environmental sensor data."""
         with self._lock:
             if temperature is not None:
@@ -119,19 +119,19 @@ class MetricsCollector:
                 self._current_minute_data["rain_amount"] = rain_amount
             self._check_minute_boundary()
 
-    def update_flow_value(self, flow_value: float):
+    def update_flow_value(self, flow_value: float) -> None:
         """Update flow value when valve is ON."""
         with self._lock:
             self._current_minute_data["flow_value"] = flow_value
             self._check_minute_boundary()
 
-    def record_valve_operation(self):
+    def record_valve_operation(self) -> None:
         """Record a valve operation for hourly counting."""
         with self._lock:
             self._current_hour_data["valve_operations"] += 1
             self._check_hour_boundary()
 
-    def record_error(self, error_type: str, error_message: str | None = None):
+    def record_error(self, error_type: str, error_message: str | None = None) -> None:
         """Record an error event."""
         now = self._time_func()
 
@@ -148,7 +148,7 @@ class MetricsCollector:
         except Exception:
             logger.exception("Failed to record error")
 
-    def _check_minute_boundary(self):
+    def _check_minute_boundary(self) -> None:
         """Check if we crossed a minute boundary and save data."""
         now = self._time_func()
         current_minute = now.replace(second=0, microsecond=0)
@@ -162,7 +162,7 @@ class MetricsCollector:
             self._current_minute_data = {}
             self._last_minute = current_minute
 
-    def _check_hour_boundary(self):
+    def _check_hour_boundary(self) -> None:
         """Check if we crossed an hour boundary and save data."""
         now = self._time_func()
         current_hour = now.replace(minute=0, second=0, microsecond=0)
@@ -176,7 +176,7 @@ class MetricsCollector:
             self._current_hour_data = {"valve_operations": 0}
             self._last_hour = current_hour
 
-    def _save_minute_data(self, timestamp: datetime.datetime):
+    def _save_minute_data(self, timestamp: datetime.datetime) -> None:
         """Save accumulated minute data to database."""
         if not self._current_minute_data:
             logger.debug("No current minute data to save for %s", timestamp)
@@ -210,7 +210,7 @@ class MetricsCollector:
         except Exception:
             logger.exception("Failed to save minute data")
 
-    def _save_hour_data(self, timestamp: datetime.datetime):
+    def _save_hour_data(self, timestamp: datetime.datetime) -> None:
         """Save accumulated hour data to database."""
         try:
             with self._get_db_connection() as conn:
@@ -226,15 +226,16 @@ class MetricsCollector:
         except Exception:
             logger.exception("Failed to save hour data")
 
-    def get_minute_data(
+    def _query(
         self,
+        table: str,
         start_time: datetime.datetime | None = None,
         end_time: datetime.datetime | None = None,
         limit: int | None = None,
-    ) -> list:
-        """Get minute-level metrics data."""
+    ) -> list[dict]:
+        """テーブルから期間・件数を指定してレコードを取得する"""
         with self._get_db_connection() as conn:
-            query = "SELECT * FROM minute_metrics"
+            query = f"SELECT * FROM {table}"  # noqa: S608  # table はクラス内の固定値のみ
             params: list[datetime.datetime | int] = []
 
             if start_time or end_time:
@@ -254,66 +255,35 @@ class MetricsCollector:
                 params.append(limit)
 
             return [dict(row) for row in conn.execute(query, params).fetchall()]
+
+    def get_minute_data(
+        self,
+        start_time: datetime.datetime | None = None,
+        end_time: datetime.datetime | None = None,
+        limit: int | None = None,
+    ) -> list[dict]:
+        """Get minute-level metrics data."""
+        return self._query("minute_metrics", start_time, end_time, limit)
 
     def get_hourly_data(
         self,
         start_time: datetime.datetime | None = None,
         end_time: datetime.datetime | None = None,
         limit: int | None = None,
-    ) -> list:
+    ) -> list[dict]:
         """Get hourly-level metrics data."""
-        with self._get_db_connection() as conn:
-            query = "SELECT * FROM hourly_metrics"
-            params: list[datetime.datetime | int] = []
-
-            if start_time or end_time:
-                query += " WHERE"
-                conditions = []
-                if start_time:
-                    conditions.append(" timestamp >= ?")
-                    params.append(start_time)
-                if end_time:
-                    conditions.append(" timestamp <= ?")
-                    params.append(end_time)
-                query += " AND".join(conditions)
-
-            query += " ORDER BY timestamp DESC"
-            if limit is not None:
-                query += " LIMIT ?"
-                params.append(limit)
-
-            return [dict(row) for row in conn.execute(query, params).fetchall()]
+        return self._query("hourly_metrics", start_time, end_time, limit)
 
     def get_error_data(
         self,
         start_time: datetime.datetime | None = None,
         end_time: datetime.datetime | None = None,
         limit: int | None = None,
-    ) -> list:
+    ) -> list[dict]:
         """Get error events data."""
-        with self._get_db_connection() as conn:
-            query = "SELECT * FROM error_events"
-            params: list[datetime.datetime | int] = []
+        return self._query("error_events", start_time, end_time, limit)
 
-            if start_time or end_time:
-                query += " WHERE"
-                conditions = []
-                if start_time:
-                    conditions.append(" timestamp >= ?")
-                    params.append(start_time)
-                if end_time:
-                    conditions.append(" timestamp <= ?")
-                    params.append(end_time)
-                query += " AND".join(conditions)
-
-            query += " ORDER BY timestamp DESC"
-            if limit is not None:
-                query += " LIMIT ?"
-                params.append(limit)
-
-            return [dict(row) for row in conn.execute(query, params).fetchall()]
-
-    def close(self):
+    def close(self) -> None:
         """Clean shutdown of metrics collector."""
         with self._lock:
             # 最後のデータを保存

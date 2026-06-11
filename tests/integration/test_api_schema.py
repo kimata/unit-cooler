@@ -10,6 +10,7 @@ API レスポンスの整合性を検証する。
 
 from __future__ import annotations
 
+import datetime
 import multiprocessing
 from dataclasses import dataclass
 from typing import Any
@@ -17,7 +18,15 @@ from typing import Any
 import flask
 
 import unit_cooler.const
-from unit_cooler.messages import ActuatorStatus, ControlMessage, DutyConfig, StatusInfo, ValveStatus
+from unit_cooler.messages import (
+    ActuatorStatus,
+    ControlMessage,
+    DutyConfig,
+    SenseData,
+    SensorReading,
+    StatusInfo,
+    ValveStatus,
+)
 
 # =============================================================================
 # フロントエンド型定義に対応する検証スキーマ
@@ -348,14 +357,15 @@ class TestApiStatSchema:
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         # センサーデータをフロントエンドが期待する形式でモック
-        sense_data = {
-            "temp": [{"name": "outdoor", "time": "2024-01-01T12:00:00", "value": 30.5}],
-            "humi": [{"name": "outdoor", "time": "2024-01-01T12:00:00", "value": 50.0}],
-            "lux": [{"name": "outdoor", "time": "2024-01-01T12:00:00", "value": 10000}],
-            "rain": [{"name": "outdoor", "time": "2024-01-01T12:00:00", "value": 0}],
-            "solar_rad": [{"name": "outdoor", "time": "2024-01-01T12:00:00", "value": 500}],
-            "power": [{"name": "outdoor_unit", "time": "2024-01-01T12:00:00", "value": 1500}],
-        }
+        ts = datetime.datetime(2024, 1, 1, 12, 0, 0, tzinfo=datetime.UTC)
+        sense_data = SenseData(
+            temp=[SensorReading(name="outdoor", value=30.5, time=ts)],
+            humi=[SensorReading(name="outdoor", value=50.0, time=ts)],
+            lux=[SensorReading(name="outdoor", value=10000, time=ts)],
+            rain=[SensorReading(name="outdoor", value=0, time=ts)],
+            solar_rad=[SensorReading(name="outdoor", value=500, time=ts)],
+            power=[SensorReading(name="outdoor_unit", value=1500, time=ts)],
+        )
 
         control_message = ControlMessage(
             state=unit_cooler.const.COOLING_STATE.WORKING,
@@ -600,7 +610,7 @@ class TestMessageSchemaConsistency:
             state=unit_cooler.const.COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=60, off_sec=30),
             mode_index=5,
-            sense_data={},
+            sense_data=None,
             cooler_status=StatusInfo(status=1, message="テスト"),
             outdoor_status=StatusInfo(status=0, message=None),
         )

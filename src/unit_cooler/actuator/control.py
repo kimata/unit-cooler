@@ -112,7 +112,7 @@ def get_control_message(handle: ControlHandle, last_message: ControlMessage) -> 
         return get_control_message_impl(handle, last_message)
     except OverflowError:  # pragma: no cover
         # NOTE: テストする際、timemachinefreezer 使って日付をいじるとこの例外が発生する
-        logging.exception("Failed to get control message")
+        logger.exception("Failed to get control message")
         return last_message
 
 
@@ -139,6 +139,6 @@ def execute(config: Config, control_message: ControlMessage) -> None:
             if total_time > 0:
                 metrics_collector.update_duty_ratio(on_time, total_time)
     except Exception:
-        logging.exception("Failed to collect metrics data")
+        logger.exception("Failed to collect metrics data")
 
     unit_cooler.actuator.valve_controller.get_valve_controller().set_cooling_state(control_message)

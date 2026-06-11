@@ -113,12 +113,12 @@ def actuator_status_worker(
                     data = json.loads(json_data)
                     status = ActuatorStatus.from_dict(data)
                     set_last_actuator_status(status)
-                    logging.debug("Received ActuatorStatus: %s", status)
+                    logger.debug("Received ActuatorStatus: %s", status)
             except zmq.Again:
                 # タイムアウト - 終了フラグをチェックして継続
                 continue
             except Exception:
-                logging.debug("Failed to parse ActuatorStatus")
+                logger.debug("Failed to parse ActuatorStatus")
 
     except Exception:
         logger.exception("Failed to subscribe ActuatorStatus")

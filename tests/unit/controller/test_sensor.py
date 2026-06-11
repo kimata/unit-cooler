@@ -2,8 +2,6 @@
 # ruff: noqa: S101
 """unit_cooler.controller.sensor のテスト"""
 
-import dataclasses
-
 import pytest
 
 from unit_cooler.config import DecisionThresholdsConfig
@@ -13,31 +11,32 @@ from unit_cooler.controller.sensor import (
     get_cooler_state,
     get_outdoor_status,
 )
+from unit_cooler.messages import SenseData, SensorReading
 
 # デフォルト閾値
-DEFAULT_THRESHOLDS = dataclasses.asdict(DecisionThresholdsConfig.default())
+DEFAULT_THRESHOLDS = DecisionThresholdsConfig.default()
 
 
 def create_sense_data(
-    temp: float = 30.0,
-    humi: float = 50.0,
-    solar_rad: float = 400.0,
-    lux: float = 500.0,
-    rain: float = 0.0,
-    powers: list[float] | None = None,
-) -> dict:
+    temp: float | None = 30.0,
+    humi: float | None = 50.0,
+    solar_rad: float | None = 400.0,
+    lux: float | None = 500.0,
+    rain: float | None = 0.0,
+    powers: list[float | None] | None = None,
+) -> SenseData:
     """テスト用センサーデータを作成"""
     if powers is None:
         powers = [600.0, 300.0]
 
-    return {
-        "temp": [{"name": "temp", "value": temp}],
-        "humi": [{"name": "humi", "value": humi}],
-        "solar_rad": [{"name": "solar_rad", "value": solar_rad}],
-        "lux": [{"name": "lux", "value": lux}],
-        "rain": [{"name": "rain", "value": rain}],
-        "power": [{"name": f"power_{i}", "value": p} for i, p in enumerate(powers)],
-    }
+    return SenseData(
+        temp=[SensorReading(name="temp", value=temp)],
+        humi=[SensorReading(name="humi", value=humi)],
+        solar_rad=[SensorReading(name="solar_rad", value=solar_rad)],
+        lux=[SensorReading(name="lux", value=lux)],
+        rain=[SensorReading(name="rain", value=rain)],
+        power=[SensorReading(name=f"power_{i}", value=p) for i, p in enumerate(powers)],
+    )
 
 
 class TestGetOutdoorStatus:
@@ -102,15 +101,13 @@ class TestGetOutdoorStatus:
 
     def test_missing_sensor_data_stops_cooling(self):
         """センサーデータ欠損で冷却停止 (status=-10)"""
-        sense_data = create_sense_data(temp=30)
-        sense_data["temp"][0]["value"] = None  # データ欠損
+        sense_data = create_sense_data(temp=None)  # データ欠損
         result = get_outdoor_status(sense_data, DEFAULT_THRESHOLDS)
         assert result.status == -10
 
     def test_missing_rain_data_stops_cooling(self):
         """雨量データ欠損でも TypeError にならず冷却停止 (status=-10)"""
-        sense_data = create_sense_data()
-        sense_data["rain"][0]["value"] = None  # データ欠損
+        sense_data = create_sense_data(rain=None)  # データ欠損
         result = get_outdoor_status(sense_data, DEFAULT_THRESHOLDS)
         assert result.status == -10
 
@@ -140,43 +137,43 @@ class TestGetCoolerState:
 
     def test_off_when_low_power(self):
         """低電力で OFF"""
-        aircon_power = {"name": "aircon1", "value": 10}
+        aircon_power = SensorReading(name="aircon1", value=10)
         result = get_cooler_state(aircon_power, 25.0, DEFAULT_THRESHOLDS)
         assert result == AIRCON_MODE.OFF
 
     def test_idle_when_mid_power(self):
         """中電力で IDLE"""
-        aircon_power = {"name": "aircon1", "value": 100}
+        aircon_power = SensorReading(name="aircon1", value=100)
         result = get_cooler_state(aircon_power, 25.0, DEFAULT_THRESHOLDS)
         assert result == AIRCON_MODE.IDLE
 
     def test_normal_when_high_power(self):
         """高電力で NORMAL"""
-        aircon_power = {"name": "aircon1", "value": 600}
+        aircon_power = SensorReading(name="aircon1", value=600)
         result = get_cooler_state(aircon_power, 25.0, DEFAULT_THRESHOLDS)
         assert result == AIRCON_MODE.NORMAL
 
     def test_full_when_very_high_power(self):
         """超高電力で FULL"""
-        aircon_power = {"name": "aircon1", "value": 1000}
+        aircon_power = SensorReading(name="aircon1", value=1000)
         result = get_cooler_state(aircon_power, 25.0, DEFAULT_THRESHOLDS)
         assert result == AIRCON_MODE.FULL
 
     def test_off_when_low_temp(self):
         """低温 (暖房?) では OFF"""
-        aircon_power = {"name": "aircon1", "value": 1000}
+        aircon_power = SensorReading(name="aircon1", value=1000)
         result = get_cooler_state(aircon_power, 15.0, DEFAULT_THRESHOLDS)
         assert result == AIRCON_MODE.OFF
 
     def test_off_when_power_is_none(self):
         """電力データなしで OFF"""
-        aircon_power = {"name": "aircon1", "value": None}
+        aircon_power = SensorReading(name="aircon1", value=None)
         result = get_cooler_state(aircon_power, 25.0, DEFAULT_THRESHOLDS)
         assert result == AIRCON_MODE.OFF
 
     def test_raises_when_temp_is_none(self):
         """外気温データなしで例外"""
-        aircon_power = {"name": "aircon1", "value": 600}
+        aircon_power = SensorReading(name="aircon1", value=600)
         with pytest.raises(RuntimeError, match="外気温が不明"):
             get_cooler_state(aircon_power, None, DEFAULT_THRESHOLDS)
 
@@ -199,7 +196,7 @@ class TestGetCoolerState:
     )
     def test_cooler_state_thresholds(self, power, temp, expected_mode):
         """電力閾値のパラメトライズドテスト"""
-        aircon_power = {"name": "aircon1", "value": power}
+        aircon_power = SensorReading(name="aircon1", value=power)
         result = get_cooler_state(aircon_power, temp, DEFAULT_THRESHOLDS)
         assert result == expected_mode
 
@@ -257,8 +254,7 @@ class TestGetCoolerActivity:
 
     def test_raises_when_temp_is_none(self):
         """外気温データなしで例外"""
-        sense_data = create_sense_data()
-        sense_data["temp"][0]["value"] = None
+        sense_data = create_sense_data(temp=None)
         with pytest.raises(RuntimeError, match="外気温が不明"):
             get_cooler_activity(sense_data, DEFAULT_THRESHOLDS)
 
@@ -290,13 +286,13 @@ class TestGetSenseData:
 
         result = get_sense_data(config)
 
-        # 全種別が含まれている
-        assert "temp" in result
-        assert "humi" in result
-        assert "lux" in result
-        assert "solar_rad" in result
-        assert "rain" in result
-        assert "power" in result
+        # 全種別にデータが格納されている
+        assert result.temp and result.temp[0].value == 25.0
+        assert result.humi
+        assert result.lux
+        assert result.solar_rad
+        assert result.rain
+        assert result.power
 
     def test_notifies_error_on_failed_sensors(self, config, mocker):
         """センサーデータ取得失敗時にエラー通知"""

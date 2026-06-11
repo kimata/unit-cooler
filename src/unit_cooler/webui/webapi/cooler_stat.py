@@ -1,14 +1,7 @@
 #!/usr/bin/env python3
-"""
-冷却システムを作業状況を WebUI に渡します。
+"""冷却システムの作業状況を WebUI に渡します。"""
 
-Usage:
-  cooler_stat.py [-c CONFIG] [-D]
-
-Options:
-  -c CONFIG         : CONFIG を設定ファイルとして読み込んで実行します。 [default: config.yaml]
-  -D                : デバッグモードで動作します。
-"""
+from __future__ import annotations
 
 import logging
 import os
@@ -21,7 +14,6 @@ import my_lib.sensor_data
 import my_lib.webapp.config
 
 import unit_cooler.webui.worker
-from unit_cooler.messages import ControlMessage
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +21,7 @@ if TYPE_CHECKING:
     from multiprocessing import Queue
 
     from unit_cooler.config import Config
+    from unit_cooler.messages import ControlMessage
 
 blueprint = flask.Blueprint("cooler-stat", __name__)
 
@@ -64,7 +57,7 @@ class CoolerStats:
         }
 
 
-def watering(config: "Config", day_before: int) -> WateringInfo:
+def watering(config: Config, day_before: int) -> WateringInfo:
     day_offset = 7 if os.environ.get("DUMMY_MODE", "false") == "true" else 0
 
     amount = my_lib.sensor_data.get_day_sum(
@@ -83,7 +76,7 @@ def watering(config: "Config", day_before: int) -> WateringInfo:
     )
 
 
-def watering_list(config: "Config") -> list[dict[str, float]]:
+def watering_list(config: Config) -> list[dict[str, float]]:
     return [watering(config, i).to_dict() for i in range(10)]
 
 
@@ -91,7 +84,7 @@ def watering_list(config: "Config") -> list[dict[str, float]]:
 _last_message: ControlMessage | None = None
 
 
-def get_last_message(message_queue: "Queue[ControlMessage]") -> ControlMessage | None:
+def get_last_message(message_queue: Queue[ControlMessage]) -> ControlMessage | None:
     # NOTE: 現在の実際の制御モードを取得する。
     global _last_message
     while not message_queue.empty():
@@ -99,7 +92,7 @@ def get_last_message(message_queue: "Queue[ControlMessage]") -> ControlMessage |
     return _last_message
 
 
-def get_stats(message_queue: "Queue[ControlMessage]") -> CoolerStats:
+def get_stats(message_queue: Queue[ControlMessage]) -> CoolerStats:
     # ZMQ 経由で Controller から受信したメッセージを使用
     control_message = get_last_message(message_queue)
 
@@ -116,9 +109,15 @@ def get_stats(message_queue: "Queue[ControlMessage]") -> CoolerStats:
             actuator_status=actuator_status_dict,
         )
 
+    # NOTE: mode に ControlMessage 全体を入れると sense_data / cooler_status /
+    # outdoor_status が重複してペイロードに含まれるため、必要なフィールドのみ返す
     return CoolerStats(
-        sensor=control_message.sense_data,
-        mode=control_message.to_dict(),
+        sensor=control_message.sense_data.to_dict() if control_message.sense_data else {},
+        mode={
+            "state": control_message.state.value,
+            "mode_index": control_message.mode_index,
+            "duty": control_message.duty.to_dict(),
+        },
         cooler_status=control_message.cooler_status.to_dict() if control_message.cooler_status else None,
         outdoor_status=control_message.outdoor_status.to_dict() if control_message.outdoor_status else None,
         actuator_status=actuator_status_dict,
