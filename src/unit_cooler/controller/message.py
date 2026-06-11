@@ -93,20 +93,3 @@ def print_control_msg() -> None:
             )
         else:
             logging.info("state: %s", control_msg.state.name)
-
-
-if __name__ == "__main__":
-    # TEST Code
-    import docopt
-    import my_lib.config
-    import my_lib.logger
-    import my_lib.pretty
-
-    assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
-
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    print_control_msg()

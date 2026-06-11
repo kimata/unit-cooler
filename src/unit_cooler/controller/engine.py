@@ -165,18 +165,11 @@ def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) 
 
 if __name__ == "__main__":
     # TEST Code
-    import docopt
-    import my_lib.logger
     import my_lib.pretty
 
+    import unit_cooler.cli
+
     assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
-
-    config_file = args["-c"]
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = Config.load(config_file)
+    args, config = unit_cooler.cli.init(__doc__, name="test")
 
     logger.info(my_lib.pretty.format(gen_control_msg(config)))

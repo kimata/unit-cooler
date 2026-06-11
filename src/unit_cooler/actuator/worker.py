@@ -147,18 +147,6 @@ def collect_environmental_metrics(config: Config, current_message: ControlMessag
         logger.exception("Failed to collect environmental metrics")
 
 
-def queue_put(
-    message_queue: Queue[ControlMessage], message: dict[str, Any], liveness_file: pathlib.Path
-) -> None:
-    # 受信直後に ControlMessage に変換
-    control_message = ControlMessage.from_dict(message)
-
-    logger.info("Receive message: %s", control_message)
-
-    message_queue.put(control_message)
-    my_lib.footprint.update(liveness_file)
-
-
 def sleep_until_next_iter(start_time, interval_sec):
     sleep_sec = max(interval_sec - (time.monotonic() - start_time), 0.5)
     logger.debug("Sleep %.1f sec...", sleep_sec)
@@ -181,23 +169,15 @@ def subscribe_worker(
     msg_count: int = 0,
     should_terminate: threading.Event | None = None,
 ) -> int:
-    logger.info("Start actuator subscribe worker (%s:%d)", control_host, pub_port)
-    ret = 0
-    try:
-        unit_cooler.pubsub.subscribe.start_client(
-            control_host,
-            pub_port,
-            lambda message: queue_put(message_queue, message, liveness_file),
-            msg_count,
-            should_terminate,
-        )
-    except Exception:
-        logger.exception("Failed to receive control message")
-        unit_cooler.util.notify_error(config, traceback.format_exc())
-        ret = -1
-
-    logger.warning("Stop subscribe worker")
-    return ret
+    return unit_cooler.pubsub.subscribe.run_subscribe_worker(
+        config,
+        "actuator",
+        control_host,
+        pub_port,
+        lambda message: unit_cooler.pubsub.subscribe.queue_put(message_queue, message, liveness_file),
+        msg_count,
+        should_terminate,
+    )
 
 
 # NOTE: バルブの状態をモニタするワーカ
@@ -418,28 +398,28 @@ if __name__ == "__main__":
     # TEST Code
     import multiprocessing
 
-    import docopt
-    import my_lib.logger
     import my_lib.webapp.config
     import my_lib.webapp.log
 
     import unit_cooler.actuator.valve_controller
+    import unit_cooler.cli
     import unit_cooler.const
-    from unit_cooler.config import Config, RuntimeSettings
+    from unit_cooler.config import RuntimeSettings
 
     assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
+    args, config = unit_cooler.cli.init(__doc__, name="test")
 
-    config_file = args["-c"]
-    control_host = os.environ.get("HEMS_CONTROL_HOST", args["-s"])
-    pub_port = int(os.environ.get("HEMS_PUB_PORT", args["-p"]))
-    speedup = int(args["-t"])
-    msg_count = int(args["-n"])
-    debug_mode = args["-D"]
+    settings = RuntimeSettings.from_args(
+        args,
+        {
+            "control_host": "-s",
+            "pub_port": "-p",
+            "speedup": "-t",
+            "msg_count": "-n",
+        },
+    )
+    settings.dummy_mode = True
 
-    my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = Config.load(config_file)
     message_queue: multiprocessing.Queue = multiprocessing.Queue()
     event_queue: multiprocessing.Queue = multiprocessing.Queue()
 
@@ -457,16 +437,6 @@ if __name__ == "__main__":
 
     # NOTE: テストしやすいように、threading.Thread ではなく multiprocessing.pool.ThreadPool を使う
     executor = concurrent.futures.ThreadPoolExecutor()
-
-    settings = RuntimeSettings.from_dict(
-        {
-            "control_host": control_host,
-            "pub_port": pub_port,
-            "speedup": speedup,
-            "msg_count": msg_count,
-            "dummy_mode": True,
-        }
-    )
 
     thread_list = start(executor, get_worker_def(config, message_queue, settings))
 

@@ -18,7 +18,6 @@ Options:
 
 import logging
 import os
-import pathlib
 import threading
 import traceback
 
@@ -118,35 +117,22 @@ def wait_and_term(control_thread, proxy_thread):
 if __name__ == "__main__":
     import sys
 
-    import docopt
-    import my_lib.logger
+    import unit_cooler.cli
 
     assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
+    args, config = unit_cooler.cli.init(__doc__)
 
-    config_file = args["-c"]
-    server_port = int(os.environ.get("HEMS_SERVER_PORT", args["-p"]))
-    real_port = int(args["-r"])
-    disable_proxy = args["-N"]
-    msg_count = int(args["-n"])
-    speedup = int(args["-t"])
-    dummy_mode = os.environ.get("DUMMY_MODE", args["-d"])
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
-    settings = RuntimeSettings.from_dict(
+    settings = RuntimeSettings.from_args(
+        args,
         {
-            "real_port": real_port,
-            "server_host": "localhost",
-            "server_port": server_port,
-            "dummy_mode": dummy_mode,
-            "debug_mode": debug_mode,
-            "disable_proxy": disable_proxy,
-            "speedup": speedup,
-            "msg_count": msg_count,
-        }
+            "server_port": "-p",
+            "real_port": "-r",
+            "disable_proxy": "-N",
+            "dummy_mode": "-d",
+            "speedup": "-t",
+            "msg_count": "-n",
+            "debug_mode": "-D",
+        },
     )
 
     sys.exit(wait_and_term(*start(config, settings)))

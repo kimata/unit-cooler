@@ -6,9 +6,8 @@ import logging
 import pathlib
 import threading
 import traceback
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-import my_lib.footprint
 import zmq
 
 import unit_cooler.pubsub.subscribe
@@ -49,20 +48,6 @@ def term() -> None:
     logger.info("Termination flag set for webui worker")
 
 
-def queue_put(
-    message_queue: Queue[ControlMessage], message: dict[str, Any], liveness_file: pathlib.Path
-) -> None:
-    control_message = ControlMessage.from_dict(message)
-
-    if message_queue.full():
-        message_queue.get()
-
-    logger.info("Receive message: %s", control_message)
-
-    message_queue.put(control_message)
-    my_lib.footprint.update(liveness_file)
-
-
 # NOTE: 制御メッセージを Subscribe して、キューに積み、cooler_stat.py で WebUI に渡すワーカ
 def subscribe_worker(
     config: Config,
@@ -72,26 +57,17 @@ def subscribe_worker(
     liveness_file: pathlib.Path,
     msg_count: int = 0,
 ) -> int:
-    logger.info("Start webui subscribe worker (%s:%d)", control_host, pub_port)
-
-    ret = 0
-    try:
-        # 終了フラグを渡してstart_clientを呼び出し
-        unit_cooler.pubsub.subscribe.start_client(
-            control_host,
-            pub_port,
-            lambda message: queue_put(message_queue, message, liveness_file),
-            msg_count,
-            should_terminate,
-        )
-    except Exception:
-        logger.exception("Failed to receive control message")
-        unit_cooler.util.notify_error(config, traceback.format_exc())
-        ret = -1
-
-    logger.warning("Stop subscribe worker")
-
-    return ret
+    return unit_cooler.pubsub.subscribe.run_subscribe_worker(
+        config,
+        "webui",
+        control_host,
+        pub_port,
+        lambda message: unit_cooler.pubsub.subscribe.queue_put(
+            message_queue, message, liveness_file, drop_oldest=True
+        ),
+        msg_count,
+        should_terminate,
+    )
 
 
 # NOTE: ActuatorStatus を Subscribe して、キャッシュするワーカ

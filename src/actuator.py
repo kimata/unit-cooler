@@ -104,6 +104,7 @@ def start(config: Config, settings: RuntimeSettings) -> tuple[Any, list[Any], An
     )
 
     signal.signal(signal.SIGTERM, sig_handler)
+    signal.signal(signal.SIGINT, sig_handler)
 
     return (executor, thread_list, log_server_handle)
 
@@ -132,6 +133,17 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True, time
     logger.info("Shutdown executor")
     executor.shutdown(wait=True)
 
+    # NOTE: ON duty 中に終了すると GPIO ピンが HIGH のまま残り散水が続くため、
+    # ワーカー停止後に必ずバルブを閉じる
+    import unit_cooler.actuator.valve_controller
+
+    try:
+        unit_cooler.actuator.valve_controller.get_valve_controller().close()
+    except RuntimeError:
+        pass  # バルブが未初期化の場合は何もしない
+    except Exception:
+        logger.exception("Failed to close valve")
+
     # メトリクスコレクターのクローズ
     from unit_cooler.metrics import get_metrics_collector
 
@@ -151,39 +163,25 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True, time
 
 ######################################################################
 if __name__ == "__main__":
-    import pathlib
     import sys
 
-    import docopt
-    import my_lib.logger
+    import unit_cooler.cli
 
     assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
+    args, config = unit_cooler.cli.init(__doc__)
 
-    config_file = args["-c"]
-    control_host = os.environ.get("HEMS_CONTROL_HOST", args["-s"])
-    pub_port = int(os.environ.get("HEMS_PUB_PORT", args["-p"]))
-    log_port = int(os.environ.get("HEMS_LOG_PORT", args["-l"]))
-    status_pub_port = int(os.environ.get("HEMS_STATUS_PUB_PORT", args["-S"]))
-    dummy_mode = os.environ.get("DUMMY_MODE", args["-d"])
-    speedup = int(args["-t"])
-    msg_count = int(args["-n"])
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
-    settings = RuntimeSettings.from_dict(
+    settings = RuntimeSettings.from_args(
+        args,
         {
-            "control_host": control_host,
-            "pub_port": pub_port,
-            "log_port": log_port,
-            "status_pub_port": status_pub_port,
-            "dummy_mode": dummy_mode,
-            "speedup": speedup,
-            "msg_count": msg_count,
-            "debug_mode": debug_mode,
-        }
+            "control_host": "-s",
+            "pub_port": "-p",
+            "log_port": "-l",
+            "status_pub_port": "-S",
+            "dummy_mode": "-d",
+            "speedup": "-t",
+            "msg_count": "-n",
+            "debug_mode": "-D",
+        },
     )
     sys.exit(
         wait_and_term(

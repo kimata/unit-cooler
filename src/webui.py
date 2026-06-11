@@ -24,7 +24,6 @@ import atexit
 import logging
 import multiprocessing
 import os
-import pathlib
 import signal
 import sys
 import threading
@@ -178,40 +177,31 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
 
 
 if __name__ == "__main__":
-    import docopt
-    import my_lib.logger
-
-    from unit_cooler.config import Config, RuntimeSettings
+    import unit_cooler.cli
+    from unit_cooler.config import RuntimeSettings
 
     assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
+    args, config = unit_cooler.cli.init(__doc__)
 
-    config_file = args["-c"]
-    control_host = os.environ.get("HEMS_CONTROL_HOST", args["-s"])
-    pub_port = int(os.environ.get("HEMS_PUB_PORT", args["-p"]))
-    actuator_host = os.environ.get("HEMS_ACTUATOR_HOST", args["-a"])
-    log_port = int(os.environ.get("HEMS_LOG_PORT", args["-l"]))
-    status_pub_port = int(os.environ.get("HEMS_STATUS_PUB_PORT", args["-S"]))
-    dummy_mode = args["-d"]
-    msg_count = int(args["-n"])
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
-    settings = RuntimeSettings.from_dict(
+    settings = RuntimeSettings.from_args(
+        args,
         {
-            "control_host": control_host,
-            "pub_port": pub_port,
-            "actuator_host": actuator_host,
-            "log_port": log_port,
-            "status_pub_port": status_pub_port,
-            "dummy_mode": dummy_mode,
-            "msg_count": msg_count,
-        }
+            "control_host": "-s",
+            "pub_port": "-p",
+            "actuator_host": "-a",
+            "log_port": "-l",
+            "status_pub_port": "-S",
+            "dummy_mode": "-d",
+            "msg_count": "-n",
+            "debug_mode": "-D",
+        },
     )
 
     app = create_app(config, settings)
+
+    # コンテナでは PID 1 で動作するため、明示的に登録しないと SIGTERM が無視される
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
 
     # Flaskアプリケーションを実行
     try:

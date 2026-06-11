@@ -220,56 +220,52 @@ def start_proxy(
 
 if __name__ == "__main__":
     # TEST Code
-    import os
     import threading
 
-    import docopt
-    import my_lib.config
-    import my_lib.logger
-    import my_lib.pretty
-
-    import unit_cooler.const
+    import unit_cooler.cli
     import unit_cooler.controller.engine
     import unit_cooler.pubsub.subscribe
+    from unit_cooler.config import RuntimeSettings
 
     assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
+    args, config = unit_cooler.cli.init(__doc__, name="test")
 
-    config_file = args["-c"]
-    server_host = args["-s"]
-    server_port = int(os.environ.get("HEMS_SERVER_PORT", args["-p"]))
-    real_port = int(args["-r"])
-    msg_count = int(args["-n"])
-    speedup = int(args["-t"])
-    dummy_mode = args["-d"]
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = my_lib.config.load(config_file)
+    settings = RuntimeSettings.from_args(
+        args,
+        {
+            "server_host": "-s",
+            "server_port": "-p",
+            "real_port": "-r",
+            "dummy_mode": "-d",
+            "speedup": "-t",
+            "msg_count": "-n",
+        },
+    )
 
     proxy_thread = threading.Thread(
         target=start_proxy,
-        args=(server_host, real_port, server_port, msg_count),
+        args=(settings.server_host, settings.real_port, settings.server_port, settings.msg_count),
     )
     proxy_thread.start()
 
     server_thread = threading.Thread(
         target=start_server,
         args=(
-            real_port,
-            lambda: unit_cooler.controller.engine.gen_control_msg(config, dummy_mode, speedup).to_dict(),  # type: ignore[arg-type]
-            config["controller"]["interval_sec"] / speedup,
-            msg_count,
+            settings.real_port,
+            lambda: unit_cooler.controller.engine.gen_control_msg(
+                config, settings.dummy_mode, settings.speedup
+            ).to_dict(),
+            config.controller.interval_sec / settings.speedup,
+            settings.msg_count,
         ),
     )
     server_thread.start()
 
     unit_cooler.pubsub.subscribe.start_client(
-        server_host,
-        server_port,
+        settings.server_host,
+        settings.server_port,
         lambda message: logger.info("receive: %s", message),
-        msg_count,
+        settings.msg_count,
     )
 
     server_thread.join()

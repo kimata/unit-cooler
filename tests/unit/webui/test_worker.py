@@ -7,9 +7,6 @@ from __future__ import annotations
 import multiprocessing
 import pathlib
 
-from unit_cooler.const import COOLING_STATE
-from unit_cooler.messages import DutyConfig
-
 
 class TestGetLastActuatorStatus:
     """get_last_actuator_status のテスト"""
@@ -72,70 +69,6 @@ class TestTerm:
         import unit_cooler.webui.worker
 
         unit_cooler.webui.worker.should_terminate.clear()
-
-
-class TestQueuePut:
-    """queue_put のテスト"""
-
-    def test_puts_message_to_queue(self, mocker):
-        """キューにメッセージを追加"""
-        import unit_cooler.webui.worker
-
-        mocker.patch("my_lib.footprint.update")
-
-        queue = multiprocessing.Queue(maxsize=10)
-        duty_dict = {"enable": True, "on_sec": 100, "off_sec": 60}
-        message = {"state": 1, "mode_index": 3, "duty": duty_dict}
-        liveness_file = pathlib.Path("/tmp/test_liveness")
-
-        unit_cooler.webui.worker.queue_put(queue, message, liveness_file)
-
-        result = queue.get(timeout=1)
-        assert result.state == COOLING_STATE.WORKING
-        assert result.mode_index == 3
-        assert result.duty == DutyConfig(enable=True, on_sec=100, off_sec=60)
-
-    def test_converts_state_to_enum(self, mocker):
-        """state を Enum に変換"""
-        import unit_cooler.webui.worker
-
-        mocker.patch("my_lib.footprint.update")
-
-        queue = multiprocessing.Queue(maxsize=10)
-        duty_dict = {"enable": False, "on_sec": 0, "off_sec": 0}
-        message = {"state": 1, "mode_index": 5, "duty": duty_dict}  # state は int
-        liveness_file = pathlib.Path("/tmp/test_liveness")
-
-        unit_cooler.webui.worker.queue_put(queue, message, liveness_file)
-
-        result = queue.get(timeout=1)
-        assert result.state == COOLING_STATE.WORKING
-        assert isinstance(result.state, COOLING_STATE)
-
-    def test_removes_old_message_when_queue_full(self, mocker):
-        """キューが満杯の場合、古いメッセージを削除"""
-        import unit_cooler.webui.worker
-
-        mocker.patch("my_lib.footprint.update")
-
-        # maxsize=1 で満杯になるキューを作成
-        queue = multiprocessing.Queue(maxsize=1)
-        liveness_file = pathlib.Path("/tmp/test_liveness")
-
-        duty_dict = {"enable": True, "on_sec": 100, "off_sec": 60}
-
-        # 最初のメッセージを追加 (state=1: WORKING)
-        first_message = {"state": 1, "mode_index": 1, "duty": duty_dict}
-        unit_cooler.webui.worker.queue_put(queue, first_message, liveness_file)
-
-        # 2番目のメッセージを追加（最初のメッセージは削除される）(state=0: IDLE)
-        second_message = {"state": 0, "mode_index": 2, "duty": duty_dict}
-        unit_cooler.webui.worker.queue_put(queue, second_message, liveness_file)
-
-        # 2番目のメッセージが取得される
-        result = queue.get(timeout=1)
-        assert result.state == COOLING_STATE.IDLE
-        assert result.mode_index == 2
 
 
 class TestSubscribeWorker:

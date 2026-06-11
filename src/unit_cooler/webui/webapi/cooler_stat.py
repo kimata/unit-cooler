@@ -147,23 +147,3 @@ def api_get_watering():
     except Exception as e:
         logger.exception("Error in api_get_watering")
         return flask.jsonify({"error": str(e)}), 500
-
-
-if __name__ == "__main__":
-    # TEST Code
-    import docopt
-    import my_lib.config
-    import my_lib.logger
-    import my_lib.pretty
-
-    assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
-
-    config_file = args["-c"]
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = my_lib.config.load(config_file)
-
-    logging.info(my_lib.pretty.format(watering_list(config)))  # type: ignore[arg-type]

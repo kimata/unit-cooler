@@ -75,6 +75,7 @@ class TestControllerActuatorFlow:
         import actuator
         import controller
         import unit_cooler.actuator.worker
+        import unit_cooler.pubsub.subscribe
 
         server_port = port_manager.find_unused_port()
         real_port = port_manager.find_unused_port()
@@ -84,14 +85,14 @@ class TestControllerActuatorFlow:
 
         # 受信メッセージを追跡（元の関数も呼び出す）
         received_count = {"count": 0}
-        original_queue_put = unit_cooler.actuator.worker.queue_put
+        original_queue_put = unit_cooler.pubsub.subscribe.queue_put
 
         def track_queue_put(queue, message, liveness_file):
             received_count["count"] += 1
             original_queue_put(queue, message, liveness_file)
 
         mocker.patch(
-            "unit_cooler.actuator.worker.queue_put",
+            "unit_cooler.pubsub.subscribe.queue_put",
             side_effect=track_queue_put,
         )
 

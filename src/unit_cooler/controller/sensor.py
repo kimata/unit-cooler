@@ -379,26 +379,3 @@ def get_sense_data(config: Config) -> dict[str, list[dict[str, Any]]]:
         )
 
     return sense_data
-
-
-if __name__ == "__main__":
-    # TEST Code
-    import docopt
-    import my_lib.logger
-    import my_lib.pretty
-
-    assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
-
-    config_file = args["-c"]
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = Config.load(config_file)
-
-    sense_data = get_sense_data(config)
-
-    logger.info(my_lib.pretty.format(sense_data))
-    logger.info(my_lib.pretty.format(get_outdoor_status(sense_data)))
-    logger.info(my_lib.pretty.format(get_cooler_activity(sense_data)))

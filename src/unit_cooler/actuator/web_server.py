@@ -130,27 +130,3 @@ def term(handle: WebServerHandle) -> None:
     handle.thread.join()
 
     my_lib.webapp.log.term()
-
-
-if __name__ == "__main__":
-    # TEST Code
-    import multiprocessing
-
-    import docopt
-    import my_lib.logger
-
-    from unit_cooler.config import Config
-
-    assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
-
-    config_file = args["-c"]
-    port = int(args["-p"])
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("test", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = Config.load(config_file)
-    event_queue: multiprocessing.Queue = multiprocessing.Queue()
-
-    log_server_handle = start(config, event_queue, port)
