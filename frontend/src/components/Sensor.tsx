@@ -29,9 +29,9 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
         return (
             <tr className="flex" key={label}>
                 <td className="text-left w-4/12 py-2 whitespace-nowrap overflow-visible">{sensorData.name}</td>
-                <td className="text-right w-3/12 py-2">
-                    <div className="inline-flex justify-end items-baseline w-full whitespace-nowrap">
-                        <div className="digit text-right text-xl min-w-[4.5em]">
+                <td className="w-3/12 py-2">
+                    <div className="flex items-baseline w-full whitespace-nowrap">
+                        <div className="digit text-right text-xl flex-1">
                             <b>
                                 {hasValue ? (
                                     <AnimatedNumber value={value} decimals={decimals} useComma={label === "lux"} />
@@ -40,7 +40,9 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                                 )}
                             </b>
                         </div>
-                        <Unit>{unit}</Unit>
+                        <div className="flex-1 text-left">
+                            <Unit>{unit}</Unit>
+                        </div>
                     </div>
                 </td>
                 <td className="text-left w-2/12 py-2 pl-2">
