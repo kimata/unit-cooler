@@ -9,7 +9,8 @@ import { Pagination } from "./common/Pagination";
 import {
     AdjustmentsHorizontalIcon,
     ClipboardDocumentListIcon,
-    SunIcon,
+    DropletIcon,
+    PauseCircleIcon,
     ToggleOffIcon,
     ToggleOnIcon,
     XCircleIcon,
@@ -37,14 +38,14 @@ const Log = React.memo(({ isReady, log }: Props) => {
             );
         } else if (message.match(/開始/)) {
             return (
-                <span className="mr-2 text-red-500">
-                    <SunIcon className="size-5 inline" />
+                <span className="mr-2 text-sky-500">
+                    <DropletIcon className="size-5 inline" />
                 </span>
             );
         } else if (message.match(/停止/)) {
             return (
-                <span className="mr-2 text-yellow-500">
-                    <SunIcon className="size-5 inline" />
+                <span className="mr-2 text-gray-400">
+                    <PauseCircleIcon className="size-5 inline" />
                 </span>
             );
         } else if (message.match(/ON Duty/)) {

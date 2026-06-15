@@ -7,6 +7,7 @@ import {
     CalendarDaysIcon,
     BoltIcon,
     ClipboardDocumentListIcon,
+    PauseCircleIcon,
 } from "@heroicons/react/24/solid";
 
 // カスタム GitHub アイコン（Heroicons にブランドアイコンなし）
@@ -55,4 +56,5 @@ export {
     CalendarDaysIcon,
     BoltIcon,
     ClipboardDocumentListIcon,
+    PauseCircleIcon,
 };
