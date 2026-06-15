@@ -56,7 +56,7 @@ uv lock && uv sync
 - `pyproject.toml`
 - `.pre-commit-config.yaml`
 - `.gitignore`
-- `.gitlab-ci.yml`
+- `.gitlab-ci.yml`（共通部分のみ。後述）
 - その他プロジェクト共通設定
 
 **これらのファイルを直接編集しないでください。**
@@ -66,6 +66,19 @@ uv lock && uv sync
 1. **必ず事前に何を変更したいか説明し、確認を取ること**
 2. `../py-project` のテンプレートを更新
 3. このリポジトリに変更を反映
+
+#### `.gitlab-ci.yml` の例外
+
+`.gitlab-ci.yml` は **共通部分（`test` / `renovate` ステージ）のみが py-project 管理**で、`include` ではなく手動同期されています。一方、本リポジトリ固有の以下のジョブは **py-project に存在せず、このリポジトリの `.gitlab-ci.yml` で直接管理** します:
+
+- `generate-tag`（Docker イメージタグ生成）
+- `build-frontend` / `build-image`（マルチアーキビルド）
+- `tag-latest` / `deploy`（k8s への `kubectl set image` デプロイ）
+- `.docker-cleanup-base` 系のクリーンアップジョブ
+
+これらプロジェクト固有ジョブの修正は、py-project ではなくこのリポジトリで直接行ってよい（事前の意図説明・確認は引き続き必要）。
+
+**イメージタグは一意**（`TAG=$(date +%y%m%d_%H%M%S)_${CI_COMMIT_SHORT_SHA}`）にしている。これは、config 用の別リポジトリ `hems-config` を変更すると本リポジトリの CI が trigger されてリビルド＆デプロイされる仕組みのため。タグが日付＋コミット SHA だけだと、同一コミット上での config 変更が同じタグを生成し、`kubectl set image` がノーオペ（spec 変更なし＝ロールアウトされず）になって設定が反映されない問題があった。
 
 ## 開発環境
 

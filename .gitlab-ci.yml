@@ -23,7 +23,7 @@ stages:
 generate-tag:
     stage: generate-tag
     script:
-        - echo "TAG=$(date +%y%m%d)_${CI_COMMIT_SHORT_SHA}" > tag.env
+        - echo "TAG=$(date +%y%m%d_%H%M%S)_${CI_COMMIT_SHORT_SHA}" > tag.env
     artifacts:
         reports:
             dotenv: tag.env
