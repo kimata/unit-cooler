@@ -162,7 +162,8 @@ def validate_cooler_status(data: dict[str, Any], path: str = "") -> list[str]:
     }
     """
     fields = [
-        SchemaField("message", str, nullable=True),
+        # message は None を空文字に正規化して常に str で返す（cooler_stat.py: _status_to_dict）
+        SchemaField("message", str),
         SchemaField("status", int),
     ]
     return validate_schema(data, fields, path)
@@ -231,22 +232,20 @@ def validate_stat_response(data: dict[str, Any]) -> list[str]:
     """
     errors: list[str] = []
 
-    # cooler_status と outdoor_status は null 許容
-    if "cooler_status" in data and data["cooler_status"] is not None:
-        errors.extend(validate_cooler_status(data["cooler_status"], "cooler_status"))
+    # cooler_status / outdoor_status / mode / sensor は Controller 停止時もバックエンドが
+    # デフォルト値を詰めて常に非 null で返す（cooler_stat.py: CoolerStats.idle 参照）
+    for key, validator in (
+        ("cooler_status", validate_cooler_status),
+        ("outdoor_status", validate_cooler_status),
+        ("mode", validate_mode),
+        ("sensor", validate_sensor_object),
+    ):
+        if key not in data or data[key] is None:
+            errors.append(f"Expected non-null {key}")
+        else:
+            errors.extend(validator(data[key], key))
 
-    if "outdoor_status" in data and data["outdoor_status"] is not None:
-        errors.extend(validate_cooler_status(data["outdoor_status"], "outdoor_status"))
-
-    # mode も null 許容（Controller 未接続時）
-    if "mode" in data and data["mode"] is not None:
-        errors.extend(validate_mode(data["mode"], "mode"))
-
-    # sensor は空オブジェクトの場合がある
-    if data.get("sensor"):
-        errors.extend(validate_sensor_object(data["sensor"], "sensor"))
-
-    # actuator_status は null 許容
+    # actuator_status は null 許容（Actuator のステータス未受信時）
     if "actuator_status" in data and data["actuator_status"] is not None:
         errors.extend(validate_actuator_status(data["actuator_status"], "actuator_status"))
 
@@ -408,8 +407,8 @@ class TestApiStatSchema:
 
             assert errors == [], f"Schema validation errors: {errors}"
 
-    def test_stat_response_with_null_values(self, config, mocker):
-        """API /api/stat のレスポンスが null 値を正しく返す"""
+    def test_stat_response_idle_defaults(self, config, mocker):
+        """API /api/stat が Controller 未接続時も全フィールド非 null のデフォルト値を返す"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
@@ -431,12 +430,21 @@ class TestApiStatSchema:
 
             data = response.get_json()
 
-            # null 許容フィールドが正しく null を返すことを確認
-            assert data["mode"] is None
-            assert data["cooler_status"] is None
-            assert data["outdoor_status"] is None
+            # フロントが単一の Stat 型で扱えるよう、null ではなくデフォルト値を返す
+            assert data["mode"] == {
+                "state": 0,
+                "mode_index": 0,
+                "duty": {"enable": False, "on_sec": 0, "off_sec": 0},
+            }
+            assert data["cooler_status"] == {"status": 0, "message": ""}
+            assert data["outdoor_status"] == {"status": 0, "message": ""}
+            assert data["sensor"] == {
+                key: [] for key in ("temp", "humi", "lux", "solar_rad", "rain", "power")
+            }
+            # actuator_status のみ未受信時 None
             assert data["actuator_status"] is None
-            assert data["sensor"] == {}
+            # スキーマ全体も検証
+            assert validate_stat_response(data) == []
 
     def test_stat_response_actuator_status_valve_format(self, config, mocker):
         """API /api/stat の actuator_status.valve が正しい形式を返す"""
@@ -647,13 +655,14 @@ class TestMessageSchemaConsistency:
 
         assert errors == [], f"Schema validation errors: {errors}"
 
-    def test_status_info_null_message(self):
-        """StatusInfo の message が null の場合もスキーマに準拠する"""
-        status_info = StatusInfo(status=0, message=None)
-        status_dict = status_info.to_dict()
-        errors = validate_cooler_status(status_dict)
+    def test_status_info_null_message_normalized(self):
+        """message が null の StatusInfo も API 境界で空文字に正規化されスキーマに準拠する"""
+        import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
-        assert errors == [], f"Schema validation errors: {errors}"
+        status_dict = cooler_stat._status_to_dict(StatusInfo(status=0, message=None))
+
+        assert status_dict == {"status": 0, "message": ""}
+        assert validate_cooler_status(status_dict) == []
 
 
 class TestSensorDataFormat:

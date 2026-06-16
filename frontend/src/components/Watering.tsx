@@ -3,7 +3,8 @@ import NumberFlow, { continuous } from "@number-flow/react";
 
 import watering_icon from "../assets/watering.png";
 import type * as ApiResponse from "../lib/ApiResponse";
-import { Card, CardBody, CardHeader } from "./common/Card";
+import { CardBody } from "./common/Card";
+import { DashboardCard } from "./common/DashboardCard";
 import { Loading } from "./common/Loading";
 import { Unit } from "./common/Unit";
 import { DropletIcon } from "./icons";
@@ -55,25 +56,17 @@ const Watering = React.memo(({ isReady, watering }: Props) => {
     );
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex-1 flex flex-col text-center">
-                <Card>
-                    <CardHeader>
-                        <DropletIcon className="size-5 text-gray-500" />
-                        本日の散水量
-                    </CardHeader>
-                    {isReady || (watering?.length ?? 0) > 0 ? (
-                        amount(watering?.[0] ?? { amount: 0, price: 0 })
-                    ) : (
-                        <CardBody>
-                            <div className={`-m-4 p-4 ${OUTDOOR_BG_CLASSES}`}>
-                                <Loading size="large" />
-                            </div>
-                        </CardBody>
-                    )}
-                </Card>
-            </div>
-        </div>
+        <DashboardCard title="本日の散水量" icon={<DropletIcon className="size-5 text-gray-500" />}>
+            {isReady || (watering?.length ?? 0) > 0 ? (
+                amount(watering?.[0] ?? { amount: 0, price: 0 })
+            ) : (
+                <CardBody>
+                    <div className={`-m-4 p-4 ${OUTDOOR_BG_CLASSES}`}>
+                        <Loading size="large" />
+                    </div>
+                </CardBody>
+            )}
+        </DashboardCard>
     );
 });
 

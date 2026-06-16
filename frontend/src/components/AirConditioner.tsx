@@ -5,7 +5,8 @@ import type { Dayjs } from "dayjs";
 import dayjs from "../lib/dayjs";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { AnimatedNumber } from "./common/AnimatedNumber";
-import { Card, CardBody, CardHeader } from "./common/Card";
+import { CardBody } from "./common/Card";
+import { DashboardCard } from "./common/DashboardCard";
 import { DateDisplay } from "./common/DateDisplay";
 import { EmptyValue } from "./common/EmptyValue";
 import { Loading } from "./common/Loading";
@@ -74,7 +75,7 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
     AirconRow.displayName = "AirconRow";
 
     const coolerStatus = (stat: ApiResponse.Stat) => {
-        if (stat.cooler_status.message != null) {
+        if (stat.cooler_status.message) {
             return <div>{stat.cooler_status.message}</div>;
         }
     };
@@ -102,19 +103,11 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
     };
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex-1 flex flex-col text-center">
-                <Card>
-                    <CardHeader>
-                        <BoltIcon className="size-5 text-gray-500" />
-                        エアコン稼働状況
-                    </CardHeader>
-                    <CardBody>
-                        {isReady || (stat.sensor.power?.length ?? 0) > 0 ? sensorInfo(stat) : <Loading size="large" />}
-                    </CardBody>
-                </Card>
-            </div>
-        </div>
+        <DashboardCard title="エアコン稼働状況" icon={<BoltIcon className="size-5 text-gray-500" />}>
+            <CardBody>
+                {isReady || (stat.sensor.power?.length ?? 0) > 0 ? sensorInfo(stat) : <Loading size="large" />}
+            </CardBody>
+        </DashboardCard>
     );
 });
 

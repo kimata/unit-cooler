@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface UseApiState<T> {
     data: T;
@@ -20,12 +20,16 @@ export function useApi<T>(
     const [data, setData] = useState<T>(initialData);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [isFirstLoad, setIsFirstLoad] = useState(true);
+    // NOTE: isFirstLoad を state にすると fetchData の identity が初回ロード完了時に変わり、
+    // interval の再生成やマウント直後の二重フェッチを招く。ref に逃がして fetchData を
+    // url のみに依存させ、identity を安定させる。
+    const isFirstLoadRef = useRef(true);
 
     const fetchData = useCallback(async (): Promise<void> => {
+        const firstLoad = isFirstLoadRef.current;
         try {
-            // 初回ロード時のみloadingをtrueにする
-            if (isFirstLoad) {
+            // 初回ロード時のみ loading を true にする
+            if (firstLoad) {
                 setLoading(true);
             }
             setError(null);
@@ -38,19 +42,19 @@ export function useApi<T>(
             const result = await response.json();
             setData(result);
 
-            if (isFirstLoad) {
-                setIsFirstLoad(false);
+            if (firstLoad) {
+                isFirstLoadRef.current = false;
             }
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "通信に失敗しました";
             setError(errorMessage);
             console.error("API fetch error:", err);
         } finally {
-            if (isFirstLoad) {
+            if (firstLoad) {
                 setLoading(false);
             }
         }
-    }, [url, isFirstLoad]);
+    }, [url]);
 
     useEffect(() => {
         if (options.immediate !== false) {

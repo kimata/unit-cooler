@@ -12,6 +12,17 @@ export function useEventSource(url: string, options: UseEventSourceOptions = {})
 
     const { onMessage, onError, reconnectInterval = 1000 } = options;
 
+    // NOTE: onMessage / onError は呼び出し側で毎レンダー新しい関数として渡されるため、
+    // 直接ハンドラに渡すと初回レンダーのクロージャを掴み続けてしまう（stale closure）。
+    // ref 経由で最新のコールバックを参照することで、SSE イベントごとに最新の状態を扱える。
+    const onMessageRef = useRef(onMessage);
+    const onErrorRef = useRef(onError);
+
+    useEffect(() => {
+        onMessageRef.current = onMessage;
+        onErrorRef.current = onError;
+    }, [onMessage, onError]);
+
     const connect = () => {
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
@@ -21,9 +32,9 @@ export function useEventSource(url: string, options: UseEventSourceOptions = {})
             const eventSource = new EventSource(url);
             eventSourceRef.current = eventSource;
 
-            if (onMessage) {
-                eventSource.addEventListener("message", onMessage);
-            }
+            eventSource.addEventListener("message", (event) => {
+                onMessageRef.current?.(event);
+            });
 
             eventSource.onerror = (event) => {
                 if (eventSource.readyState === EventSource.CLOSED) {
@@ -31,15 +42,11 @@ export function useEventSource(url: string, options: UseEventSourceOptions = {})
                     reconnectTimeoutRef.current = setTimeout(connect, reconnectInterval);
                 }
 
-                if (onError) {
-                    onError(event);
-                }
+                onErrorRef.current?.(event);
             };
         } catch (error) {
             console.error("EventSource connection failed:", error);
-            if (onError) {
-                onError(error as Event);
-            }
+            onErrorRef.current?.(error as Event);
         }
     };
 

@@ -18,6 +18,15 @@ import { AirConditioner } from "./components/AirConditioner";
 import { Sensor } from "./components/Sensor";
 import { Log } from "./components/Log";
 
+// 日時文字列を整形する。空・未取得・"?" などの不正値は dayjs().isValid() で弾き "?" を返す。
+function formatDateOrFallback(value: string | undefined, method: "format" | "fromNow"): string {
+    const date = dayjs(value);
+    if (!value || !date.isValid()) {
+        return "?";
+    }
+    return method === "format" ? date.format("LLL") : date.fromNow();
+}
+
 function App() {
     const API_ENDPOINT = "/unit-cooler/api";
     const [logUpdateTrigger, setLogUpdateTrigger] = useState(0);
@@ -146,11 +155,13 @@ function App() {
     }, [refetchStat, refetchWatering, refetchLog]);
 
     // Format system info data with memoization
+    // NOTE: バックエンド (my_lib.webapp.util) は値が取れないとき uptime に "?" を返すため、
+    // 単純な truthy 判定では dayjs("?") → "Invalid Date" になる。dayjs().isValid() で弾く。
     const systemInfoMemo = useMemo(() => ({
-        imageBuildDate: sysInfo?.image_build_date ? dayjs(sysInfo.image_build_date).format("LLL") : "?",
-        imageBuildDateFrom: sysInfo?.image_build_date ? dayjs(sysInfo.image_build_date).fromNow() : "?",
-        actuatorUptime: actuatorSysInfo?.uptime ? dayjs(actuatorSysInfo.uptime).format("LLL") : "?",
-        actuatorUptimeFrom: actuatorSysInfo?.uptime ? dayjs(actuatorSysInfo.uptime).fromNow() : "?",
+        imageBuildDate: formatDateOrFallback(sysInfo?.image_build_date, "format"),
+        imageBuildDateFrom: formatDateOrFallback(sysInfo?.image_build_date, "fromNow"),
+        actuatorUptime: formatDateOrFallback(actuatorSysInfo?.uptime, "format"),
+        actuatorUptimeFrom: formatDateOrFallback(actuatorSysInfo?.uptime, "fromNow"),
         actuatorLoadAverage: actuatorSysInfo?.load_average || "?"
     }), [sysInfo?.image_build_date, actuatorSysInfo?.uptime, actuatorSysInfo?.load_average]);
 

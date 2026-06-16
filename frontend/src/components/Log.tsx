@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import dayjs from "../lib/dayjs";
 import type * as ApiResponse from "../lib/ApiResponse";
-import { Card, CardBody, CardHeader } from "./common/Card";
+import { CardBody } from "./common/Card";
+import { DashboardCard } from "./common/DashboardCard";
 import { Loading } from "./common/Loading";
 import { Pagination } from "./common/Pagination";
 import {
@@ -92,7 +93,8 @@ const Log = React.memo(({ isReady, log }: Props) => {
                 <div className="text-left flex-1 mb-4" data-testid="log">
                     <AnimatePresence initial={false}>
                         {log.slice((page - 1) * size, page * size).map((entry, index) => {
-                            const date = dayjs(entry.date);
+                            // サーバーは tz 付き ISO 8601 を返す。ブラウザの TZ に依らず JST で表示する。
+                            const date = dayjs(entry.date).tz("Asia/Tokyo");
                             const log_date = date.format("M月D日(ddd) HH:mm");
                             const log_fromNow = date.fromNow();
                             const isLast = index === Math.min(size, log.length - (page - 1) * size) - 1;
@@ -133,19 +135,11 @@ const Log = React.memo(({ isReady, log }: Props) => {
     };
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex-1 flex flex-col text-center">
-                <Card>
-                    <CardHeader>
-                        <ClipboardDocumentListIcon className="size-5 text-gray-500" />
-                        作動ログ
-                    </CardHeader>
-                    <CardBody className="flex flex-col">
-                        {isReady ? logData(log.data) : <Loading size="large" />}
-                    </CardBody>
-                </Card>
-            </div>
-        </div>
+        <DashboardCard title="作動ログ" icon={<ClipboardDocumentListIcon className="size-5 text-gray-500" />}>
+            <CardBody className="flex flex-col">
+                {isReady ? logData(log.data) : <Loading size="large" />}
+            </CardBody>
+        </DashboardCard>
     );
 });
 

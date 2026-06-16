@@ -5,7 +5,8 @@ import type { Dayjs } from "dayjs";
 import dayjs from "../lib/dayjs";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { AnimatedNumber } from "./common/AnimatedNumber";
-import { Card, CardBody, CardHeader } from "./common/Card";
+import { CardBody } from "./common/Card";
+import { DashboardCard } from "./common/DashboardCard";
 import { DateDisplay } from "./common/DateDisplay";
 import { EmptyValue } from "./common/EmptyValue";
 import { Loading } from "./common/Loading";
@@ -56,7 +57,7 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
     };
 
     const outdoorStatus = (stat: ApiResponse.Stat) => {
-        if (stat.outdoor_status.message == null) {
+        if (!stat.outdoor_status.message) {
             return;
         }
 
@@ -98,19 +99,11 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
     };
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex-1 flex flex-col text-center">
-                <Card>
-                    <CardHeader>
-                        <ThermometerIcon className="size-5 text-gray-500" />
-                        センサー値
-                    </CardHeader>
-                    <CardBody>
-                        {isReady || (stat.sensor.temp?.length ?? 0) > 0 ? sensorInfo(stat) : <Loading size="large" />}
-                    </CardBody>
-                </Card>
-            </div>
-        </div>
+        <DashboardCard title="センサー値" icon={<ThermometerIcon className="size-5 text-gray-500" />}>
+            <CardBody>
+                {isReady || (stat.sensor.temp?.length ?? 0) > 0 ? sensorInfo(stat) : <Loading size="large" />}
+            </CardBody>
+        </DashboardCard>
     );
 });
 

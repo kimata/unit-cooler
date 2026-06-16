@@ -6,7 +6,8 @@ import { Bar } from "react-chartjs-2";
 Chart.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 import type * as ApiResponse from "../lib/ApiResponse";
-import { Card, CardBody, CardHeader } from "./common/Card";
+import { CardBody } from "./common/Card";
+import { DashboardCard } from "./common/DashboardCard";
 import { Loading } from "./common/Loading";
 import { CalendarDaysIcon } from "./icons";
 
@@ -76,21 +77,13 @@ const History = React.memo(({ isReady, watering }: Props) => {
     );
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex-1 flex flex-col text-center">
-                <Card>
-                    <CardHeader>
-                        <CalendarDaysIcon className="size-5 text-gray-500" />
-                        散水履歴
-                    </CardHeader>
-                    {isReady || (watering?.length ?? 0) > 0 ? history() : (
-                        <CardBody>
-                            <Loading size="large" />
-                        </CardBody>
-                    )}
-                </Card>
-            </div>
-        </div>
+        <DashboardCard title="散水履歴" icon={<CalendarDaysIcon className="size-5 text-gray-500" />}>
+            {isReady || (watering?.length ?? 0) > 0 ? history() : (
+                <CardBody>
+                    <Loading size="large" />
+                </CardBody>
+            )}
+        </DashboardCard>
     );
 });
 

@@ -41,6 +41,8 @@ export interface Watering {
 }
 
 export interface Stat {
+    // バックエンド (cooler_stat.py: get_stats) が Controller 停止時もデフォルト値を詰めて
+    // 常に非 null・全フィールドを返すため、ここは全て必須・非 null でよい
     cooler_status: CoolerStatus;
     outdoor_status: OutdoorStatus;
     mode: Mode;

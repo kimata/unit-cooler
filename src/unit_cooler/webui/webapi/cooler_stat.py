@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -13,6 +14,8 @@ import my_lib.flask_util
 import my_lib.sensor_data
 import my_lib.webapp.config
 
+import unit_cooler.const
+import unit_cooler.messages
 import unit_cooler.webui.worker
 
 logger = logging.getLogger(__name__)
@@ -21,7 +24,7 @@ if TYPE_CHECKING:
     from multiprocessing import Queue
 
     from unit_cooler.config import Config
-    from unit_cooler.messages import ControlMessage
+    from unit_cooler.messages import ControlMessage, StatusInfo
 
 blueprint = flask.Blueprint("cooler-stat", __name__)
 
@@ -37,14 +40,25 @@ class WateringInfo:
         return {"amount": self.amount, "price": self.price}
 
 
+def _status_to_dict(status: StatusInfo | None) -> dict[str, Any]:
+    """StatusInfo を非 null の dict に正規化する（message の None は空文字に揃える）"""
+    if status is None:
+        return {"status": 0, "message": ""}
+    return {"status": status.status, "message": status.message or ""}
+
+
 @dataclass(frozen=True)
 class CoolerStats:
-    """冷却システム統計情報"""
+    """冷却システム統計情報
+
+    Controller 停止時も全フィールドを非 null で返すことで、フロントエンドは
+    単一の Stat 型（null 分岐なし）で扱える。actuator_status のみ未受信時 None。
+    """
 
     sensor: dict[str, Any]
-    mode: dict[str, Any] | None
-    cooler_status: dict[str, Any] | None
-    outdoor_status: dict[str, Any] | None
+    mode: dict[str, Any]
+    cooler_status: dict[str, Any]
+    outdoor_status: dict[str, Any]
     actuator_status: dict[str, Any] | None
 
     def to_dict(self) -> dict[str, Any]:
@@ -55,6 +69,43 @@ class CoolerStats:
             "outdoor_status": self.outdoor_status,
             "actuator_status": self.actuator_status,
         }
+
+    @classmethod
+    def from_message(
+        cls, control_message: ControlMessage, actuator_status: dict[str, Any] | None
+    ) -> CoolerStats:
+        # NOTE: mode に ControlMessage 全体を入れると sense_data / cooler_status /
+        # outdoor_status が重複してペイロードに含まれるため、必要なフィールドのみ返す
+        return cls(
+            sensor=(
+                control_message.sense_data.to_dict()
+                if control_message.sense_data
+                else unit_cooler.messages.SenseData().to_dict()
+            ),
+            mode={
+                "state": control_message.state.value,
+                "mode_index": control_message.mode_index,
+                "duty": control_message.duty.to_dict(),
+            },
+            cooler_status=_status_to_dict(control_message.cooler_status),
+            outdoor_status=_status_to_dict(control_message.outdoor_status),
+            actuator_status=actuator_status,
+        )
+
+    @classmethod
+    def idle(cls, actuator_status: dict[str, Any] | None) -> CoolerStats:
+        """Controller 未接続時のデフォルト統計情報（全フィールド非 null）"""
+        return cls(
+            sensor=unit_cooler.messages.SenseData().to_dict(),
+            mode={
+                "state": unit_cooler.const.COOLING_STATE.IDLE.value,
+                "mode_index": 0,
+                "duty": {"enable": False, "on_sec": 0, "off_sec": 0},
+            },
+            cooler_status={"status": 0, "message": ""},
+            outdoor_status={"status": 0, "message": ""},
+            actuator_status=actuator_status,
+        )
 
 
 def watering(config: Config, day_before: int) -> WateringInfo:
@@ -86,9 +137,14 @@ _last_message: ControlMessage | None = None
 
 def get_last_message(message_queue: Queue[ControlMessage]) -> ControlMessage | None:
     # NOTE: 現在の実際の制御モードを取得する。
+    # empty() でチェックしてから get() すると、並行リクエストが間にキューを空にした場合に
+    # get() がブロックし得る（TOCTOU）。get_nowait() + queue.Empty 捕捉でブロックを避ける。
     global _last_message
-    while not message_queue.empty():
-        _last_message = message_queue.get()
+    while True:
+        try:
+            _last_message = message_queue.get_nowait()
+        except queue.Empty:
+            break
     return _last_message
 
 
@@ -101,27 +157,9 @@ def get_stats(message_queue: Queue[ControlMessage]) -> CoolerStats:
     actuator_status_dict = actuator_status.to_dict() if actuator_status else None
 
     if control_message is None:
-        return CoolerStats(
-            sensor={},
-            mode=None,
-            cooler_status=None,
-            outdoor_status=None,
-            actuator_status=actuator_status_dict,
-        )
+        return CoolerStats.idle(actuator_status_dict)
 
-    # NOTE: mode に ControlMessage 全体を入れると sense_data / cooler_status /
-    # outdoor_status が重複してペイロードに含まれるため、必要なフィールドのみ返す
-    return CoolerStats(
-        sensor=control_message.sense_data.to_dict() if control_message.sense_data else {},
-        mode={
-            "state": control_message.state.value,
-            "mode_index": control_message.mode_index,
-            "duty": control_message.duty.to_dict(),
-        },
-        cooler_status=control_message.cooler_status.to_dict() if control_message.cooler_status else None,
-        outdoor_status=control_message.outdoor_status.to_dict() if control_message.outdoor_status else None,
-        actuator_status=actuator_status_dict,
-    )
+    return CoolerStats.from_message(control_message, actuator_status_dict)
 
 
 @blueprint.route("/api/stat", methods=["GET"])

@@ -175,8 +175,8 @@ class TestGetStats:
         assert hasattr(result, "outdoor_status")
         assert hasattr(result, "actuator_status")
 
-    def test_returns_empty_data_when_no_message(self, mocker):
-        """ZMQ メッセージがない場合は空データを返す"""
+    def test_returns_idle_defaults_when_no_message(self, mocker):
+        """ZMQ メッセージがない場合は全フィールド非 null のデフォルト値を返す"""
         import unit_cooler.webui.webapi.cooler_stat as cooler_stat
 
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=None)
@@ -186,10 +186,15 @@ class TestGetStats:
 
         result = cooler_stat.get_stats(queue)
 
-        assert result.sensor == {}
-        assert result.mode is None
-        assert result.cooler_status is None
-        assert result.outdoor_status is None
+        # フロントエンドが単一の Stat 型で扱えるよう、null ではなくデフォルト値を返す
+        assert result.sensor == SenseData().to_dict()
+        assert result.mode == {
+            "state": COOLING_STATE.IDLE.value,
+            "mode_index": 0,
+            "duty": {"enable": False, "on_sec": 0, "off_sec": 0},
+        }
+        assert result.cooler_status == {"status": 0, "message": ""}
+        assert result.outdoor_status == {"status": 0, "message": ""}
 
     def test_includes_actuator_status_when_available(self, mocker):
         """ActuatorStatus が利用可能時に含める"""

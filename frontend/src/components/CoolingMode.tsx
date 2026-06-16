@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 
 import type * as ApiResponse from "../lib/ApiResponse";
 import { useApi } from "../hooks/useApi";
 import { AnimatedNumber } from "./common/AnimatedNumber";
-import { Card, CardBody, CardHeader } from "./common/Card";
+import { CardBody } from "./common/Card";
+import { DashboardCard } from "./common/DashboardCard";
 import { Loading } from "./common/Loading";
 import { Unit } from "./common/Unit";
 import { AdjustmentsVerticalIcon } from "./icons";
@@ -78,16 +79,33 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
         return () => clearInterval(timer);
     }, [remainingTime]);
 
+    // NOTE: currentFlow を依存配列に入れると、流量更新（毎秒）のたびにこの effect が
+    // 再生成され interval が張り直されて約 2 req/s になる。ref 経由で最新値を読み、
+    // interval は valve 状態の変化時のみ生成する。
+    const currentFlowRef = useRef(currentFlow);
+    useEffect(() => {
+        currentFlowRef.current = currentFlow;
+    }, [currentFlow]);
+
     // Update flow when valve is OPEN or when CLOSE but flow > 0
     useEffect(() => {
-        if (valveStatus.state === "OPEN" || (valveStatus.state === "CLOSE" && currentFlow > 0)) {
-            refetchFlowStatus();
-            const flowTimer = setInterval(() => {
-                refetchFlowStatus();
-            }, 1000);
-            return () => clearInterval(flowTimer);
+        const shouldPoll =
+            valveStatus.state === "OPEN" || (valveStatus.state === "CLOSE" && currentFlowRef.current > 0);
+        if (!shouldPoll) {
+            return;
         }
-    }, [valveStatus.state, refetchFlowStatus, currentFlow]);
+
+        refetchFlowStatus();
+        const flowTimer = setInterval(() => {
+            // CLOSE になり流量が 0 まで落ちたらポーリングを止める
+            if (valveStatus.state === "CLOSE" && currentFlowRef.current <= 0) {
+                clearInterval(flowTimer);
+                return;
+            }
+            refetchFlowStatus();
+        }, 1000);
+        return () => clearInterval(flowTimer);
+    }, [valveStatus.state, refetchFlowStatus]);
 
     // Update currentFlow state when flowStatus changes
     useEffect(() => {
@@ -193,10 +211,6 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     };
 
     const modeInfo = (mode: ApiResponse.Mode) => {
-        if (mode == null) {
-            return <Loading size="large" />;
-        }
-
         return (
             <div data-testid="cooling-info">
                 <div className="text-6xl font-light align-middle ml-1">
@@ -209,19 +223,11 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     };
 
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex-1 flex flex-col text-center">
-                <Card>
-                    <CardHeader>
-                        <AdjustmentsVerticalIcon className="size-5 text-gray-500" />
-                        現在の冷却モード
-                    </CardHeader>
-                    <CardBody>
-                        {isReady || (stat.mode?.mode_index ?? 0) !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}
-                    </CardBody>
-                </Card>
-            </div>
-        </div>
+        <DashboardCard title="現在の冷却モード" icon={<AdjustmentsVerticalIcon className="size-5 text-gray-500" />}>
+            <CardBody>
+                {isReady || stat.mode.mode_index !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}
+            </CardBody>
+        </DashboardCard>
     );
 });
 
