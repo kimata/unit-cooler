@@ -35,6 +35,8 @@ class ControlHandle:
     message_queue: Queue[ControlMessage]
     receive_time: datetime.datetime = field(default_factory=my_lib.time.now)
     receive_count: int = 0
+    # 制御指示の途絶を既に通知したか（途絶中の ERROR ログ・IDLE フォールバックを 1 回に抑える）
+    timeout_notified: bool = False
 
 
 def gen_handle(config: Config, message_queue: Queue[ControlMessage]) -> ControlHandle:
@@ -76,8 +78,18 @@ def get_control_message_impl(handle: ControlHandle, last_message: ControlMessage
         elapsed = (my_lib.time.now() - handle.receive_time).total_seconds()
         threshold = handle.config.controller.interval_sec * 3
         if elapsed > threshold:
-            unit_cooler.actuator.work_log.add(
-                "冷却モードの指示を受信できません。", unit_cooler.const.LOG_LEVEL.ERROR
+            if not handle.timeout_notified:
+                unit_cooler.actuator.work_log.add(
+                    "冷却モードの指示を受信できません。", unit_cooler.const.LOG_LEVEL.ERROR
+                )
+                handle.timeout_notified = True
+
+            # NOTE: 安全側のフォールバック。Controller 途絶中に last_message（WORKING かも）の
+            # まま散水を続けると、水漏れ等のリスクが残るため IDLE に落として停止する。
+            return ControlMessage(
+                mode_index=0,
+                state=unit_cooler.const.COOLING_STATE.IDLE,
+                duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
             )
 
         return last_message
@@ -90,6 +102,7 @@ def get_control_message_impl(handle: ControlHandle, last_message: ControlMessage
 
         handle.receive_time = my_lib.time.now()
         handle.receive_count += 1
+        handle.timeout_notified = False
         if os.environ.get("TEST", "false") == "true":
             # NOTE: テスト時は、コマンドの数を整合させたいので、
             # 1 回に1個のコマンドのみ処理する。

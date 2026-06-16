@@ -135,19 +135,31 @@ def get_last_flow() -> float:
 
 
 def check_sensing(handle: MonitorHandle, mist_condition: MistCondition) -> None:
-    if mist_condition.flow is None:
-        handle.flow_unknown += 1
-    else:
-        handle.flow_unknown = 0
-
     config = handle.config
-    if handle.flow_unknown > config.actuator.monitor.sense.giveup:
-        unit_cooler.actuator.work_log.add("流量計が使えません。", unit_cooler.const.LOG_LEVEL.ERROR)
-    elif handle.flow_unknown > (config.actuator.monitor.sense.giveup / 2):
+    giveup = config.actuator.monitor.sense.giveup
+
+    if mist_condition.flow is not None:
+        handle.flow_unknown = 0
+        return
+
+    handle.flow_unknown += 1
+
+    # NOTE: giveup/2 周期でセンサーをリセットして復旧を試みる。giveup 超過後も
+    # リセットを継続し（以前は giveup 超過後リセットを諦めて毎秒 ERROR を積むだけだった）、
+    # 毎サイクルのログ/リセットによる work_log のスパムも防ぐ。
+    reset_interval = max(1, int(giveup / 2))
+    if handle.flow_unknown % reset_interval != 0:
+        return
+
+    if handle.flow_unknown > giveup:
+        unit_cooler.actuator.work_log.add(
+            "流量計が使えません。リセットを試みます。", unit_cooler.const.LOG_LEVEL.ERROR
+        )
+    else:
         unit_cooler.actuator.work_log.add(
             "流量計が応答しないので一旦、リセットします。", unit_cooler.const.LOG_LEVEL.WARN
         )
-        unit_cooler.actuator.sensor.stop()
+    unit_cooler.actuator.sensor.stop()
 
 
 def check_mist_condition(handle: MonitorHandle, mist_condition: MistCondition) -> None:

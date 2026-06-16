@@ -251,11 +251,14 @@ class MetricsCollector:
         """Save accumulated hour data to database."""
         try:
             with self._get_db_connection() as conn:
+                # NOTE: INSERT OR REPLACE だと、同一時間帯に再起動した際に再起動前のカウントを
+                # 上書きして失ってしまう。加算 UPSERT にして既存値に積み増す (BUG #19)。
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO hourly_metrics
-                    (timestamp, valve_operations)
+                    INSERT INTO hourly_metrics (timestamp, valve_operations)
                     VALUES (?, ?)
+                    ON CONFLICT(timestamp) DO UPDATE SET
+                        valve_operations = valve_operations + excluded.valve_operations
                 """,
                     (timestamp.isoformat(), self._current_hour_data["valve_operations"]),
                 )

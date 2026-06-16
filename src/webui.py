@@ -20,7 +20,6 @@ Options:
 
 from __future__ import annotations
 
-import atexit
 import logging
 import multiprocessing
 import os
@@ -126,31 +125,10 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
 
     app = flask.Flask("unit-cooler-webui")
 
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
-        if settings.dummy_mode:
-            logger.warning("Set dummy mode")
-            # NOTE: オプションでダミーモードが指定された場合、環境変数もそれに揃えておく
-            os.environ["DUMMY_MODE"] = "true"
-        else:  # pragma: no cover
-            pass
-
-        def notify_terminate():  # pragma: no cover
-            import my_lib.webapp.log
-
-            term()
-            my_lib.webapp.log.info("🏃 アプリを再起動します。")
-            my_lib.webapp.log.term()
-
-        atexit.register(notify_terminate)
-    else:  # pragma: no cover
-        pass
-
     flask_cors.CORS(app)
 
     app.config["CONFIG"] = config
     app.config["MESSAGE_QUEUE"] = message_queue
-
-    app.json.compat = True  # type: ignore[attr-defined]
 
     # Initialize proxy before registering blueprint
     api_base_url = f"http://{settings.actuator_host}:{settings.log_port}/unit-cooler"
@@ -197,6 +175,11 @@ if __name__ == "__main__":
         },
     )
 
+    if settings.dummy_mode:
+        logger.warning("Set dummy mode")
+        # NOTE: ダミーモード指定時は下流コードが参照する環境変数も揃えておく
+        os.environ["DUMMY_MODE"] = "true"
+
     app = create_app(config, settings)
 
     # コンテナでは PID 1 で動作するため、明示的に登録しないと SIGTERM が無視される
@@ -205,8 +188,10 @@ if __name__ == "__main__":
 
     # Flaskアプリケーションを実行
     try:
-        # NOTE: スクリプトの自動リロード停止したい場合は use_reloader=False にする
-        app.run(host="0.0.0.0", threaded=True, use_reloader=True, port=config.webui.webapp.port)  # noqa: S104
+        # NOTE: use_reloader=True にすると reloader の親プロセスでも create_app() が走り、
+        # ZMQ 購読ワーカースレッドが親子で二重起動してしまう。本番では自動リロードは
+        # 不要なので False にする。
+        app.run(host="0.0.0.0", threaded=True, use_reloader=False, port=config.webui.webapp.port)  # noqa: S104
     except KeyboardInterrupt:
         logger.info("Received KeyboardInterrupt, shutting down...")
         signal_handler(signal.SIGINT, None)

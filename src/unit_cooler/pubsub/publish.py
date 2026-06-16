@@ -47,10 +47,13 @@ def wait_first_client(socket: zmq.Socket[bytes], timeout: float = 1.0) -> None:
                 logger.info("First client connected.")
                 # 購読イベントを処理
                 socket.send(event)
+                # NOTE: 接続済みなのにループを継続すると、タイムアウト経過後に
+                # 「Timeout」の誤警告を出してしまうため、ここで抜ける。
+                return
 
         if time.monotonic() - start_time > timeout:
             logger.warning("Timeout waiting for first client connection.")
-            break
+            return
 
 
 def start_server(

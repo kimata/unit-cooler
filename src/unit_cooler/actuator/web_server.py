@@ -62,8 +62,6 @@ def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
     app.config["CONFIG"] = config
     app.config["CONFIG_FILE_NORMAL"] = "config.yaml"  # メトリクス用設定
 
-    app.json.compat = True  # type: ignore[attr-defined]
-
     app.register_blueprint(my_lib.webapp.log.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
     app.register_blueprint(my_lib.webapp.event.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
     app.register_blueprint(my_lib.webapp.util.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
