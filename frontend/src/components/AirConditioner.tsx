@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import type { Dayjs } from "dayjs";
 
 import dayjs from "../lib/dayjs";
@@ -10,6 +9,7 @@ import { DashboardCard } from "./common/DashboardCard";
 import { DateDisplay } from "./common/DateDisplay";
 import { EmptyValue } from "./common/EmptyValue";
 import { Loading } from "./common/Loading";
+import { ProgressBar } from "./common/ProgressBar";
 import { Unit } from "./common/Unit";
 import { BoltIcon } from "./icons";
 
@@ -38,30 +38,22 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
             <tr className="flex items-center">
                 <td className="text-left w-2/12 whitespace-nowrap py-2 flex items-center h-10">{props.airconData.name}</td>
                 <td className="text-right w-5/12 py-2 pr-3 flex items-center">
-                    <div className="relative w-full">
-                        <div className="w-full bg-gray-200 rounded overflow-hidden h-8">
-                            <motion.div
-                                className="h-full bg-gray-500 transition-all duration-500"
-                                role="progressbar"
-                                aria-valuenow={currentValue}
-                                aria-valuemin={0}
-                                aria-valuemax={1200}
-                                initial={{ width: previousWidth + "%" }}
-                                animate={{ width: currentWidth + "%" }}
-                                transition={{ duration: 30.0, ease: "easeOut" }}
-                            />
-                        </div>
-                        <div className="absolute top-1/2 -translate-y-1/2 right-[5%] text-xl digit">
-                            <b>
-                                {hasValue ? (
-                                    <AnimatedNumber value={value} decimals={0} useComma={true} />
-                                ) : (
-                                    <EmptyValue />
-                                )}
-                            </b>
-                            <Unit>W</Unit>
-                        </div>
-                    </div>
+                    <ProgressBar
+                        fillPercent={currentWidth}
+                        initialPercent={previousWidth}
+                        durationSec={30.0}
+                        ariaValueNow={currentValue}
+                        ariaValueMax={1200}
+                    >
+                        <b>
+                            {hasValue ? (
+                                <AnimatedNumber value={value} decimals={0} useComma={true} />
+                            ) : (
+                                <EmptyValue />
+                            )}
+                        </b>
+                        <Unit>W</Unit>
+                    </ProgressBar>
                 </td>
                 <td className="text-left w-2/12 py-2 pl-2 flex items-center h-10">
                     <DateDisplay date={date} format="relative" />

@@ -1,8 +1,8 @@
 import React from "react";
-import NumberFlow, { continuous } from "@number-flow/react";
 
 import watering_icon from "../assets/watering.png";
 import type * as ApiResponse from "../lib/ApiResponse";
+import { AnimatedNumber } from "./common/AnimatedNumber";
 import { CardBody } from "./common/Card";
 import { DashboardCard } from "./common/DashboardCard";
 import { Loading } from "./common/Loading";
@@ -28,25 +28,13 @@ const Watering = React.memo(({ isReady, watering }: Props) => {
                 <div className="flex-1 ml-4 flex flex-col">
                     <div className="w-full">
                         <span className="text-left text-6xl font-light" data-testid="watering-amount-info">
-                            <NumberFlow
-                                value={watering.amount}
-                                format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}
-                                plugins={[continuous]}
-                                trend={1}
-                                className="font-bold digit"
-                            />
+                            <AnimatedNumber value={watering.amount} decimals={1} className="font-bold digit" />
                             <Unit className="text-4xl">L</Unit>
                         </span>
                     </div>
                     <div className="w-full mt-3">
                         <span className="text-left text-gray-500" data-testid="watering-price-info">
-                            <NumberFlow
-                                value={watering.price}
-                                format={{ minimumFractionDigits: 1, maximumFractionDigits: 1 }}
-                                plugins={[continuous]}
-                                trend={1}
-                                className="font-bold text-3xl digit"
-                            />
+                            <AnimatedNumber value={watering.price} decimals={1} className="font-bold text-3xl digit" />
                             <Unit>円</Unit>
                         </span>
                     </div>

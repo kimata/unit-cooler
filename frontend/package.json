@@ -16,7 +16,6 @@
     },
     "dependencies": {
         "@heroicons/react": "^2.2.0",
-        "@number-flow/react": "^0.5.10",
         "chart.js": "^4.4.9",
         "dayjs": "^1.11.13",
         "framer-motion": "^12.19.1",

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { motion } from "framer-motion";
 
 import type * as ApiResponse from "../lib/ApiResponse";
 import { useApi } from "../hooks/useApi";
@@ -7,6 +6,7 @@ import { AnimatedNumber } from "./common/AnimatedNumber";
 import { CardBody } from "./common/Card";
 import { DashboardCard } from "./common/DashboardCard";
 import { Loading } from "./common/Loading";
+import { ProgressBar } from "./common/ProgressBar";
 import { Unit } from "./common/Unit";
 import { AdjustmentsVerticalIcon } from "./icons";
 
@@ -177,27 +177,16 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
 
                 {/* Progress Bar */}
                 <div className="flex items-center mb-1">
-                    <div className="w-full">
-                        <div className="relative">
-                            <div className="w-full bg-gray-200 rounded overflow-hidden h-8">
-                                <motion.div
-                                    key={`${valveStatus.state}-${maxDuration}-${valveStatus.duration}`}
-                                    className="h-full bg-gray-500 transition-all duration-500"
-                                    role="progressbar"
-                                    initial={{ width: "0%" }}
-                                    animate={{ width: `${Math.max(0, progress)}%` }}
-                                    transition={{ duration: 0.5, ease: "easeOut" }}
-                                    aria-valuenow={progress}
-                                    aria-valuemin={0}
-                                    aria-valuemax={100}
-                                />
-                            </div>
-                            <div className="absolute top-1/2 -translate-y-1/2 right-[5%] text-xl digit text-gray-400">
-                                <small className="mr-2">残り</small>
-                                <b>{formatTime(remainingTime)}</b>
-                            </div>
-                        </div>
-                    </div>
+                    <ProgressBar
+                        fillPercent={progress}
+                        animationKey={`${valveStatus.state}-${maxDuration}-${valveStatus.duration}`}
+                        ariaValueNow={progress}
+                        ariaValueMax={100}
+                        overlayClassName="text-gray-400"
+                    >
+                        <small className="mr-2">残り</small>
+                        <b>{formatTime(remainingTime)}</b>
+                    </ProgressBar>
                 </div>
 
                 {/* Warning Message */}
