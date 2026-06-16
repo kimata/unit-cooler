@@ -189,6 +189,32 @@ class TestMetricsCollectorHourBoundary:
 
         collector.close()
 
+    def test_restart_within_hour_accumulates_count(self, tmp_path):
+        """同一時間帯に再起動してもカウントが上書きされず加算される (BUG #19)"""
+        db_path = tmp_path / "metrics.db"
+
+        # 1 つ目のプロセス: 12:30 に 3 回操作して終了（close で 12:00 行に保存）
+        holder1 = {"time": datetime.datetime(2024, 6, 15, 12, 30, 0, tzinfo=TIMEZONE)}
+        c1 = MetricsCollector(db_path, time_func=lambda: holder1["time"])
+        for _ in range(3):
+            c1.record_valve_operation()
+        c1.close()
+
+        # 2 つ目のプロセス（再起動相当）: 同じ 12 時台に 2 回操作して終了
+        holder2 = {"time": datetime.datetime(2024, 6, 15, 12, 45, 0, tzinfo=TIMEZONE)}
+        c2 = MetricsCollector(db_path, time_func=lambda: holder2["time"])
+        for _ in range(2):
+            c2.record_valve_operation()
+        c2.close()
+
+        # 12 時台のカウントは 3 + 2 = 5（INSERT OR REPLACE なら 2 に上書きされてしまう）
+        c3 = MetricsCollector(db_path, time_func=lambda: holder2["time"])
+        data = c3.get_hourly_data()
+        c3.close()
+
+        assert len(data) == 1
+        assert data[0]["valve_operations"] == 5
+
 
 class TestMetricsCollectorRecordError:
     """エラー記録のテスト"""

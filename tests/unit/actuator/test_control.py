@@ -179,6 +179,52 @@ class TestGetControlMessage:
 
         assert result == last_message
 
+    def test_falls_back_to_idle_on_timeout(self, config, mocker):
+        """制御指示が閾値を超えて途絶したら IDLE にフォールバックする (BUG #6)"""
+        now = datetime.datetime.now()
+        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
+
+        queue = multiprocessing.Queue()
+        handle = unit_cooler.actuator.control.gen_handle(config, queue)
+        # receive_time を閾値（interval_sec*3）より十分過去にして途絶状態を作る
+        handle.receive_time = now - datetime.timedelta(seconds=config.controller.interval_sec * 3 + 10)
+        mocker.patch("my_lib.time.now", return_value=now)
+
+        last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=10, off_sec=5),
+        )
+
+        result = unit_cooler.actuator.control.get_control_message(handle, last_message)
+
+        assert result.state == COOLING_STATE.IDLE
+        assert result.mode_index == 0
+        assert result.duty.enable is False
+        assert handle.timeout_notified is True
+        assert mock_add.call_args[0][1] == LOG_LEVEL.ERROR
+
+    def test_timeout_error_logged_once(self, config, mocker):
+        """途絶中の ERROR ログは毎サイクルではなく途絶開始時の 1 回のみ"""
+        now = datetime.datetime.now()
+        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
+
+        queue = multiprocessing.Queue()
+        handle = unit_cooler.actuator.control.gen_handle(config, queue)
+        handle.receive_time = now - datetime.timedelta(seconds=config.controller.interval_sec * 3 + 10)
+        mocker.patch("my_lib.time.now", return_value=now)
+
+        last_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
+        )
+
+        unit_cooler.actuator.control.get_control_message(handle, last_message)
+        unit_cooler.actuator.control.get_control_message(handle, last_message)
+
+        assert mock_add.call_count == 1
+
     def test_returns_new_message_from_queue(self, config, mocker):
         """キューからメッセージを取得"""
         now = datetime.datetime.now()
