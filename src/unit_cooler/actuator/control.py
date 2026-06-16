@@ -50,7 +50,10 @@ def hazard_clear(config: Config) -> None:
 
 
 def hazard_notify(config: Config, message: str) -> None:
-    if my_lib.footprint.elapsed(config.actuator.control.hazard.file) / 60 > HAZARD_NOTIFY_INTERVAL_MIN:
+    # NOTE: elapsed はハザードファイルが存在しない（未通知）場合 None を返す。
+    # その場合は「前回通知から十分経過した」とみなして通知する。
+    elapsed = my_lib.footprint.elapsed(config.actuator.control.hazard.file)
+    if elapsed is None or elapsed / 60 > HAZARD_NOTIFY_INTERVAL_MIN:
         unit_cooler.actuator.work_log.add(message, unit_cooler.const.LOG_LEVEL.ERROR)
 
         hazard_register(config)

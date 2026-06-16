@@ -110,9 +110,10 @@ class ValveController:
             elif my_lib.footprint.exists(STAT_PATH_VALVE_CLOSE):
                 duration = my_lib.footprint.elapsed(STAT_PATH_VALVE_CLOSE)
             else:
-                duration = 0
+                duration = 0.0
 
-            return ValveStatus(state=valve_state, duration_sec=duration)
+            # NOTE: elapsed はファイル不在/破損時に None を返すため 0.0 にフォールバックする
+            return ValveStatus(state=valve_state, duration_sec=duration or 0.0)
 
     def set_cooling_working(self, duty: DutyConfig) -> ValveStatus:
         """バルブを動作状態に設定（デューティサイクル制御）"""
