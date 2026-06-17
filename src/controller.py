@@ -35,9 +35,12 @@ SCHEMA_CONFIG = "schema/config.schema"
 
 # NOTE: Last Value Caching Proxy
 def cache_proxy_start(server_host, real_port, server_port, msg_count, idle_timeout_sec=0):
+    # NOTE: daemon=True にして、万一終了条件を取りこぼしてもプロセス終了を妨げないようにする
+    # （xdist ワーカーがスレッドに引っ張られて孤児化し ZMQ ポートを握り続けるのを防ぐ）。
     thread = threading.Thread(
         target=unit_cooler.pubsub.publish.start_proxy,
         args=(server_host, real_port, server_port, msg_count, idle_timeout_sec),
+        daemon=True,
     )
     thread.start()
 
@@ -62,6 +65,7 @@ def control_server_start(
             config.controller.interval_sec / speedup,
             msg_count,
         ),
+        daemon=True,
     )
     thread.start()
 

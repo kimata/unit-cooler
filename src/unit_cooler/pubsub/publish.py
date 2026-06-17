@@ -210,7 +210,10 @@ def start_proxy(
 
         if msg_count != 0:
             logger.debug("(proxy_count, msg_count) = (%d, %d)", proxy_count, msg_count)
-            if proxy_count == msg_count:
+            # NOTE: proxy_count はメッセージ転送だけでなく新規購読時のキャッシュ送信でも増えるため、
+            # 複数購読者がいると msg_count を飛び越え得る。== だとループが終わらず join() が
+            # 無限ブロックして xdist ワーカーが孤児化するため >= で判定する。
+            if proxy_count >= msg_count:
                 logger.info("Terminate, because the specified number of times has been reached.")
                 break
 
