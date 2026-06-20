@@ -16,6 +16,10 @@ type Props = {
     children?: React.ReactNode;
     // オーバーレイの追加クラス（色など）
     overlayClassName?: string;
+    // トラック（背景）のクラス上書き（色・角丸）。既定は四隅丸の薄グレー
+    trackClassName?: string;
+    // 塗りつぶしのクラス上書き（色）。既定は中間グレー
+    fillClassName?: string;
 };
 
 // バーのトラック + アニメーションする塗りつぶし + オーバーレイの共通コンポーネント。
@@ -30,12 +34,14 @@ const ProgressBar = React.memo(
         animationKey,
         children,
         overlayClassName = "",
+        trackClassName = "bg-gray-200 rounded",
+        fillClassName = "bg-gray-500",
     }: Props) => (
         <div className="relative w-full">
-            <div className="w-full bg-gray-200 rounded overflow-hidden h-8">
+            <div className={`w-full overflow-hidden h-8 ${trackClassName}`}>
                 <motion.div
                     key={animationKey}
-                    className="h-full bg-gray-500 transition-all duration-500"
+                    className={`h-full transition-all duration-500 ${fillClassName}`}
                     role="progressbar"
                     aria-valuenow={ariaValueNow}
                     aria-valuemin={0}

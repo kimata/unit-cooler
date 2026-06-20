@@ -30,18 +30,20 @@ const FrequencyHeatBar = React.memo(({ values, max, bins = 48, className = "" }:
     );
     const peak = Math.max(...smoothed, 1);
 
-    // 各ビン中心に色停止点を置き、CSS の補間で滑らかなグラデーションにする
+    // 各ビン中心に色停止点を置き、CSS の補間で滑らかなグラデーションにする。
+    // 色は棒グラフの塗り(slate-600 = 71,85,105)と揃え、一体のグラフに見せる。
     const stops = smoothed
         .map((c, i) => {
             const pct = bins === 1 ? 0 : (i / (bins - 1)) * 100;
-            const alpha = (c / peak) * 0.7; // 頻度に比例した濃さ（最大 0.7）
-            return `rgba(75, 85, 99, ${alpha.toFixed(3)}) ${pct.toFixed(1)}%`;
+            const alpha = (c / peak) * 0.75; // 頻度に比例した濃さ（最大 0.75）
+            return `rgba(71, 85, 105, ${alpha.toFixed(3)}) ${pct.toFixed(1)}%`;
         })
         .join(", ");
 
     return (
+        // 上辺は角丸なしで棒グラフのトラックと密着させ、下辺のみ角丸にする
         <div
-            className={`h-2.5 w-full rounded-b bg-gray-200 ${className}`}
+            className={`h-2 w-full rounded-b bg-slate-200 ${className}`}
             style={{ backgroundImage: `linear-gradient(to right, ${stops})` }}
             aria-hidden="true"
         />
