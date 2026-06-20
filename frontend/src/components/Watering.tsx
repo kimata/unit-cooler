@@ -25,15 +25,15 @@ const Watering = React.memo(({ isReady, watering }: Props) => {
                 <div className="shrink-0 w-[120px]">
                     <img src={watering_icon} alt="🚰" className="w-full h-auto" />
                 </div>
-                <div className="flex-1 ml-4 flex flex-col">
-                    <div className="w-full">
-                        <span className="text-left text-6xl font-light" data-testid="watering-amount-info">
+                <div className="flex-1 ml-4 flex flex-col items-center">
+                    <div className="w-full text-center">
+                        <span className="text-6xl font-light" data-testid="watering-amount-info">
                             <AnimatedNumber value={watering.amount} decimals={1} className="font-bold digit" />
                             <Unit className="text-4xl">L</Unit>
                         </span>
                     </div>
-                    <div className="w-full mt-3">
-                        <span className="text-left text-gray-500" data-testid="watering-price-info">
+                    <div className="w-full mt-3 text-center">
+                        <span className="text-gray-500" data-testid="watering-price-info">
                             <AnimatedNumber value={watering.price} decimals={1} className="font-bold text-3xl digit" />
                             <Unit>円</Unit>
                         </span>

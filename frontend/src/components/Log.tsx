@@ -24,11 +24,17 @@ type Props = {
 
 const Log = React.memo(({ isReady, log }: Props) => {
     const [page, setPage] = useState(1);
+    // ページ遷移方向: 1 = ページ増加（次へ）, -1 = ページ減少（前へ）
+    const [direction, setDirection] = useState(1);
     const size = 5;
 
-    const handlePageChange = useCallback((page: number) => {
-        setPage(page);
-    }, []);
+    const handlePageChange = useCallback(
+        (newPage: number) => {
+            setDirection(newPage >= page ? 1 : -1);
+            setPage(newPage);
+        },
+        [page],
+    );
 
     const messageIcon = (message: string) => {
         if (message.match(/故障/)) {
@@ -103,9 +109,9 @@ const Log = React.memo(({ isReady, log }: Props) => {
                                 <motion.div
                                     className="flex flex-col"
                                     key={entry.id}
-                                    initial={{ opacity: 0, height: 0, y: -20 }}
+                                    initial={{ opacity: 0, height: 0, y: direction * -20 }}
                                     animate={{ opacity: 1, height: "auto", y: 0 }}
-                                    exit={{ opacity: 0, height: 0, y: -20 }}
+                                    exit={{ opacity: 0, height: 0, y: direction * -20 }}
                                     transition={{ duration: 0.3, ease: "easeOut" }}
                                     layout
                                 >
