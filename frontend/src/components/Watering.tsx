@@ -20,9 +20,9 @@ const OUTDOOR_BG_CLASSES =
 
 const Watering = React.memo(({ isReady, watering }: Props) => {
     const amount = (watering: ApiResponse.Watering) => (
-        <CardBody>
+        <CardBody className="flex flex-col">
             <div
-                className={`relative flex flex-col items-center justify-center -m-4 p-4 min-h-[180px] ${OUTDOOR_BG_CLASSES}`}
+                className={`relative flex flex-1 flex-col items-center justify-center -m-4 p-4 min-h-[180px] ${OUTDOOR_BG_CLASSES}`}
             >
                 <img
                     src={watering_icon}
@@ -50,9 +50,9 @@ const Watering = React.memo(({ isReady, watering }: Props) => {
             {isReady || (watering?.length ?? 0) > 0 ? (
                 amount(watering?.[0] ?? { amount: 0, price: 0 })
             ) : (
-                <CardBody>
+                <CardBody className="flex flex-col">
                     <div
-                        className={`flex items-center justify-center -m-4 p-4 min-h-[180px] ${OUTDOOR_BG_CLASSES}`}
+                        className={`flex flex-1 items-center justify-center -m-4 p-4 min-h-[180px] ${OUTDOOR_BG_CLASSES}`}
                     >
                         <Loading size="large" />
                     </div>
