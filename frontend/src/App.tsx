@@ -38,7 +38,7 @@ function App() {
                         <Watering isReady={isReady} watering={wateringData.watering} />
                         <History isReady={isReady} watering={wateringData.watering} />
                         <CoolingMode isReady={isReady} stat={stat} logUpdateTrigger={logUpdateTrigger} />
-                        <AirConditioner isReady={isReady} stat={stat} />
+                        <AirConditioner isReady={isReady} stat={stat} sensorGraph={sensorGraph} />
                         <Sensor isReady={isReady} stat={stat} sensorGraph={sensorGraph} />
                         <Log isReady={isLogReady} log={log} />
                     </div>

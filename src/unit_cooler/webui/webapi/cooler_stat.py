@@ -153,10 +153,12 @@ def watering_list(config: Config) -> list[dict[str, float]]:
     return [watering(config, i).to_dict() for i in range(10)]
 
 
-def sensor_graph(config: Config) -> dict[str, dict[str, Any]]:
+def sensor_graph(config: Config) -> dict[str, Any]:
     """各センサーの過去12時間系列を取得し、背景グラフ用に整形する。
 
     取得失敗・データなしの種別は省略する（フロントは存在チェックで分岐）。
+    エアコン消費電力は ``power`` キーに、stat.sensor.power と同順のリストで返す
+    （頻度ヒートバー用。欠損アエコンは None で詰めてインデックスを揃える）。
     """
     if os.environ.get("DUMMY_MODE", "false") == "true":
         # NOTE: get_sense_data と同様、DUMMY 時は1週間前の12時間窓を参照する
@@ -195,10 +197,34 @@ def sensor_graph(config: Config) -> dict[str, dict[str, Any]]:
         )
         kinds.append(kind)
 
+    # エアコンごとの消費電力履歴（頻度ヒートバー用）。stat.sensor.power と同順で取得する。
+    requests.extend(
+        my_lib.sensor_data.DataRequest(
+            measure=sensor.measure,
+            hostname=sensor.hostname,
+            field="power",
+            start=start,
+            stop=stop,
+            every_min=10,
+            window_min=10,
+            last=False,
+        )
+        for sensor in config.controller.sensor.power
+    )
+
     results = asyncio.run(my_lib.sensor_data.fetch_data_parallel(config.controller.influxdb, requests))
 
-    graph: dict[str, dict[str, Any]] = {}
-    for kind, result in zip(kinds, results, strict=True):
+    def to_series(result: Any) -> dict[str, Any] | None:
+        if isinstance(result, BaseException) or not result.valid or not result.value:
+            return None
+        values = list(result.value)
+        return SensorGraphSeries(
+            values=values, min=min(values), max=max(values), current=values[-1]
+        ).to_dict()
+
+    graph: dict[str, Any] = {}
+    n_single = len(kinds)
+    for kind, result in zip(kinds, results[:n_single], strict=True):
         if isinstance(result, BaseException) or not result.valid or not result.value:
             continue
         values = list(result.value)
@@ -211,6 +237,10 @@ def sensor_graph(config: Config) -> dict[str, dict[str, Any]]:
             max=max(values),
             current=values[-1],
         ).to_dict()
+
+    power_series = [to_series(result) for result in results[n_single:]]
+    if any(series is not None for series in power_series):
+        graph["power"] = power_series
 
     return graph
 

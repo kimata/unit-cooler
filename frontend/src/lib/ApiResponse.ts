@@ -91,4 +91,6 @@ export interface SensorGraph {
     lux?: SensorGraphSeries;
     solar_rad?: SensorGraphSeries;
     rain?: SensorGraphSeries;
+    // エアコン消費電力（頻度ヒートバー用）。stat.sensor.power と同順、欠損は null。
+    power?: (SensorGraphSeries | null)[];
 }

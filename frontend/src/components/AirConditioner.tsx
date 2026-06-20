@@ -8,6 +8,7 @@ import { CardBody } from "./common/Card";
 import { DashboardCard } from "./common/DashboardCard";
 import { DateDisplay } from "./common/DateDisplay";
 import { EmptyValue } from "./common/EmptyValue";
+import { FrequencyHeatBar } from "./common/FrequencyHeatBar";
 import { Loading } from "./common/Loading";
 import { ProgressBar } from "./common/ProgressBar";
 import { Unit } from "./common/Unit";
@@ -16,17 +17,24 @@ import { BoltIcon } from "./icons";
 type Props = {
     isReady: boolean;
     stat: ApiResponse.Stat;
+    sensorGraph: ApiResponse.SensorGraph;
 };
 
-const AirConditioner = React.memo(({ isReady, stat }: Props) => {
-    type AirconRowProps = { airconData: ApiResponse.SensorData };
+// 消費電力バー・頻度ヒートバーの軸の最大値（W）
+const POWER_SCALE_W = 1500;
+
+const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
+    type AirconRowProps = {
+        airconData: ApiResponse.SensorData;
+        graph?: ApiResponse.SensorGraphSeries | null;
+    };
     const AirconRow: React.FC<AirconRowProps> = React.memo((props) => {
         const value = props.airconData.value;
         const hasValue = value != null;
         const currentValue = value ?? 0;
         const [previousValue, setPreviousValue] = useState(currentValue);
-        const currentWidth = (100.0 * currentValue) / 1500;
-        const previousWidth = (100.0 * previousValue) / 1500;
+        const currentWidth = (100.0 * currentValue) / POWER_SCALE_W;
+        const previousWidth = (100.0 * previousValue) / POWER_SCALE_W;
 
         useEffect(() => {
             setPreviousValue(currentValue);
@@ -37,23 +45,33 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
         return (
             <tr className="flex items-center">
                 <td className="text-left w-2/12 whitespace-nowrap py-2 flex items-center h-10">{props.airconData.name}</td>
-                <td className="text-right w-5/12 py-2 pr-3 flex items-center">
-                    <ProgressBar
-                        fillPercent={currentWidth}
-                        initialPercent={previousWidth}
-                        durationSec={30.0}
-                        ariaValueNow={currentValue}
-                        ariaValueMax={1200}
-                    >
-                        <b>
-                            {hasValue ? (
-                                <AnimatedNumber value={value} decimals={0} useComma={true} />
-                            ) : (
-                                <EmptyValue />
-                            )}
-                        </b>
-                        <Unit>W</Unit>
-                    </ProgressBar>
+                <td className="w-5/12 py-2 pr-3 flex items-center">
+                    <div className="w-full">
+                        <ProgressBar
+                            fillPercent={currentWidth}
+                            initialPercent={previousWidth}
+                            durationSec={30.0}
+                            ariaValueNow={currentValue}
+                            ariaValueMax={POWER_SCALE_W}
+                        >
+                            <b>
+                                {hasValue ? (
+                                    <AnimatedNumber value={value} decimals={0} useComma={true} />
+                                ) : (
+                                    <EmptyValue />
+                                )}
+                            </b>
+                            <Unit>W</Unit>
+                        </ProgressBar>
+                        {props.graph && props.graph.values.length > 0 && (
+                            <FrequencyHeatBar
+                                values={props.graph.values}
+                                max={POWER_SCALE_W}
+                                current={value}
+                                className="mt-1"
+                            />
+                        )}
+                    </div>
                 </td>
                 <td className="text-left w-2/12 py-2 pl-2 flex items-center h-10">
                     <DateDisplay date={date} format="relative" />
@@ -85,7 +103,7 @@ const AirConditioner = React.memo(({ isReady, stat }: Props) => {
                     </thead>
                     <tbody>
                         {(stat.sensor.power ?? []).map((airconData, index) => (
-                            <AirconRow airconData={airconData} key={index} />
+                            <AirconRow airconData={airconData} graph={sensorGraph.power?.[index]} key={index} />
                         ))}
                     </tbody>
                 </table>
