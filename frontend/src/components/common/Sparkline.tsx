@@ -29,8 +29,10 @@ const Sparkline = React.memo(({ values, min, max }: Props) => {
     const lastY = yAt(values[n - 1]);
 
     return (
-        // inset-y で上下に余白を設け、隣接行のグラフ同士が接触しないようにする
-        <div className="absolute inset-x-0 inset-y-1.5 pointer-events-none" aria-hidden="true">
+        // inset-y で上下に余白を設け、隣接行のグラフ同士が接触しないようにする。
+        // 右端は列端から少し内側(right-2)に寄せ、末尾の現在値プロット(円)が
+        // 列の overflow-hidden で右半分が欠けないようにする。
+        <div className="absolute inset-y-1.5 left-0 right-2 pointer-events-none" aria-hidden="true">
             <svg
                 className="absolute inset-0 w-full h-full"
                 viewBox="0 0 100 100"
