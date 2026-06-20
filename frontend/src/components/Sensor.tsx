@@ -10,16 +10,23 @@ import { DashboardCard } from "./common/DashboardCard";
 import { DateDisplay } from "./common/DateDisplay";
 import { EmptyValue } from "./common/EmptyValue";
 import { Loading } from "./common/Loading";
+import { Sparkline } from "./common/Sparkline";
 import { Unit } from "./common/Unit";
 import { ThermometerIcon } from "./icons";
 
 type Props = {
     isReady: boolean;
     stat: ApiResponse.Stat;
+    sensorGraph: ApiResponse.SensorGraph;
 };
 
-const Sensor = React.memo(({ isReady, stat }: Props) => {
-    const sensorRow = (label: string, sensorData: ApiResponse.SensorData, unit: React.JSX.Element) => {
+const Sensor = React.memo(({ isReady, stat, sensorGraph }: Props) => {
+    const sensorRow = (
+        label: string,
+        sensorData: ApiResponse.SensorData,
+        unit: React.JSX.Element,
+        graph?: ApiResponse.SensorGraphSeries,
+    ) => {
         const value = sensorData.value;
         const hasValue = value != null;
         const date: Dayjs | null = sensorData.time != null ? dayjs(sensorData.time) : null;
@@ -29,9 +36,12 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
 
         return (
             <tr className="flex" key={label}>
-                <td className="text-left w-4/12 py-2 whitespace-nowrap overflow-visible">{sensorData.name}</td>
-                <td className="w-3/12 py-2">
-                    <div className="flex items-baseline w-full whitespace-nowrap">
+                <td className="text-left w-4/12 py-4 whitespace-nowrap overflow-visible">{sensorData.name}</td>
+                <td className="relative w-3/12 py-4 overflow-hidden">
+                    {graph && graph.values.length > 0 && (
+                        <Sparkline values={graph.values} min={graph.min} max={graph.max} />
+                    )}
+                    <div className="relative z-10 flex items-baseline w-full whitespace-nowrap">
                         <div className="digit text-right text-xl flex-1">
                             <b>
                                 {hasValue ? (
@@ -46,10 +56,10 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                         </div>
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-2 pl-2">
+                <td className="text-left w-2/12 py-4 pl-2">
                     <DateDisplay date={date} format="relative" />
                 </td>
-                <td className="text-left w-3/12 whitespace-nowrap py-2 pl-2">
+                <td className="text-left w-3/12 whitespace-nowrap py-4 pl-2">
                     <DateDisplay date={date} format="absolute" />
                 </td>
             </tr>
@@ -82,15 +92,16 @@ const Sensor = React.memo(({ isReady, stat }: Props) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {stat.sensor.temp?.[0] && sensorRow("temp", stat.sensor.temp[0], <span>℃</span>)}
-                        {stat.sensor.humi?.[0] && sensorRow("humi", stat.sensor.humi[0], <span>%</span>)}
-                        {stat.sensor.lux?.[0] && sensorRow("lux", stat.sensor.lux[0], <span>lx</span>)}
+                        {stat.sensor.temp?.[0] && sensorRow("temp", stat.sensor.temp[0], <span>℃</span>, sensorGraph.temp)}
+                        {stat.sensor.humi?.[0] && sensorRow("humi", stat.sensor.humi[0], <span>%</span>, sensorGraph.humi)}
+                        {stat.sensor.lux?.[0] && sensorRow("lux", stat.sensor.lux[0], <span>lx</span>, sensorGraph.lux)}
                         {stat.sensor.solar_rad?.[0] && sensorRow(
                             "solar_rad",
                             stat.sensor.solar_rad[0],
-                            <span>W/m<sup>2</sup></span>
+                            <span>W/m<sup>2</sup></span>,
+                            sensorGraph.solar_rad
                         )}
-                        {stat.sensor.rain?.[0] && sensorRow("rain", stat.sensor.rain[0], <span>mm/h</span>)}
+                        {stat.sensor.rain?.[0] && sensorRow("rain", stat.sensor.rain[0], <span>mm/h</span>, sensorGraph.rain)}
                     </tbody>
                 </table>
                 <div className="text-left mt-4">{outdoorStatus(stat)}</div>

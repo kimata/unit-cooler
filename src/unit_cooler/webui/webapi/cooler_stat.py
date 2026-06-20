@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import queue
@@ -23,8 +24,11 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from multiprocessing import Queue
 
-    from unit_cooler.config import Config
+    from unit_cooler.config import Config, SensorItemConfig
     from unit_cooler.messages import ControlMessage, StatusInfo
+
+# センサー値列の背景グラフに使う種別（power は UI 非表示のため除外）
+SENSOR_GRAPH_KINDS: tuple[str, ...] = ("temp", "humi", "lux", "solar_rad", "rain")
 
 blueprint = flask.Blueprint("cooler-stat", __name__)
 
@@ -38,6 +42,24 @@ class WateringInfo:
 
     def to_dict(self) -> dict[str, float]:
         return {"amount": self.amount, "price": self.price}
+
+
+@dataclass(frozen=True)
+class SensorGraphSeries:
+    """センサー値の過去系列（背景スパークライン用）"""
+
+    values: list[float]  # 古い→新しい順
+    min: float
+    max: float
+    current: float | None  # 系列末尾（最新値）
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "values": self.values,
+            "min": self.min,
+            "max": self.max,
+            "current": self.current,
+        }
 
 
 def _status_to_dict(status: StatusInfo | None) -> dict[str, Any]:
@@ -131,6 +153,68 @@ def watering_list(config: Config) -> list[dict[str, float]]:
     return [watering(config, i).to_dict() for i in range(10)]
 
 
+def sensor_graph(config: Config) -> dict[str, dict[str, Any]]:
+    """各センサーの過去12時間系列を取得し、背景グラフ用に整形する。
+
+    取得失敗・データなしの種別は省略する（フロントは存在チェックで分岐）。
+    """
+    if os.environ.get("DUMMY_MODE", "false") == "true":
+        # NOTE: get_sense_data と同様、DUMMY 時は1週間前の12時間窓を参照する
+        start = "-180h"
+        stop = "-168h"
+    else:
+        start = "-12h"
+        stop = "now()"
+
+    sensor_map: dict[str, list[SensorItemConfig]] = {
+        "temp": config.controller.sensor.temp,
+        "humi": config.controller.sensor.humi,
+        "lux": config.controller.sensor.lux,
+        "solar_rad": config.controller.sensor.solar_rad,
+        "rain": config.controller.sensor.rain,
+    }
+
+    requests: list[my_lib.sensor_data.DataRequest] = []
+    kinds: list[str] = []
+    for kind in SENSOR_GRAPH_KINDS:
+        sensors = sensor_map[kind]
+        if not sensors:
+            continue
+        sensor = sensors[0]
+        requests.append(
+            my_lib.sensor_data.DataRequest(
+                measure=sensor.measure,
+                hostname=sensor.hostname,
+                field=kind,
+                start=start,
+                stop=stop,
+                every_min=10,  # 12時間 ≒ 72 点に間引く（背景スパークラインには十分）
+                window_min=10,
+                last=False,
+            )
+        )
+        kinds.append(kind)
+
+    results = asyncio.run(my_lib.sensor_data.fetch_data_parallel(config.controller.influxdb, requests))
+
+    graph: dict[str, dict[str, Any]] = {}
+    for kind, result in zip(kinds, results, strict=True):
+        if isinstance(result, BaseException) or not result.valid or not result.value:
+            continue
+        values = list(result.value)
+        if kind == "rain":
+            # NOTE: 観測値は1分間の降水量なので、1時間雨量に換算（sensor.py と同様）
+            values = [v * 60 for v in values]
+        graph[kind] = SensorGraphSeries(
+            values=values,
+            min=min(values),
+            max=max(values),
+            current=values[-1],
+        ).to_dict()
+
+    return graph
+
+
 # モジュールレベル変数（関数属性パターンの代替）
 _last_message: ControlMessage | None = None
 
@@ -183,4 +267,16 @@ def api_get_watering():
         return flask.jsonify({"watering": watering_list(config)})
     except Exception as e:
         logger.exception("Error in api_get_watering")
+        return flask.jsonify({"error": str(e)}), 500
+
+
+@blueprint.route("/api/sensor_graph", methods=["GET"])
+@my_lib.flask_util.support_jsonp
+def api_get_sensor_graph():
+    try:
+        config = flask.current_app.config["CONFIG"]
+
+        return flask.jsonify(sensor_graph(config))
+    except Exception as e:
+        logger.exception("Error in api_get_sensor_graph")
         return flask.jsonify({"error": str(e)}), 500

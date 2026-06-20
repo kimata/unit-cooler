@@ -15,6 +15,7 @@ function App() {
         apiEndpoint,
         stat,
         wateringData,
+        sensorGraph,
         log,
         sysInfo,
         actuatorSysInfo,
@@ -38,7 +39,7 @@ function App() {
                         <History isReady={isReady} watering={wateringData.watering} />
                         <CoolingMode isReady={isReady} stat={stat} logUpdateTrigger={logUpdateTrigger} />
                         <AirConditioner isReady={isReady} stat={stat} />
-                        <Sensor isReady={isReady} stat={stat} />
+                        <Sensor isReady={isReady} stat={stat} sensorGraph={sensorGraph} />
                         <Log isReady={isLogReady} log={log} />
                     </div>
                 </div>

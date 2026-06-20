@@ -20,6 +20,9 @@ const emptyStat: ApiResponse.Stat = {
     sensor: { temp: [], humi: [], lux: [], solar_rad: [], rain: [], power: [] },
 };
 
+// センサー背景グラフの初期値（未取得時は各種別が欠落した空オブジェクト）
+const emptySensorGraph: ApiResponse.SensorGraph = {};
+
 // NOTE: 空配列にすることで初回ロード中（isReady=false）に Loading 分岐へ入る (BUG #13)。
 const emptyWatering: ApiResponse.WateringResponse = { watering: [] };
 const emptyLog: ApiResponse.Log = { data: [], last_time: 0 };
@@ -59,6 +62,10 @@ export function useDashboardData() {
         error: wateringError,
         refetch: refetchWatering,
     } = useApi(`${API_ENDPOINT}/watering`, emptyWatering, { interval: 58000 });
+
+    const { data: sensorGraph } = useApi(`${API_ENDPOINT}/sensor_graph`, emptySensorGraph, {
+        interval: 58000,
+    });
 
     const {
         data: log,
@@ -123,6 +130,7 @@ export function useDashboardData() {
         apiEndpoint: API_ENDPOINT,
         stat,
         wateringData,
+        sensorGraph,
         log,
         sysInfo,
         actuatorSysInfo,

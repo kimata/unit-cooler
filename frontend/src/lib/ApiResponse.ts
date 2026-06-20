@@ -76,3 +76,19 @@ export interface ValveStatus {
 export interface FlowStatus {
     flow: number;
 }
+
+export interface SensorGraphSeries {
+    values: number[];
+    min: number;
+    max: number;
+    current: number | null;
+}
+
+// センサー値列の背景グラフ用の過去系列（取得失敗・データなしの種別は欠落しうる）
+export interface SensorGraph {
+    temp?: SensorGraphSeries;
+    humi?: SensorGraphSeries;
+    lux?: SensorGraphSeries;
+    solar_rad?: SensorGraphSeries;
+    rain?: SensorGraphSeries;
+}
