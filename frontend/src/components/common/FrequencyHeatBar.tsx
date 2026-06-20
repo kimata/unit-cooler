@@ -7,7 +7,7 @@ type Props = {
     max: number;
     // ビン数（横方向の分解能。多いほどグラデーションが滑らか）
     bins?: number;
-    // 濃淡の色（RGB 値のカンマ区切り）。既定は sky-500
+    // 濃淡の色（RGB 値のカンマ区切り）。既定は slate-600
     colorRgb?: string;
     // 最頻ビンの不透明度（0〜1）
     maxAlpha?: number;
@@ -19,7 +19,7 @@ type Props = {
 // 左端=0、右端=max に対応し、濃いほどその値帯にいた頻度が高い。
 // ProgressBar の trackBackground として全面に敷き、半透明の塗りと重ねて使う。
 const FrequencyHeatBar = React.memo(
-    ({ values, max, bins = 48, colorRgb = "14, 165, 233", maxAlpha = 0.5, className = "" }: Props) => {
+    ({ values, max, bins = 48, colorRgb = "71, 85, 105", maxAlpha = 0.6, className = "" }: Props) => {
         if (values.length === 0 || max <= 0) {
             return null;
         }
