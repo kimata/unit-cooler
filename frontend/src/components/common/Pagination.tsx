@@ -41,7 +41,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         return pages;
     };
 
-    const baseClass = "px-3 py-1 rounded border border-gray-300 text-gray-500 transition-colors";
+    const baseClass = "px-2 py-1 text-sm rounded border border-gray-300 text-gray-500 transition-colors";
     const activeClass = "bg-gray-500 border-gray-500 text-white";
     const hoverClass = "hover:bg-gray-100";
 
@@ -65,7 +65,7 @@ export const Pagination: React.FC<PaginationProps> = ({
                         {p}
                     </button>
                 ) : (
-                    <span key={idx} className="px-2">
+                    <span key={idx} className="px-1 text-sm">
                         ...
                     </span>
                 )

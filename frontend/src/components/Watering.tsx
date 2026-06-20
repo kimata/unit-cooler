@@ -21,23 +21,25 @@ const OUTDOOR_BG_CLASSES =
 const Watering = React.memo(({ isReady, watering }: Props) => {
     const amount = (watering: ApiResponse.Watering) => (
         <CardBody>
-            <div className={`flex items-center -m-4 p-4 ${OUTDOOR_BG_CLASSES}`}>
-                <div className="shrink-0 w-[120px]">
-                    <img src={watering_icon} alt="🚰" className="w-full h-auto" />
+            <div
+                className={`relative flex flex-col items-center justify-center -m-4 p-4 min-h-[180px] ${OUTDOOR_BG_CLASSES}`}
+            >
+                <img
+                    src={watering_icon}
+                    alt="🚰"
+                    className="absolute bottom-2 right-2 w-[120px] h-auto pointer-events-none"
+                />
+                <div className="relative z-10 w-full text-center">
+                    <span className="text-6xl font-light" data-testid="watering-amount-info">
+                        <AnimatedNumber value={watering.amount} decimals={1} className="font-bold digit" />
+                        <Unit className="text-4xl">L</Unit>
+                    </span>
                 </div>
-                <div className="flex-1 ml-4 flex flex-col items-center">
-                    <div className="w-full text-center">
-                        <span className="text-6xl font-light" data-testid="watering-amount-info">
-                            <AnimatedNumber value={watering.amount} decimals={1} className="font-bold digit" />
-                            <Unit className="text-4xl">L</Unit>
-                        </span>
-                    </div>
-                    <div className="w-full mt-3 text-center">
-                        <span className="text-gray-500" data-testid="watering-price-info">
-                            <AnimatedNumber value={watering.price} decimals={1} className="font-bold text-3xl digit" />
-                            <Unit>円</Unit>
-                        </span>
-                    </div>
+                <div className="relative z-10 w-full mt-3 text-center">
+                    <span className="text-gray-500" data-testid="watering-price-info">
+                        <AnimatedNumber value={watering.price} decimals={1} className="font-bold text-3xl digit" />
+                        <Unit>円</Unit>
+                    </span>
                 </div>
             </div>
         </CardBody>
@@ -49,7 +51,9 @@ const Watering = React.memo(({ isReady, watering }: Props) => {
                 amount(watering?.[0] ?? { amount: 0, price: 0 })
             ) : (
                 <CardBody>
-                    <div className={`-m-4 p-4 ${OUTDOOR_BG_CLASSES}`}>
+                    <div
+                        className={`flex items-center justify-center -m-4 p-4 min-h-[180px] ${OUTDOOR_BG_CLASSES}`}
+                    >
                         <Loading size="large" />
                     </div>
                 </CardBody>

@@ -127,10 +127,10 @@ const Log = React.memo(({ isReady, log }: Props) => {
                     </AnimatePresence>
                 </div>
 
-                <div className="mt-auto pt-3 border-t border-gray-100">
+                <div className="mt-auto pt-3 px-6 border-t border-gray-100">
                     <Pagination
                         page={page}
-                        between={3}
+                        between={2}
                         total={log.length}
                         limit={size}
                         onChange={handlePageChange}
