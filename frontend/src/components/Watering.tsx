@@ -27,7 +27,7 @@ const Watering = React.memo(({ isReady, watering }: Props) => {
                 <img
                     src={watering_icon}
                     alt="🚰"
-                    className="absolute bottom-2 right-2 w-[120px] h-auto pointer-events-none"
+                    className="absolute top-2 left-2 w-[120px] h-auto pointer-events-none"
                 />
                 <div className="relative z-10 w-full text-center">
                     <span className="text-6xl font-light" data-testid="watering-amount-info">
