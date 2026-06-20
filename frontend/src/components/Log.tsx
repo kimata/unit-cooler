@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 import dayjs from "../lib/dayjs";
 import type * as ApiResponse from "../lib/ApiResponse";
@@ -20,6 +20,16 @@ import {
 type Props = {
     isReady: boolean;
     log: ApiResponse.Log;
+};
+
+// ページ遷移方向(custom=direction)に応じて入場・退場を対称に切り替える。
+// 次へ(dir=1): 新項目は下から入り、旧項目は上へ抜ける。前へ(dir=-1)はその逆。
+// height アニメ(0↔auto)は方向に依らない「展開」感が支配的で方向差が埋もれるため、
+// opacity + 大きめの y スライドのみで方向を明確に表現する。
+const logVariants: Variants = {
+    enter: (dir: number) => ({ opacity: 0, y: dir * 56 }),
+    center: { opacity: 1, y: 0 },
+    exit: (dir: number) => ({ opacity: 0, y: dir * -56 }),
 };
 
 const Log = React.memo(({ isReady, log }: Props) => {
@@ -97,7 +107,7 @@ const Log = React.memo(({ isReady, log }: Props) => {
         return (
             <div className="flex flex-col h-full">
                 <div className="text-left flex-1 mb-4" data-testid="log">
-                    <AnimatePresence initial={false}>
+                    <AnimatePresence initial={false} custom={direction} mode="popLayout">
                         {log.slice((page - 1) * size, page * size).map((entry, index) => {
                             // サーバーは tz 付き ISO 8601 を返す。ブラウザの TZ に依らず JST で表示する。
                             const date = dayjs(entry.date).tz("Asia/Tokyo");
@@ -109,9 +119,11 @@ const Log = React.memo(({ isReady, log }: Props) => {
                                 <motion.div
                                     className="flex flex-col"
                                     key={entry.id}
-                                    initial={{ opacity: 0, height: 0, y: direction * -20 }}
-                                    animate={{ opacity: 1, height: "auto", y: 0 }}
-                                    exit={{ opacity: 0, height: 0, y: direction * -20 }}
+                                    custom={direction}
+                                    variants={logVariants}
+                                    initial="enter"
+                                    animate="center"
+                                    exit="exit"
                                     transition={{ duration: 0.3, ease: "easeOut" }}
                                     layout
                                 >
