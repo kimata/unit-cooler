@@ -29,25 +29,26 @@ const Sparkline = React.memo(({ values, min, max }: Props) => {
     const lastY = yAt(values[n - 1]);
 
     return (
-        <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+        // inset-y で上下に余白を設け、隣接行のグラフ同士が接触しないようにする
+        <div className="absolute inset-x-0 inset-y-1.5 pointer-events-none" aria-hidden="true">
             <svg
                 className="absolute inset-0 w-full h-full"
                 viewBox="0 0 100 100"
                 preserveAspectRatio="none"
             >
-                <polygon points={areaPoints} fill="rgb(107 114 128)" fillOpacity="0.1" />
+                <polygon points={areaPoints} fill="rgb(107 114 128)" fillOpacity="0.05" />
                 <polyline
                     points={points}
                     fill="none"
                     stroke="rgb(107 114 128)"
-                    strokeOpacity="0.45"
+                    strokeOpacity="0.22"
                     strokeWidth="1.5"
                     vectorEffect="non-scaling-stroke"
                 />
             </svg>
             {/* preserveAspectRatio=none による歪みを避けるため、現在値の点は絶対配置の円で描く */}
             <span
-                className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-600"
+                className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-400"
                 style={{ left: `${lastX}%`, top: `${lastY}%` }}
             />
         </div>

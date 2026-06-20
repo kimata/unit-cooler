@@ -36,8 +36,8 @@ const Sensor = React.memo(({ isReady, stat, sensorGraph }: Props) => {
 
         return (
             <tr className="flex" key={label}>
-                <td className="text-left w-4/12 py-4 whitespace-nowrap overflow-visible">{sensorData.name}</td>
-                <td className="relative w-3/12 py-4 overflow-hidden">
+                <td className="text-left w-[100px] py-2 whitespace-nowrap overflow-visible">{sensorData.name}</td>
+                <td className="relative flex-1 py-2 overflow-hidden">
                     {graph && graph.values.length > 0 && (
                         <Sparkline values={graph.values} min={graph.min} max={graph.max} />
                     )}
@@ -56,10 +56,10 @@ const Sensor = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                         </div>
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-4 pl-2">
+                <td className="text-left w-[68px] py-2 pl-2">
                     <DateDisplay date={date} format="relative" />
                 </td>
-                <td className="text-left w-3/12 whitespace-nowrap py-4 pl-2">
+                <td className="text-left w-[104px] whitespace-nowrap py-2 pl-2">
                     <DateDisplay date={date} format="absolute" />
                 </td>
             </tr>
@@ -86,9 +86,11 @@ const Sensor = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                 <table className="w-full">
                     <thead>
                         <tr className="flex border-b border-gray-200">
-                            <th className="w-4/12 text-left py-2">センサー</th>
-                            <th className="w-3/12 text-left py-2">値</th>
-                            <th colSpan={2} className="w-5/12 text-left py-2">最新更新日時</th>
+                            <th className="w-[100px] text-left py-2 whitespace-nowrap">センサー</th>
+                            <th className="flex-1 text-center py-2">値</th>
+                            <th colSpan={2} className="w-[172px] text-left py-2 whitespace-nowrap">
+                                最新更新日時
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
