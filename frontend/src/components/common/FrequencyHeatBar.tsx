@@ -43,7 +43,7 @@ const FrequencyHeatBar = React.memo(({ values, max, bins = 48, className = "" }:
     return (
         // 上辺は角丸なしで棒グラフのトラックと密着させ、下辺のみ角丸にする
         <div
-            className={`h-2 w-full rounded-b bg-slate-200 ${className}`}
+            className={`h-1 w-full rounded-b bg-gray-200 ${className}`}
             style={{ backgroundImage: `linear-gradient(to right, ${stops})` }}
             aria-hidden="true"
         />

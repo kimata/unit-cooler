@@ -54,8 +54,8 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                             ariaValueNow={currentValue}
                             ariaValueMax={POWER_SCALE_W}
                             // 下辺の角丸を消し、直下のヒートマップと一体のグラフに見せる
-                            trackClassName="bg-slate-200 rounded-t"
-                            fillClassName="bg-slate-600"
+                            // （棒グラフ自体はグレースケールのまま）
+                            trackClassName="bg-gray-200 rounded-t"
                         >
                             <b>
                                 {hasValue ? (
