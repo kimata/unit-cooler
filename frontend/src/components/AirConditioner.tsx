@@ -53,11 +53,17 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                             durationSec={30.0}
                             ariaValueNow={currentValue}
                             ariaValueMax={POWER_SCALE_W}
-                            // 過去12時間の電力頻度ヒートマップを同じ角丸枠に内包し、
-                            // 棒グラフと一体のグラフに見せる（棒はグレー・ヒートは slate）
-                            footer={
+                            // 過去12時間の電力頻度ヒートマップをトラック全面の背景に敷き、
+                            // 半透明の塗りで分布を透かす（トラック地色は sky の極薄 tint）
+                            trackClassName="bg-sky-50"
+                            fillClassName="bg-gray-500/80"
+                            trackBackground={
                                 props.graph && props.graph.values.length > 0 ? (
-                                    <FrequencyHeatBar values={props.graph.values} max={POWER_SCALE_W} />
+                                    <FrequencyHeatBar
+                                        values={props.graph.values}
+                                        max={POWER_SCALE_W}
+                                        className="absolute inset-0"
+                                    />
                                 ) : undefined
                             }
                         >
