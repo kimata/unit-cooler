@@ -41,9 +41,9 @@ const FrequencyHeatBar = React.memo(({ values, max, bins = 48, className = "" }:
         .join(", ");
 
     return (
-        // 上辺は角丸なしで棒グラフのトラックと密着させ、下辺のみ角丸にする
+        // 角丸・土台色は親の枠(ProgressBar)が持つため、ここでは持たない
         <div
-            className={`h-1 w-full rounded-b bg-gray-200 ${className}`}
+            className={`h-1 w-full bg-gray-200 ${className}`}
             style={{ backgroundImage: `linear-gradient(to right, ${stops})` }}
             aria-hidden="true"
         />

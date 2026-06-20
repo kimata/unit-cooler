@@ -53,9 +53,13 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                             durationSec={30.0}
                             ariaValueNow={currentValue}
                             ariaValueMax={POWER_SCALE_W}
-                            // 下辺の角丸を消し、直下のヒートマップと一体のグラフに見せる
-                            // （棒グラフ自体はグレースケールのまま）
-                            trackClassName="bg-gray-200 rounded-t"
+                            // 過去12時間の電力頻度ヒートマップを同じ角丸枠に内包し、
+                            // 棒グラフと一体のグラフに見せる（棒はグレー・ヒートは slate）
+                            footer={
+                                props.graph && props.graph.values.length > 0 ? (
+                                    <FrequencyHeatBar values={props.graph.values} max={POWER_SCALE_W} />
+                                ) : undefined
+                            }
                         >
                             <b>
                                 {hasValue ? (
@@ -66,9 +70,6 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                             </b>
                             <Unit>W</Unit>
                         </ProgressBar>
-                        {props.graph && props.graph.values.length > 0 && (
-                            <FrequencyHeatBar values={props.graph.values} max={POWER_SCALE_W} />
-                        )}
                     </div>
                 </td>
                 <td className="text-left w-[68px] py-2 pl-2 flex items-center h-10">
