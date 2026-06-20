@@ -44,8 +44,8 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
 
         return (
             <tr className="flex items-center">
-                <td className="text-left w-2/12 whitespace-nowrap py-2 flex items-center h-10">{props.airconData.name}</td>
-                <td className="w-5/12 py-2 pr-3 flex items-center">
+                <td className="text-left w-[76px] whitespace-nowrap py-2 flex items-center h-10">{props.airconData.name}</td>
+                <td className="flex-1 py-2 pr-3 flex items-center">
                     <div className="w-full">
                         <ProgressBar
                             fillPercent={currentWidth}
@@ -64,19 +64,14 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                             <Unit>W</Unit>
                         </ProgressBar>
                         {props.graph && props.graph.values.length > 0 && (
-                            <FrequencyHeatBar
-                                values={props.graph.values}
-                                max={POWER_SCALE_W}
-                                current={value}
-                                className="mt-1"
-                            />
+                            <FrequencyHeatBar values={props.graph.values} max={POWER_SCALE_W} />
                         )}
                     </div>
                 </td>
-                <td className="text-left w-2/12 py-2 pl-2 flex items-center h-10">
+                <td className="text-left w-[68px] py-2 pl-2 flex items-center h-10">
                     <DateDisplay date={date} format="relative" />
                 </td>
-                <td className="text-left w-3/12 whitespace-nowrap py-2 flex items-center h-10">
+                <td className="text-left w-[104px] whitespace-nowrap py-2 flex items-center h-10">
                     <DateDisplay date={date} format="absolute" />
                 </td>
             </tr>
@@ -96,9 +91,11 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                 <table className="w-full">
                     <thead>
                         <tr className="flex border-b border-gray-200">
-                            <th className="w-2/12 text-left py-2">エアコン</th>
-                            <th className="w-5/12 text-left py-2 pr-3">値</th>
-                            <th colSpan={2} className="w-5/12 text-left py-2 pl-2">最新更新日時</th>
+                            <th className="w-[76px] text-left py-2 whitespace-nowrap">エアコン</th>
+                            <th className="flex-1 text-left py-2 pr-3">値</th>
+                            <th colSpan={2} className="w-[172px] text-left py-2 pl-2 whitespace-nowrap">
+                                最新更新日時
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
