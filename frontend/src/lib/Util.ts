@@ -4,6 +4,6 @@ export const dateText = (date: dayjs.Dayjs | null) => {
     if (date == null) {
         return "?";
     } else {
-        return date.format("M/D HH:mm");
+        return date.format("M月D日 HH:mm");
     }
 };

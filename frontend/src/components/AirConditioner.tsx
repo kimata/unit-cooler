@@ -71,7 +71,7 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                 <td className="text-left w-[68px] py-2 pl-2 flex items-center h-10">
                     <DateDisplay date={date} format="relative" />
                 </td>
-                <td className="text-left w-[104px] whitespace-nowrap py-2 flex items-center h-10">
+                <td className="text-left w-[120px] whitespace-nowrap py-2 flex items-center h-10">
                     <DateDisplay date={date} format="absolute" />
                 </td>
             </tr>
@@ -93,7 +93,7 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                         <tr className="flex border-b border-gray-200">
                             <th className="w-[76px] text-left py-2 whitespace-nowrap">エアコン</th>
                             <th className="flex-1 text-left py-2 pr-3">値</th>
-                            <th colSpan={2} className="w-[172px] text-left py-2 pl-2 whitespace-nowrap">
+                            <th colSpan={2} className="w-[188px] text-left py-2 pl-2 whitespace-nowrap">
                                 最新更新日時
                             </th>
                         </tr>
