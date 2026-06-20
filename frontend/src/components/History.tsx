@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect } from "react";
+import React, { useMemo } from "react";
 import { Chart, CategoryScale, LinearScale, BarElement, Tooltip } from "chart.js";
 import type { ChartOptions, TooltipItem } from "chart.js";
 import { Bar } from "react-chartjs-2";
@@ -17,8 +17,6 @@ type Props = {
 };
 
 const History = React.memo(({ isReady, watering }: Props) => {
-    const chartRef = useRef<Chart<"bar"> | null>(null);
-
     // chartOptionsは変更されないのでメモ化
     const chartOptions: ChartOptions<"bar"> = useMemo(
         () => ({
@@ -43,35 +41,30 @@ const History = React.memo(({ isReady, watering }: Props) => {
         []
     );
 
-    // 初期データ
-    const initialChartData = useMemo(
-        () => ({
+    // 散水データからチャートデータを生成する。
+    // watering は stat / log とは独立に到着するため、isReady を待たずに watering 単体で反映する
+    // （isReady を待つと watering 到着済みでも log/stat ロード完了までゼロ表示のままになる）。
+    // react-chartjs-2 が data prop の変更を内部で検知してチャートを更新するため、宣言的に渡す。
+    const chartData = useMemo(() => {
+        const hasData = (watering?.length ?? 0) >= 10;
+        return {
             labels: Array.from(Array(10), (_, i) => (i == 9 ? "本日" : 9 - i + "日前")),
             datasets: [
                 {
                     label: "散水量",
-                    data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    data: hasData
+                        ? watering.map((w) => parseFloat(w["amount"].toFixed(1))).reverse()
+                        : Array(10).fill(0),
                     backgroundColor: "rgba(128, 128, 128, 0.6)",
                 },
             ],
-        }),
-        []
-    );
-
-    // データが更新された時にチャートを更新
-    useEffect(() => {
-        if (chartRef.current && isReady && watering && (watering?.length ?? 0) >= 10) {
-            const chart = chartRef.current;
-            const newData = watering.map((w) => parseFloat(w["amount"].toFixed(1))).reverse();
-            chart.data.datasets[0].data = newData;
-            chart.update("none");
-        }
-    }, [isReady, watering]);
+        };
+    }, [watering]);
 
     const history = () => (
         <CardBody>
             <div className="w-full relative h-[250px]" data-testid="history-info">
-                <Bar ref={chartRef} options={chartOptions} data={initialChartData} />
+                <Bar options={chartOptions} data={chartData} />
             </div>
         </CardBody>
     );
