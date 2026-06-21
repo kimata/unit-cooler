@@ -54,8 +54,8 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                             ariaValueNow={currentValue}
                             ariaValueMax={POWER_SCALE_W}
                             // 過去12時間の電力頻度ヒートマップをトラック全面の背景に敷き、
-                            // 半透明の塗りで分布を透かす（濃淡は slate・地色は slate-100）
-                            trackClassName="bg-slate-100"
+                            // 半透明の塗りで分布を透かす（濃淡は zinc・地色は zinc-100）
+                            trackClassName="bg-zinc-100"
                             fillClassName="bg-gray-500/80"
                             trackBackground={
                                 props.graph && props.graph.values.length > 0 ? (
