@@ -58,7 +58,7 @@ const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
                             trackClassName="bg-zinc-100"
                             fillClassName="bg-gray-500/80"
                             // 塗りの右端に細い濃色の縦線を重ね、現在値の位置を読み取りやすくする
-                            fillCursorClassName="w-px bg-gray-700/60"
+                            fillCursorClassName="w-px bg-gray-700/50"
                             trackBackground={
                                 props.graph && props.graph.values.length > 0 ? (
                                     <FrequencyHeatBar
