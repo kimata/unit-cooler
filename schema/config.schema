@@ -192,6 +192,36 @@
                         "unit_price"
                     ]
                 },
+                "decision": {
+                    "type": "object",
+                    "properties": {
+                        "thresholds": {
+                            "type": "object"
+                        },
+                        "night_stop": {
+                            "type": "object",
+                            "properties": {
+                                "enable": {
+                                    "type": "boolean"
+                                },
+                                "start_hour": {
+                                    "type": "integer"
+                                },
+                                "end_hour": {
+                                    "type": "integer"
+                                }
+                            },
+                            "required": [
+                                "enable",
+                                "end_hour",
+                                "start_hour"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "night_stop"
+                    ]
+                },
                 "interval_sec": {
                     "type": "integer"
                 },
@@ -208,6 +238,7 @@
                 }
             },
             "required": [
+                "decision",
                 "influxdb",
                 "interval_sec",
                 "liveness",

@@ -2,6 +2,12 @@
 # ruff: noqa: S101
 """unit_cooler.controller.engine のテスト"""
 
+import datetime
+
+import my_lib.time
+import pytest
+
+from unit_cooler.config import NightStopConfig
 from unit_cooler.const import COOLING_STATE
 from unit_cooler.controller.engine import (
     OFF_SEC_MIN,
@@ -9,6 +15,7 @@ from unit_cooler.controller.engine import (
     dummy_cooling_mode,
     gen_control_msg,
     get_dummy_prev_mode,
+    is_night_stop,
     judge_cooling_mode,
     set_dummy_prev_mode,
 )
@@ -100,6 +107,14 @@ class TestDummyCoolingMode:
 
 class TestJudgeCoolingMode:
     """judge_cooling_mode のテスト"""
+
+    @pytest.fixture(autouse=True)
+    def _daytime(self, mocker):
+        """夜間停止の影響を受けないよう、現在時刻を昼間（12時）に固定する"""
+        mocker.patch(
+            "my_lib.time.now",
+            return_value=datetime.datetime(2024, 7, 1, 12, 0, 0, tzinfo=my_lib.time.get_zoneinfo()),
+        )
 
     def test_returns_cooling_mode_result(self, config):
         """CoolingModeResult を返す"""

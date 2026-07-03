@@ -10,7 +10,7 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Self
 
 import dacite
@@ -224,15 +224,40 @@ class DecisionThresholdsConfig:
 
 
 @dataclass(frozen=True)
+class NightStopConfig:
+    """夜間停止設定
+
+    指定した時間帯は冷却モードを 0 に固定する。
+    日をまたぐ時間帯（例: 21時〜6時）にも対応する。
+    """
+
+    # 夜間停止を有効にするか
+    enable: bool
+    # 停止を開始する時刻（時, 0-23）
+    start_hour: int
+    # 停止を終了する時刻（時, 0-23）。この時刻になると冷却を再開する。
+    end_hour: int
+
+    @classmethod
+    def default(cls) -> Self:
+        """デフォルト値を返す（21時〜6時を停止）"""
+        return cls(enable=True, start_hour=21, end_hour=6)
+
+
+@dataclass(frozen=True)
 class DecisionConfig:
     """判定設定"""
 
-    thresholds: DecisionThresholdsConfig
+    night_stop: NightStopConfig
+    thresholds: DecisionThresholdsConfig = field(default_factory=DecisionThresholdsConfig.default)
 
     @classmethod
     def default(cls) -> Self:
         """デフォルト値を返す（既存動作との互換性のため）"""
-        return cls(thresholds=DecisionThresholdsConfig.default())
+        return cls(
+            night_stop=NightStopConfig.default(),
+            thresholds=DecisionThresholdsConfig.default(),
+        )
 
 
 @dataclass(frozen=True)
@@ -471,10 +496,7 @@ class Config:
 
         slack = _parse_slack(raw_config.get("slack"))
 
-        # decision がない場合のデフォルト値を設定
-        controller_data = dict(raw_config["controller"])
-        if "decision" not in controller_data:
-            controller_data["decision"] = dataclasses.asdict(DecisionConfig.default())
+        controller_data = raw_config["controller"]
 
         # actuator.metrics.data の相対パスを解決
         actuator_data = _resolve_relative_paths(raw_config["actuator"], base_dir)

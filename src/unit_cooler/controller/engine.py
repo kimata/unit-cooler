@@ -10,12 +10,15 @@ Options:
   -D                : デバッグモードで動作します。
 """
 
+import datetime
 import logging
+
+import my_lib.time
 
 import unit_cooler.controller.message
 import unit_cooler.controller.sensor
 import unit_cooler.util
-from unit_cooler.config import Config
+from unit_cooler.config import Config, NightStopConfig
 from unit_cooler.messages import ControlMessage, CoolingModeResult, DutyConfig, SenseData, StatusInfo
 
 logger = logging.getLogger(__name__)
@@ -75,8 +78,31 @@ def get_dummy_prev_mode() -> int:
     return _dummy_prev_mode
 
 
+def is_night_stop(night_stop: NightStopConfig, now: datetime.datetime) -> bool:
+    """現在時刻が夜間停止時間帯かどうかを判定する。"""
+    if not night_stop.enable:
+        return False
+
+    hour = now.hour
+    if night_stop.start_hour <= night_stop.end_hour:
+        return night_stop.start_hour <= hour < night_stop.end_hour
+
+    # 日をまたぐ場合（例: 21時〜6時）
+    return hour >= night_stop.start_hour or hour < night_stop.end_hour
+
+
 def judge_cooling_mode(config: Config, sense_data: SenseData) -> CoolingModeResult:
     logger.info("Judge cooling mode")
+
+    night_stop = config.controller.decision.night_stop
+    if is_night_stop(night_stop, my_lib.time.now()):
+        logger.info("夜間停止時間帯のため、冷却モードを 0 にします")
+        return CoolingModeResult(
+            cooling_mode=0,
+            cooler_status=StatusInfo(status=0, message="夜間停止時間帯"),
+            outdoor_status=StatusInfo(status=0, message=None),
+            sense_data=sense_data,
+        )
 
     # 閾値を config から取得
     thresholds = config.controller.decision.thresholds
