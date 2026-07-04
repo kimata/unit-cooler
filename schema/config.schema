@@ -217,10 +217,7 @@
                                 "start_hour"
                             ]
                         }
-                    },
-                    "required": [
-                        "night_stop"
-                    ]
+                    }
                 },
                 "interval_sec": {
                     "type": "integer"
@@ -238,7 +235,6 @@
                 }
             },
             "required": [
-                "decision",
                 "influxdb",
                 "interval_sec",
                 "liveness",

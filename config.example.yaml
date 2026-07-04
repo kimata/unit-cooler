@@ -78,6 +78,13 @@ controller:
             power_normal: 500
             # クーラーフル稼働中と判定する電力閾値(W)
             power_full: 900
+        # 夜間停止設定（省略時: enable: true, 21時〜6時停止）
+        night_stop:
+            enable: true
+            # 停止を開始する時刻（時, 0-23）
+            start_hour: 21
+            # 停止を終了する時刻（時, 0-23）。この時刻になると冷却を再開する。
+            end_hour: 6
     interval_sec: 60
     liveness:
         file: /dev/shm/healthz.controller

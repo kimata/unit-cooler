@@ -248,7 +248,7 @@ class NightStopConfig:
 class DecisionConfig:
     """判定設定"""
 
-    night_stop: NightStopConfig
+    night_stop: NightStopConfig = field(default_factory=NightStopConfig.default)
     thresholds: DecisionThresholdsConfig = field(default_factory=DecisionThresholdsConfig.default)
 
     @classmethod
@@ -267,9 +267,9 @@ class ControllerConfig:
     influxdb: InfluxDBConfig
     sensor: SensorConfig
     watering: WateringConfig
-    decision: DecisionConfig
     interval_sec: int
     liveness: LivenessConfig
+    decision: DecisionConfig = field(default_factory=DecisionConfig.default)
 
 
 # =============================================================================

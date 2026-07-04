@@ -17,6 +17,7 @@ from unit_cooler.config import (
     LivenessConfig,
     MetricsConfig,
     MonitorConfig,
+    NightStopConfig,
     RuntimeSettings,
     SensorConfig,
     SensorItemConfig,
@@ -198,6 +199,25 @@ class TestDecisionThresholdsConfig:
         assert config.humi_max == 96
 
 
+class TestNightStopConfig:
+    """NightStopConfig のテスト"""
+
+    def test_from_dict(self):
+        """dict から変換"""
+        data = {"enable": False, "start_hour": 22, "end_hour": 5}
+        config = dacite.from_dict(NightStopConfig, data, DACITE_CONFIG)
+        assert config.enable is False
+        assert config.start_hour == 22
+        assert config.end_hour == 5
+
+    def test_default(self):
+        """デフォルト値（21時〜6時停止）"""
+        config = NightStopConfig.default()
+        assert config.enable is True
+        assert config.start_hour == 21
+        assert config.end_hour == 6
+
+
 class TestDecisionConfig:
     """DecisionConfig のテスト"""
 
@@ -227,6 +247,11 @@ class TestDecisionConfig:
         """デフォルト値"""
         config = DecisionConfig.default()
         assert config.thresholds.lux == 300
+
+    def test_night_stop_defaults_when_missing(self):
+        """night_stop を省略した場合はデフォルト値が使われる（既存 config との互換性）"""
+        config = dacite.from_dict(DecisionConfig, {}, DACITE_CONFIG)
+        assert config.night_stop == NightStopConfig.default()
 
 
 class TestValveConfig:
@@ -383,6 +408,21 @@ class TestConfigLoad:
         # decision はオプションで、存在しない場合はデフォルト値が使用される
         assert config.controller.decision is not None
         assert config.controller.decision.thresholds is not None
+
+    def test_load_without_decision(self, tmp_path):
+        """decision セクションがない config でも読み込める（本番 config との互換性）"""
+        import yaml
+
+        with pathlib.Path("config.example.yaml").open() as f:
+            raw = yaml.safe_load(f)
+        del raw["controller"]["decision"]
+
+        config_path = tmp_path / "config.yaml"
+        with config_path.open("w") as f:
+            yaml.safe_dump(raw, f, allow_unicode=True)
+
+        config = Config.load(str(config_path), pathlib.Path("schema/config.schema"))
+        assert config.controller.decision.night_stop == NightStopConfig.default()
 
     def test_influxdb_is_my_lib_type(self, config):
         """InfluxDB 設定は my_lib.sensor_data.InfluxDBConfig のインスタンス"""
