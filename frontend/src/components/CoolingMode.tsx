@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
+import { API_ENDPOINT } from "../lib/api";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { useApi } from "../hooks/useApi";
 import { AnimatedNumber } from "./common/AnimatedNumber";
@@ -8,7 +9,8 @@ import { DashboardCard } from "./common/DashboardCard";
 import { Loading } from "./common/Loading";
 import { ProgressBar } from "./common/ProgressBar";
 import { Unit } from "./common/Unit";
-import { AdjustmentsVerticalIcon } from "./icons";
+import { OverrideControl } from "./OverrideControl";
+import { AdjustmentsVerticalIcon, MoonIcon } from "./icons";
 
 type Props = {
     isReady: boolean;
@@ -16,20 +18,23 @@ type Props = {
     logUpdateTrigger: number;
 };
 
+const emptyValveStatus: ApiResponse.ValveStatus = {
+    state: "CLOSE",
+    state_value: 0,
+    duration: 0,
+};
+
+const emptyFlowStatus: ApiResponse.FlowStatus = {
+    flow: 0,
+};
+
 const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
-    const API_ENDPOINT = "/unit-cooler/api";
+    // カウントダウンの終了予定時刻（ms）。null はカウントダウンなし。
+    // 「残り秒を毎秒デクリメント」ではなく終了時刻基準で毎回計算することで、
+    // setInterval の遅延・バックグラウンドタブによるドリフトを防ぐ。
+    const [deadlineMs, setDeadlineMs] = useState<number | null>(null);
     const [remainingTime, setRemainingTime] = useState(0);
     const [currentFlow, setCurrentFlow] = useState(0);
-
-    const emptyValveStatus: ApiResponse.ValveStatus = {
-        state: "CLOSE",
-        state_value: 0,
-        duration: 0,
-    };
-
-    const emptyFlowStatus: ApiResponse.FlowStatus = {
-        flow: 0,
-    };
 
     const {
         data: valveStatus,
@@ -53,31 +58,35 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [logUpdateTrigger, isReady, refetchValveStatus]);
 
-    // Calculate remaining time
+    // バルブ状態の更新時に終了予定時刻を再計算する
     useEffect(() => {
         if (!isReady || !stat.mode?.duty?.enable || valveLoading) {
-            setRemainingTime(0);
+            setDeadlineMs(null);
             return;
         }
 
         const isOpen = valveStatus.state === "OPEN";
         const maxDuration = isOpen ? (stat.mode?.duty?.on_sec ?? 0) : (stat.mode?.duty?.off_sec ?? 0);
-        const elapsed = valveStatus.duration;
-        const remaining = Math.max(0, maxDuration - elapsed);
+        const remaining = Math.max(0, maxDuration - valveStatus.duration);
 
-        setRemainingTime(remaining);
+        setDeadlineMs(Date.now() + remaining * 1000);
     }, [isReady, stat.mode?.duty?.enable, stat.mode?.duty?.on_sec, stat.mode?.duty?.off_sec, valveStatus, valveLoading]);
 
-    // Real-time countdown update
+    // 終了時刻基準のリアルタイムカウントダウン
     useEffect(() => {
-        if (remainingTime <= 0) return;
+        if (deadlineMs == null) {
+            setRemainingTime(0);
+            return;
+        }
 
-        const timer = setInterval(() => {
-            setRemainingTime((prev) => Math.max(0, prev - 1));
-        }, 1000);
+        const update = () => {
+            setRemainingTime(Math.max(0, Math.round((deadlineMs - Date.now()) / 1000)));
+        };
 
+        update();
+        const timer = setInterval(update, 1000);
         return () => clearInterval(timer);
-    }, [remainingTime]);
+    }, [deadlineMs]);
 
     // NOTE: currentFlow を依存配列に入れると、流量更新（毎秒）のたびにこの effect が
     // 再生成され interval が張り直されて約 2 req/s になる。ref 経由で最新値を読み、
@@ -205,6 +214,15 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                 <div className="text-6xl font-light align-middle ml-1">
                     <AnimatedNumber value={mode.mode_index} decimals={0} className="font-bold digit" />
                 </div>
+                {/* 夜間停止によるモード 0 固定中の表示（モード 0 の理由が分かるように） */}
+                {mode.night_stop && (
+                    <div className="mt-1 mb-2 flex justify-center" data-testid="night-stop-badge">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-600 text-sm">
+                            <MoonIcon className="size-4" />
+                            夜間停止中
+                        </span>
+                    </div>
+                )}
                 {dutyInfo(mode)}
                 {valveStatusDisplay()}
             </div>
@@ -215,6 +233,8 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
         <DashboardCard title="現在の冷却モード" icon={<AdjustmentsVerticalIcon className="size-5 text-gray-500" />}>
             <CardBody>
                 {isReady || stat.mode.mode_index !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}
+                {/* 散水の手動一時停止（オーバーライド）。モード表示のロード状態とは独立に描画する */}
+                <OverrideControl />
             </CardBody>
         </DashboardCard>
     );

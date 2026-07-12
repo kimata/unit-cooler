@@ -8,7 +8,7 @@ interface PaginationProps {
     onChange: (page: number) => void;
 }
 
-export const Pagination: React.FC<PaginationProps> = ({
+export const Pagination: React.FC<PaginationProps> = React.memo(({
     page,
     total,
     limit,
@@ -49,7 +49,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         <nav className="flex items-center justify-center gap-1">
             <button
                 onClick={() => onChange(page - 1)}
-                disabled={page === 1}
+                disabled={page <= 1}
                 className={`${baseClass} ${hoverClass} disabled:opacity-50 disabled:cursor-not-allowed`}
             >
                 &laquo;
@@ -73,11 +73,14 @@ export const Pagination: React.FC<PaginationProps> = ({
 
             <button
                 onClick={() => onChange(page + 1)}
-                disabled={page === totalPages}
+                // ログ件数減少などで page が totalPages を超えている場合も範囲外へ進めない
+                disabled={page >= totalPages}
                 className={`${baseClass} ${hoverClass} disabled:opacity-50 disabled:cursor-not-allowed`}
             >
                 &raquo;
             </button>
         </nav>
     );
-};
+});
+
+Pagination.displayName = "Pagination";

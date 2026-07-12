@@ -22,6 +22,8 @@ export interface Mode {
     };
     mode_index: number;
     state: number;
+    // 夜間停止によってモード 0 に固定されているか
+    night_stop: boolean;
 }
 
 export interface OutdoorStatus {
@@ -40,6 +42,25 @@ export interface Watering {
     price: number;
 }
 
+// Actuator が ZeroMQ 経由で配信する稼働状態（messages.py: ActuatorStatus）
+export interface ActuatorStatus {
+    timestamp: string;
+    valve: {
+        // VALVE_STATE (IntEnum): 1 = OPEN, 0 = CLOSE
+        state: number;
+        duration: number;
+    };
+    flow_lpm: number | null;
+    cooling_mode_index: number;
+    hazard_detected: boolean;
+}
+
+// 各コンポーネントからの最終受信からの経過秒（未受信は null）
+export interface Freshness {
+    controller_sec: number | null;
+    actuator_sec: number | null;
+}
+
 export interface Stat {
     // バックエンド (cooler_stat.py: get_stats) が Controller 停止時もデフォルト値を詰めて
     // 常に非 null・全フィールドを返すため、ここは全て必須・非 null でよい
@@ -54,6 +75,22 @@ export interface Stat {
         solar_rad: SensorData[];
         power: SensorData[];
     };
+    // Actuator の稼働状態。未受信・鮮度切れ（60 秒超）の場合は null
+    actuator_status: ActuatorStatus | null;
+    freshness: Freshness;
+}
+
+// GET /api/proxy/json/api/hazard のレスポンス
+export interface HazardStatus {
+    hazard: boolean;
+    registered_at: string | null;
+}
+
+// GET/POST /api/proxy/json/api/override（散水の手動一時停止）のレスポンス
+export interface OverrideStatus {
+    enabled: boolean;
+    // オーバーライドの終了予定日時（ISO 8601）。無効時は null
+    until: string | null;
 }
 
 export interface WateringResponse {

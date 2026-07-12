@@ -1,19 +1,9 @@
 import React, { useMemo } from "react";
 import { version as reactVersion } from "react";
 
-import dayjs from "../lib/dayjs";
+import { formatDateOrFallback } from "../lib/datetime";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { GitHubIcon, ChartBarIcon } from "./icons";
-
-// 日時文字列を整形する。空・未取得・"?"（バックエンドのセンチネル）などの不正値は
-// dayjs().isValid() で弾き "?" を返す（dayjs("?") → "Invalid Date" を防ぐ）。
-function formatDateOrFallback(value: string | undefined, method: "format" | "fromNow"): string {
-    const date = dayjs(value);
-    if (!value || !date.isValid()) {
-        return "?";
-    }
-    return method === "format" ? date.format("LLL") : date.fromNow();
-}
 
 type Props = {
     apiEndpoint: string;
@@ -38,8 +28,8 @@ const Footer = React.memo(({ apiEndpoint, updateTime, sysInfo, actuatorSysInfo }
     const buildInfo = useMemo(() => {
         const buildDate = import.meta.env.VITE_BUILD_DATE || new Date().toISOString();
         return {
-            buildDate: dayjs(buildDate).format("LLL"),
-            buildDateFrom: dayjs(buildDate).fromNow(),
+            buildDate: formatDateOrFallback(buildDate, "format"),
+            buildDateFrom: formatDateOrFallback(buildDate, "fromNow"),
         };
     }, []);
 

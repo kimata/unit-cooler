@@ -1,7 +1,7 @@
 import React from "react";
 import type { Dayjs } from "dayjs";
 
-import { dateText } from "../../lib/Util";
+import { dateText } from "../../lib/datetime";
 import { EmptyValue } from "./EmptyValue";
 
 interface DateDisplayProps {

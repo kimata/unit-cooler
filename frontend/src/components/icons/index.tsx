@@ -2,12 +2,15 @@ import {
     ChartBarIcon,
     XCircleIcon,
     SunIcon,
+    MoonIcon,
     AdjustmentsHorizontalIcon,
     AdjustmentsVerticalIcon,
     CalendarDaysIcon,
     BoltIcon,
     ClipboardDocumentListIcon,
     PauseCircleIcon,
+    PlayCircleIcon,
+    ExclamationTriangleIcon,
 } from "@heroicons/react/24/solid";
 
 // カスタム GitHub アイコン（Heroicons にブランドアイコンなし）
@@ -51,10 +54,13 @@ export {
     ChartBarIcon,
     XCircleIcon,
     SunIcon,
+    MoonIcon,
     AdjustmentsHorizontalIcon,
     AdjustmentsVerticalIcon,
     CalendarDaysIcon,
     BoltIcon,
     ClipboardDocumentListIcon,
     PauseCircleIcon,
+    PlayCircleIcon,
+    ExclamationTriangleIcon,
 };

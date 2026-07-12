@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface UseEventSourceOptions {
     onMessage?: (event: MessageEvent) => void;
@@ -6,9 +6,13 @@ interface UseEventSourceOptions {
     reconnectInterval?: number;
 }
 
-export function useEventSource(url: string, options: UseEventSourceOptions = {}) {
-    const eventSourceRef = useRef<EventSource | null>(null);
-    const reconnectTimeoutRef = useRef<number | null>(null);
+interface UseEventSourceState {
+    // SSE の接続状態。null = 接続確立前（初回接続中）、true = 接続中、false = 切断
+    connected: boolean | null;
+}
+
+export function useEventSource(url: string, options: UseEventSourceOptions = {}): UseEventSourceState {
+    const [connected, setConnected] = useState<boolean | null>(null);
 
     const { onMessage, onError, reconnectInterval = 1000 } = options;
 
@@ -23,57 +27,60 @@ export function useEventSource(url: string, options: UseEventSourceOptions = {})
         onErrorRef.current = onError;
     }, [onMessage, onError]);
 
-    const connect = () => {
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-        }
+    useEffect(() => {
+        let disposed = false;
+        let eventSource: EventSource | null = null;
+        let reconnectTimer: number | null = null;
 
-        try {
-            const eventSource = new EventSource(url);
-            eventSourceRef.current = eventSource;
+        const connect = () => {
+            if (disposed) {
+                return;
+            }
+            eventSource?.close();
+
+            try {
+                eventSource = new EventSource(url);
+            } catch (error) {
+                console.error("EventSource connection failed:", error);
+                setConnected(false);
+                return;
+            }
+
+            eventSource.onopen = () => {
+                setConnected(true);
+            };
 
             eventSource.addEventListener("message", (event) => {
                 onMessageRef.current?.(event);
             });
 
             eventSource.onerror = (event) => {
-                if (eventSource.readyState === EventSource.CLOSED) {
+                setConnected(false);
+
+                // CONNECTING の場合はブラウザが自動再接続するので任せる。
+                // CLOSED の場合のみ自前のタイマーで再接続する。
+                if (eventSource?.readyState === EventSource.CLOSED) {
                     console.warn("EventSource が閉じられました．再接続します．");
-                    reconnectTimeoutRef.current = setTimeout(connect, reconnectInterval);
+                    if (reconnectTimer != null) {
+                        clearTimeout(reconnectTimer);
+                    }
+                    reconnectTimer = window.setTimeout(connect, reconnectInterval);
                 }
 
                 onErrorRef.current?.(event);
             };
-        } catch (error) {
-            console.error("EventSource connection failed:", error);
-            onErrorRef.current?.(error as Event);
-        }
-    };
+        };
 
-    useEffect(() => {
         connect();
 
         return () => {
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
-            }
-            if (reconnectTimeoutRef.current) {
-                clearTimeout(reconnectTimeoutRef.current);
+            disposed = true;
+            eventSource?.close();
+            if (reconnectTimer != null) {
+                clearTimeout(reconnectTimer);
             }
         };
-        // connect is intentionally excluded to prevent infinite loops
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [url]);
+    }, [url, reconnectInterval]);
 
-    return {
-        reconnect: connect,
-        close: () => {
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
-            }
-            if (reconnectTimeoutRef.current) {
-                clearTimeout(reconnectTimeoutRef.current);
-            }
-        },
-    };
+    return { connected };
 }

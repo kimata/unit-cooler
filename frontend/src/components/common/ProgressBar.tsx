@@ -51,7 +51,9 @@ const ProgressBar = React.memo(
             {trackBackground}
             <motion.div
                 key={animationKey}
-                className={`absolute inset-y-0 left-0 transition-all duration-500 ${fillClassName}`}
+                // NOTE: CSS transition (transition-all 等) を付けると framer-motion の
+                // width アニメーションと競合してカクつくので、アニメーションは motion に一任する
+                className={`absolute inset-y-0 left-0 ${fillClassName}`}
                 role="progressbar"
                 aria-valuenow={ariaValueNow}
                 aria-valuemin={0}

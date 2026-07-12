@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 
-import dayjs from "../lib/dayjs";
+import { parseAsJst } from "../lib/datetime";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { CardBody } from "./common/Card";
 import { DashboardCard } from "./common/DashboardCard";
@@ -104,16 +104,20 @@ const Log = React.memo(({ isReady, log }: Props) => {
             );
         }
 
+        // ログ件数の減少（ローテーション等）で page が総ページ数を超えた場合に備えてクランプする
+        const totalPages = Math.max(1, Math.ceil(log.length / size));
+        const currentPage = Math.min(page, totalPages);
+
         return (
             <div className="flex flex-col h-full">
                 <div className="text-left flex-1 mb-4" data-testid="log">
                     <AnimatePresence initial={false} custom={direction} mode="popLayout">
-                        {log.slice((page - 1) * size, page * size).map((entry, index) => {
+                        {log.slice((currentPage - 1) * size, currentPage * size).map((entry, index) => {
                             // サーバーは tz 付き ISO 8601 を返す。ブラウザの TZ に依らず JST で表示する。
-                            const date = dayjs(entry.date).tz("Asia/Tokyo");
+                            const date = parseAsJst(entry.date);
                             const log_date = date.format("M月D日(ddd) HH:mm");
                             const log_fromNow = date.fromNow();
-                            const isLast = index === Math.min(size, log.length - (page - 1) * size) - 1;
+                            const isLast = index === Math.min(size, log.length - (currentPage - 1) * size) - 1;
 
                             return (
                                 <motion.div
@@ -141,7 +145,7 @@ const Log = React.memo(({ isReady, log }: Props) => {
 
                 <div className="mt-auto pt-3 px-6 border-t border-gray-100">
                     <Pagination
-                        page={page}
+                        page={currentPage}
                         between={2}
                         total={log.length}
                         limit={size}

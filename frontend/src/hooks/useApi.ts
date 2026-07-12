@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface UseApiState<T> {
     data: T;
@@ -18,22 +18,17 @@ export function useApi<T>(
     options: UseApiOptions = {}
 ): UseApiState<T> & { refetch: () => Promise<void> } {
     const [data, setData] = useState<T>(initialData);
-    const [loading, setLoading] = useState(true);
+    // 一度でもデータ取得に成功したか。loading はこれの否定（導出値）にする。
+    // 初回フェッチの失敗が続いている間も loading=true のまま安定し（呼び出し側は
+    // プレースホルダ表示を維持できる）、一度成功したら以降は loading=false で安定する。
+    const [hasLoaded, setHasLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    // NOTE: isFirstLoad を state にすると fetchData の identity が初回ロード完了時に変わり、
-    // interval の再生成やマウント直後の二重フェッチを招く。ref に逃がして fetchData を
-    // url のみに依存させ、identity を安定させる。
-    const isFirstLoadRef = useRef(true);
+    // 連続失敗回数。同一メッセージの失敗が続いても値が変わるため、
+    // リトライ用 effect の再実行トリガーとして機能する。
+    const [failureCount, setFailureCount] = useState(0);
 
     const fetchData = useCallback(async (): Promise<void> => {
-        const firstLoad = isFirstLoadRef.current;
         try {
-            // 初回ロード時のみ loading を true にする
-            if (firstLoad) {
-                setLoading(true);
-            }
-            setError(null);
-
             const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -41,18 +36,16 @@ export function useApi<T>(
 
             const result = await response.json();
             setData(result);
-
-            if (firstLoad) {
-                isFirstLoadRef.current = false;
-            }
+            setHasLoaded(true);
+            setError(null);
+            setFailureCount(0);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "通信に失敗しました";
+            // NOTE: 成功するまで error を保持する（フェッチ開始時にはクリアしない）。
+            // リトライのたびに error が null ↔ メッセージで振動するのを防ぐ。
             setError(errorMessage);
+            setFailureCount((prev) => prev + 1);
             console.error("API fetch error:", err);
-        } finally {
-            if (firstLoad) {
-                setLoading(false);
-            }
         }
     }, [url]);
 
@@ -67,17 +60,17 @@ export function useApi<T>(
         }
     }, [fetchData, options.immediate, options.interval]);
 
-    // エラー時のリトライ
+    // エラー時のリトライ（失敗するたびに failureCount が増えて再スケジュールされる）
     useEffect(() => {
-        if (error && options.retryInterval) {
+        if (failureCount > 0 && options.retryInterval) {
             const retryId = setTimeout(fetchData, options.retryInterval);
             return () => clearTimeout(retryId);
         }
-    }, [error, options.retryInterval, fetchData]);
+    }, [failureCount, options.retryInterval, fetchData]);
 
     return {
         data,
-        loading,
+        loading: !hasLoaded,
         error,
         refetch: fetchData,
     };

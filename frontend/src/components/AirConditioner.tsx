@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import type { Dayjs } from "dayjs";
 
 import dayjs from "../lib/dayjs";
@@ -23,74 +23,74 @@ type Props = {
 // 消費電力バー・頻度ヒートバーの軸の最大値（W）
 const POWER_SCALE_W = 1500;
 
+type AirconRowProps = {
+    airconData: ApiResponse.SensorData;
+    graph?: ApiResponse.SensorGraphSeries | null;
+};
+
+// NOTE: 親コンポーネントの関数本体内で定義すると、レンダーのたびに新しい element type と
+// なって全行がアンマウント→再マウントされ、電力バーの 30 秒スムーズアニメーションや
+// AnimatedNumber の補間が効かなくなる。必ずモジュールレベルに置くこと。
+const AirconRow = React.memo(({ airconData, graph }: AirconRowProps) => {
+    const value = airconData.value;
+    const hasValue = value != null;
+    const currentValue = value ?? 0;
+    const currentWidth = (100.0 * currentValue) / POWER_SCALE_W;
+
+    const date: Dayjs | null = airconData.time != null ? dayjs(airconData.time) : null;
+
+    return (
+        <tr className="flex items-center">
+            <td className="text-left w-[76px] whitespace-nowrap py-2 flex items-center h-10">{airconData.name}</td>
+            <td className="flex-1 py-2 pr-3 flex items-center">
+                <div className="w-full">
+                    <ProgressBar
+                        fillPercent={currentWidth}
+                        // マウント時は現在値の位置から開始（初回表示でバーが 0 から
+                        // 這い上がるのを防ぐ）。以降の更新は framer-motion が旧値→新値を補間する。
+                        initialPercent={currentWidth}
+                        durationSec={30.0}
+                        ariaValueNow={currentValue}
+                        ariaValueMax={POWER_SCALE_W}
+                        // 過去12時間の電力頻度ヒートマップをトラック全面の背景に敷き、
+                        // 半透明の塗りで分布を透かす（濃淡は zinc・地色は zinc-100）
+                        trackClassName="bg-zinc-100"
+                        fillClassName="bg-gray-500/80"
+                        // 塗りの右端に細い濃色の縦線を重ね、現在値の位置を読み取りやすくする
+                        fillCursorClassName="w-px bg-gray-700/50"
+                        trackBackground={
+                            graph && graph.values.length > 0 ? (
+                                <FrequencyHeatBar
+                                    values={graph.values}
+                                    max={POWER_SCALE_W}
+                                    className="absolute inset-0"
+                                />
+                            ) : undefined
+                        }
+                    >
+                        <b>
+                            {hasValue ? (
+                                <AnimatedNumber value={value} decimals={0} useComma={true} />
+                            ) : (
+                                <EmptyValue />
+                            )}
+                        </b>
+                        <Unit>W</Unit>
+                    </ProgressBar>
+                </div>
+            </td>
+            <td className="text-left w-[68px] py-2 pl-2 flex items-center h-10">
+                <DateDisplay date={date} format="relative" />
+            </td>
+            <td className="text-left w-[120px] whitespace-nowrap py-2 flex items-center h-10">
+                <DateDisplay date={date} format="absolute" />
+            </td>
+        </tr>
+    );
+});
+AirconRow.displayName = "AirconRow";
+
 const AirConditioner = React.memo(({ isReady, stat, sensorGraph }: Props) => {
-    type AirconRowProps = {
-        airconData: ApiResponse.SensorData;
-        graph?: ApiResponse.SensorGraphSeries | null;
-    };
-    const AirconRow: React.FC<AirconRowProps> = React.memo((props) => {
-        const value = props.airconData.value;
-        const hasValue = value != null;
-        const currentValue = value ?? 0;
-        const [previousValue, setPreviousValue] = useState(currentValue);
-        const currentWidth = (100.0 * currentValue) / POWER_SCALE_W;
-        const previousWidth = (100.0 * previousValue) / POWER_SCALE_W;
-
-        useEffect(() => {
-            setPreviousValue(currentValue);
-        }, [currentValue]);
-
-        const date: Dayjs | null = props.airconData.time != null ? dayjs(props.airconData.time) : null;
-
-        return (
-            <tr className="flex items-center">
-                <td className="text-left w-[76px] whitespace-nowrap py-2 flex items-center h-10">{props.airconData.name}</td>
-                <td className="flex-1 py-2 pr-3 flex items-center">
-                    <div className="w-full">
-                        <ProgressBar
-                            fillPercent={currentWidth}
-                            initialPercent={previousWidth}
-                            durationSec={30.0}
-                            ariaValueNow={currentValue}
-                            ariaValueMax={POWER_SCALE_W}
-                            // 過去12時間の電力頻度ヒートマップをトラック全面の背景に敷き、
-                            // 半透明の塗りで分布を透かす（濃淡は zinc・地色は zinc-100）
-                            trackClassName="bg-zinc-100"
-                            fillClassName="bg-gray-500/80"
-                            // 塗りの右端に細い濃色の縦線を重ね、現在値の位置を読み取りやすくする
-                            fillCursorClassName="w-px bg-gray-700/50"
-                            trackBackground={
-                                props.graph && props.graph.values.length > 0 ? (
-                                    <FrequencyHeatBar
-                                        values={props.graph.values}
-                                        max={POWER_SCALE_W}
-                                        className="absolute inset-0"
-                                    />
-                                ) : undefined
-                            }
-                        >
-                            <b>
-                                {hasValue ? (
-                                    <AnimatedNumber value={value} decimals={0} useComma={true} />
-                                ) : (
-                                    <EmptyValue />
-                                )}
-                            </b>
-                            <Unit>W</Unit>
-                        </ProgressBar>
-                    </div>
-                </td>
-                <td className="text-left w-[68px] py-2 pl-2 flex items-center h-10">
-                    <DateDisplay date={date} format="relative" />
-                </td>
-                <td className="text-left w-[120px] whitespace-nowrap py-2 flex items-center h-10">
-                    <DateDisplay date={date} format="absolute" />
-                </td>
-            </tr>
-        );
-    });
-    AirconRow.displayName = "AirconRow";
-
     const coolerStatus = (stat: ApiResponse.Stat) => {
         if (stat.cooler_status.message) {
             return <div>{stat.cooler_status.message}</div>;

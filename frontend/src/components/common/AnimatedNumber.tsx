@@ -9,7 +9,7 @@ interface AnimatedNumberProps {
   useComma?: boolean;
 }
 
-export const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
+export const AnimatedNumber: React.FC<AnimatedNumberProps> = React.memo(({
   value,
   decimals = 1,
   className = '',
@@ -66,4 +66,6 @@ export const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
       {display.get()}
     </motion.span>
   );
-};
+});
+
+AnimatedNumber.displayName = 'AnimatedNumber';
