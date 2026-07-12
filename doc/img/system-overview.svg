@@ -83,12 +83,12 @@
 <path d="M848,207 L822,207" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
 <text x="836" y="198" text-anchor="middle" font-size="10" fill="#57606a">流量</text>
 
-<path d="M470,160 C520,220 420,280 415,278" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
-<text x="505" y="230" text-anchor="middle" font-size="10" fill="#57606a">ZMQ SUB :2222</text>
+<path d="M470,160 C525,205 400,215 400,276" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="510" y="230" text-anchor="middle" font-size="10" fill="#57606a">ZMQ SUB :2222</text>
 
 <path d="M660,222 L650,278" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
 
-<path d="M580,190 C520,240 480,300 472,330" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M580,190 C530,235 525,330 474,330" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
 <text x="560" y="262" text-anchor="middle" font-size="10" fill="#57606a">HTTP proxy / ActuatorStatus</text>
 
 <path d="M355,408 L355,448" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
