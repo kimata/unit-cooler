@@ -45,6 +45,8 @@ Raspberry Pi を使ったエアコン室外機自動冷却システム
 - 📊 **リアルタイム監視** - Web UIでシステム状況をリアルタイム表示
 - 📱 **通知機能** - Slackを通じたエラー通知とアラート
 - 🏠 **省エネルギー** - 室外機の熱交換効率向上により消費電力を削減
+- 🌙 **夜間停止** - 夜間（デフォルト 21時〜6時）は自動的にミスト噴射を停止
+- 🛡️ **フェイルセーフ** - 最大連続開弁タイマーと永続ハザードラッチで水の出しっぱなしを防止
 - 🔧 **メンテナンスフリー** - 全自動運転で人手を必要としない
 
 ## ⚙️ 自動制御構造
@@ -98,7 +100,7 @@ graph TB
     Controller -->|ハートビート| Liveness
 
     %% データフロー（Actuator）
-    Proxy -->|ZeroMQ<br/>Port 5559| Actuator
+    Proxy -->|ZeroMQ<br/>Port 2222| Actuator
     Actuator -->|GPIO制御| GPIO
     GPIO --> Valve
     FlowSensor -->|SPI通信| Actuator
@@ -107,7 +109,7 @@ graph TB
     Actuator -->|ハートビート| Liveness
 
     %% データフロー（Web UI）
-    WebUI -->|ZeroMQ購読<br/>Port 5560| Proxy
+    WebUI -->|ZeroMQ購読<br/>Port 2222| Proxy
     WebUI -->|API Proxy| Actuator
     WebUI -->|Flask API| React
     React -->|HTTP| Browser
@@ -239,8 +241,9 @@ sequenceDiagram
 
 - **ZeroMQ Publisher-Subscriber**パターンでリアルタイム分散メッセージング
 - **Last Value Caching (LVC) Proxy**による信頼性向上と最新値キャッシュ
-- Controller → Actuator: ポート5559（制御信号）
-- Web UI ← Controller: ポート5560（状態監視）
+- Controller → Actuator / Web UI: ポート2222（ZeroMQ Pub、制御信号）
+- Web UI → Actuator: ポート5001（HTTP、ログ・バルブ状態のプロキシ）
+- Web UI: ポート5000（Flask、ブラウザ向け）
 
 ### 技術スタック
 
@@ -318,12 +321,40 @@ cp config.example.yaml config.yaml
 # config.yaml を環境に合わせて編集
 ```
 
-設定項目の例：
+設定項目の例（実際のキーは `config.example.yaml` と `schema/config.schema` を参照）：
 
-- InfluxDB接続設定（センサーデータの保存先）
-- GPIO設定（電磁弁制御用のピン番号）
-- Slack設定（エラー通知用）
-- 流量センサー設定（異常検知の閾値）
+- `controller.influxdb` - InfluxDB接続設定（センサーデータの取得元）
+- `controller.decision.thresholds` - 冷却モード判定の閾値（電力・気温・日射量など）
+- `controller.decision.night_stop` - 夜間停止設定（後述）
+- `actuator.control.valve.pin_no` - 電磁弁制御用の GPIO ピン番号（BCM、デフォルト 17）
+- `actuator.control.max_open_sec` - バルブ連続開放時間の上限（デフォルト 1800 秒）
+- `actuator.control.hazard.file` - ハザードラッチファイル（永続領域に置くこと）
+- `actuator.monitor.flow` - 流量センサー設定（水漏れ・断水検知の閾値）
+- `slack` - Slack設定（エラー通知用）
+
+#### 🌙 夜間停止機能
+
+デフォルトで有効です。指定した時間帯（デフォルト: 21時〜6時）は冷却モードを 0 に固定し、
+ミスト噴射を停止します。夜間停止中は Web UI に 🌙 が表示されます。
+
+```yaml
+controller:
+    decision:
+        night_stop:
+            enable: true # 省略時: true
+            start_hour: 21 # 停止開始（時, 0-23）
+            # start_minute: 30  # 分単位の指定も可能（省略時: 0）
+            end_hour: 6 # 停止終了（時, 0-23）
+            # end_minute: 0
+```
+
+#### 🛡️ フェイルセーフ機能
+
+- **最大連続開弁タイマー** - バルブが `actuator.control.max_open_sec`（デフォルト 1800 秒）を
+  超えて開き続けた場合、上流の指示によらず強制的に閉弁し、ハザードとして記録
+- **ハザードラッチの永続化** - 水漏れ等の検知はファイル（デフォルト: `data/unit_cooler.hazard`）に
+  永続化され、再起動しても解除されない。Web UI または API から手動クリア可能
+- **手動オーバーライド** - API から「強制 OFF（n 分間）」を指定可能（メンテナンス時などに使用）
 
 ## 💻 実行方法
 
@@ -331,16 +362,16 @@ cp config.example.yaml config.yaml
 
 ```bash
 # フロントエンドのビルド
-cd react
+cd frontend
 npm ci
 npm run build
 cd ..
 
 # Docker Composeで起動
-docker-compose up -d
+docker compose up -d
 
 # ログの確認
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### Docker を使用しない場合
@@ -368,8 +399,8 @@ uv run python ./src/webui.py -c config.yaml
 
 ```bash
 # フロントエンド開発サーバー
-cd react
-npm start
+cd frontend
+npm run dev
 
 # バックエンド（デバッグモード）
 uv run python ./src/webui.py -c config.yaml -D
@@ -404,9 +435,9 @@ uv run mypy src/
 
 テスト結果：
 
-- HTMLレポート: `tests/evidence/index.htm`
-- カバレッジ: `tests/evidence/coverage/`
-- E2E録画: `tests/evidence/test_*/`
+- HTMLレポート: `reports/pytest.html`
+- JUnit XML: `reports/junit-report.xml`
+- カバレッジ: `htmlcov/`（HTML）, `reports/coverage.xml` / `reports/coverage.lcov`
 
 ## 📊 メトリクス・分析機能
 
@@ -440,6 +471,9 @@ uv run mypy src/
 - **相関分析**: 環境要因とシステム性能のPearson相関係数
 - **外れ値検出**: IQR法による異常値検出
 - **統計サマリー**: 平均値、中央値、標準偏差、最小/最大値
+- **省エネ効果**: 散水による消費電力削減効果の推定（ダッシュボードに表示）
+
+ダッシュボードは actuator の `GET /unit-cooler/api/metrics` （ポート5001）で閲覧できます。
 
 ### データベース構造
 
@@ -473,34 +507,36 @@ error_events (
 )
 ```
 
-### 必要なライブラリ
-
-高度な分析機能を使用するには以下のライブラリが必要：
-
-```bash
-uv add pandas scipy  # 相関分析・統計計算用
-```
-
 ## 🎯 API エンドポイント
 
-### システム状態
+URL prefix はいずれも `/unit-cooler` です。
 
-- `GET /unit-cooler/api/status` - システム全体の状態取得
-- `GET /unit-cooler/api/sensor` - センサーデータ取得
+### Web UI（ポート5000）
 
-### 制御
+- `GET /unit-cooler/api/stat` - システム全体の状態取得（冷却モード・センサー値・
+  データ鮮度を示す `freshness` フィールドを含む）
+- `GET /unit-cooler/api/watering` - 散水量・水道代の集計
+- `GET /unit-cooler/api/sensor_graph` - センサーグラフ用の時系列データ
+- `GET|POST /unit-cooler/api/proxy/json/<subpath>` - actuator API への JSON プロキシ
+  （例: `/api/proxy/json/api/log_view`）
+- `GET /unit-cooler/api/proxy/event/<subpath>` - actuator への Server-Sent Events プロキシ
 
-- `POST /unit-cooler/api/valve_ctrl` - 電磁弁の手動制御
-- `GET /unit-cooler/api/mode` - 動作モード取得/設定
+### Actuator（ポート5001）
 
-### ログ・履歴
+- `GET /unit-cooler/api/valve_status` - 電磁弁の開閉状態取得
+- `GET /unit-cooler/api/get_flow` - 流量センサー値取得
+- `GET /unit-cooler/api/log_view` - 作動ログ取得
+- `GET /unit-cooler/api/event` - Server-Sent Events（ログ更新通知）
+- `GET /unit-cooler/api/hazard` - ハザードラッチの状態取得
+- `POST /unit-cooler/api/hazard/clear` - ハザードラッチの手動クリア
+- `GET /unit-cooler/api/override` - 手動オーバーライドの状態取得
+- `POST /unit-cooler/api/override` - 強制 OFF の設定（JSON `{"duration_min": N}`）
+- `POST /unit-cooler/api/override/clear` - 手動オーバーライドの解除
 
-- `GET /unit-cooler/api/log` - システムログ取得
-- `GET /unit-cooler/api/log_view` - ログビューア
+### メトリクス（Actuator、ポート5001）
 
-### メトリクス
-
-- `GET /unit-cooler/api/metrics` - 包括的メトリクスダッシュボード
+- `GET /unit-cooler/api/metrics` - メトリクスダッシュボード（HTML、省エネ効果の推定を含む）
+- `GET /unit-cooler/api/metrics/data` - ダッシュボード用データ（JSON）
 
 ## ☸️ Kubernetes デプロイ
 
@@ -529,7 +565,9 @@ kubectl logs -n hems -l app=unit-cooler-actuator
 
 - **GPIO権限不足**: `sudo usermod -a -G gpio $USER` を実行後、再起動
 - **配線確認**: GPIO17番ピンと電磁弁の接続を確認
-- **設定確認**: `config.yaml` の `actuator.gpio.valve_pin` をチェック
+- **設定確認**: `config.yaml` の `actuator.control.valve.pin_no` をチェック
+- **ハザードラッチ**: 水漏れ等の検知後はラッチが解除されるまで開弁しません。
+  Web UI か `POST /unit-cooler/api/hazard/clear` でクリアしてください
 
 #### 流量センサーが読み取れない
 
@@ -539,15 +577,15 @@ kubectl logs -n hems -l app=unit-cooler-actuator
 #### Web UIにアクセスできない
 
 - **ポート確認**: デフォルトポート5000が開いているか確認
-- **サービス確認**: `docker-compose ps` でサービス起動状況を確認
+- **サービス確認**: `docker compose ps` でサービス起動状況を確認
 
 ### ログ確認
 
 ```bash
 # Dockerの場合
-docker-compose logs -f controller
-docker-compose logs -f actuator
-docker-compose logs -f webui
+docker compose logs -f controller
+docker compose logs -f actuator
+docker compose logs -f webui
 
 # ネイティブ実行の場合
 # 各コンポーネントのログは標準出力に表示
@@ -555,7 +593,9 @@ docker-compose logs -f webui
 
 ## 📊 CI/CD
 
-GitHub Actions によるCI/CDパイプラインを構築しています。テスト結果とカバレッジは上部のバッジからアクセスできます。
+プライマリリポジトリの GitLab CI でテスト・マルチアーキイメージビルド・Kubernetes への
+デプロイを行っています。GitHub ミラーでは GitHub Actions によるテストを実行しており、
+テスト結果とカバレッジは上部のバッジからアクセスできます。
 
 ## 📝 ライセンス
 
@@ -567,6 +607,6 @@ GitHub Actions によるCI/CDパイプラインを構築しています。テス
 
 **⭐ このプロジェクトが役に立った場合は、Star をお願いします！**
 
-[🐛 Issue 報告](https://github.com/kimata/unit-cooler/issues) | [💡 Feature Request](https://github.com/kimata/unit-cooler/issues/new?template=feature_request.md) | [📖 詳細なドキュメント](./docs)
+[🐛 Issue 報告](https://github.com/kimata/unit-cooler/issues) | [💡 Feature Request](https://github.com/kimata/unit-cooler/issues/new?template=feature_request.md)
 
 </div>

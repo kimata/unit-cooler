@@ -137,8 +137,8 @@ uv run python ./src/actuator.py -c config.yaml -d
 # 依存関係インストール
 cd frontend && npm ci
 
-# 開発サーバー起動（localhost:3000）
-npm start
+# 開発サーバー起動
+npm run dev
 
 # プロダクションビルド
 npm run build
@@ -231,7 +231,9 @@ tests/
 
 - **ZeroMQ Publisher-Subscriber** パターンでリアルタイム分散メッセージング
 - **Last Value Caching Proxy** による信頼性向上
-- ポート: 5559（Controller→Actuator）, 5560（Web UI→Frontend）
+- ポート: 2222（ZeroMQ Pub。Controller → Actuator / Web UI が購読）,
+  5001（Actuator の Flask API。Web UI がプロキシ）, 5000（Web UI の Flask）
+- ポートは config ではなくコマンドライン引数（`-p` 等）/ 環境変数（`HEMS_CONTROL_HOST` 等）で指定
 
 ### 技術スタック
 
@@ -247,28 +249,65 @@ tests/
 
 #### config.yaml
 
+実際の全項目は `config.example.yaml` と `schema/config.schema` を参照。主要な構造:
+
 ```yaml
 controller:
-    zmq:
-        endpoint: "tcp://localhost:5559"
     influxdb:
-        host: "influxdb.example.com"
+        url: http://influxdb.example.com:8086
+        token: XXX
+        org: home
+        bucket: sensor
+    sensor: # temp / humi / lux / solar_rad / rain / power の測定点定義
         # ...
+    decision:
+        thresholds: # 冷却モード判定の閾値（lux, solar_rad_*, temp_*, power_* 等）
+            # ...
+        night_stop: # 夜間停止（省略時: enable: true, 21時〜6時停止）
+            enable: true
+            start_hour: 21 # start_minute で分単位指定も可（省略時: 0）
+            end_hour: 6 # end_minute も同様
+    interval_sec: 60
+    liveness:
+        file: /dev/shm/healthz.controller
 
 actuator:
-    gpio:
-        valve_pin: 17
-    flow_sensor:
-        # ...
+    subscribe:
+        liveness:
+            file: /dev/shm/healthz.actuator.subscribe
+    control:
+        valve:
+            pin_no: 17 # 電磁弁制御用 GPIO（BCM）
+        max_open_sec: 1800 # バルブ連続開放時間の上限〔秒〕。超過で強制閉弁＋ハザード記録
+        hazard:
+            file: data/unit_cooler.hazard # ハザードラッチ。永続領域に置くこと（/dev/shm 不可）
+        liveness:
+            file: /dev/shm/healthz.actuator.control
+    monitor:
+        flow: # 流量の異常検知閾値（on.min / on.max / off.max）
+            # ...
+        liveness:
+            file: /dev/shm/healthz.actuator.monitor
+    web_server:
+        webapp:
+            data:
+                log_file_path: data/hems.unit_cooler.log
     metrics:
-        data: "data/metrics.db" # メトリクス DB パス
+        data: data/metrics.db # メトリクス DB パス
 
 webui:
-    flask:
+    webapp:
+        static_dir_path: frontend/dist
         port: 5000
-    zmq:
-        endpoint: "tcp://localhost:5560"
+    subscribe:
+        liveness:
+            file: /dev/shm/healthz.webui.subscribe
+
+slack: # エラー通知（任意）
+    # ...
 ```
+
+ZeroMQ の接続先ポートは config ではなく各エントリポイントの引数（デフォルト 2222）で指定する。
 
 ### 重要な設定アクセスパターン
 
@@ -298,7 +337,7 @@ docker-compose up -d
 
 ```bash
 # デプロイ
-kubectl apply -f kubernetes/outdoor_unit_cooler.yml
+kubectl apply -f kubernetes/unit-cooler.yml
 
 # 状態確認
 kubectl get pods -n hems
