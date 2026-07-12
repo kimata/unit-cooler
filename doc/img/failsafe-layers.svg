@@ -1,0 +1,51 @@
+<svg viewBox="0 0 960 500" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI','Hiragino Sans','Noto Sans JP',Meiryo,sans-serif" font-size="13">
+<rect x="0" y="0" width="960" height="500" fill="#ffffff"/>
+<text x="20" y="30" font-size="16" font-weight="700" fill="#1f2328">フェイルセーフの多層防御（「バルブ開きっぱなし」を止める仕組み）</text>
+
+<!-- Layer 1 -->
+<rect x="20" y="60" width="450" height="120" rx="8" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
+<text x="40" y="86" font-weight="600" fill="#1a7f37">層1: 流量ベースの異常検知（monitor_worker, 毎秒）</text>
+<text x="40" y="108" font-size="11" fill="#57606a">・開弁中の過大流量 → 「水漏れ」ハザード（経過秒に応じた段階閾値）</text>
+<text x="40" y="126" font-size="11" fill="#57606a">・閉弁後 120 秒を超えて流量が残る → 「電磁弁故障」ハザード</text>
+<text x="40" y="144" font-size="11" fill="#57606a">・開弁中の過小流量 → 「元栓閉」を ERROR 記録（ハザードにはしない）</text>
+<text x="40" y="162" font-size="11" fill="#57606a">・ハザード発動 = 即時閉弁 + ラッチ登録 + Slack 通知（30 分抑制）</text>
+
+<!-- Layer 2 -->
+<rect x="490" y="60" width="450" height="120" rx="8" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
+<text x="510" y="86" font-weight="600" fill="#1a7f37">層2: 最大連続開弁タイマー（monitor_worker, 毎秒）</text>
+<text x="510" y="108" font-size="11" fill="#57606a">・連続開弁が actuator.control.max_open_sec（既定 1800 秒）を超えたら</text>
+<text x="510" y="126" font-size="11" fill="#57606a">　無条件で強制閉弁 + ハザード登録</text>
+<text x="510" y="144" font-size="11" fill="#57606a">・control_worker が死んでいても効く actuator 内完結の安全網</text>
+<text x="510" y="162" font-size="11" fill="#57606a">・正常 Duty の最大 ON は 600 秒のため誤発動しない（テストで担保）</text>
+
+<!-- Layer 3 -->
+<rect x="20" y="200" width="450" height="100" rx="8" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
+<text x="40" y="226" font-weight="600" fill="#9a6700">層3: 制御指示途絶時の IDLE フォールバック（control_worker）</text>
+<text x="40" y="248" font-size="11" fill="#57606a">・ControlMessage の受信が controller.interval_sec × 3 を超えて途絶したら</text>
+<text x="40" y="266" font-size="11" fill="#57606a">　IDLE（閉弁）に落とす。ERROR 記録は途絶中 1 回に抑制</text>
+<text x="40" y="284" font-size="11" fill="#57606a">・ワーカ自体もイテレーション単位の例外捕捉 + 脱出時 finally で閉弁</text>
+
+<!-- Layer 4 -->
+<rect x="490" y="200" width="450" height="100" rx="8" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
+<text x="510" y="226" font-weight="600" fill="#9a6700">層4: ハザードラッチ（永続）</text>
+<text x="510" y="248" font-size="11" fill="#57606a">・検知記録は永続領域のファイル（actuator.control.hazard.file）に保存され、</text>
+<text x="510" y="266" font-size="11" fill="#57606a">　再起動後も制御停止を維持（execute() が毎回チェックし IDLE に差し替え）</text>
+<text x="510" y="284" font-size="11" fill="#57606a">・解除は UI のバナー / POST /api/hazard/clear から明示的に行う</text>
+
+<!-- Layer 5 -->
+<rect x="20" y="320" width="450" height="100" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="40" y="346" font-weight="600" fill="#1f2328">層5: プロセスレベルの防御</text>
+<text x="40" y="368" font-size="11" fill="#57606a">・起動時に必ず CLOSE 初期化（ValveController.__post_init__）</text>
+<text x="40" y="386" font-size="11" fill="#57606a">・SIGTERM/SIGINT で終了処理を実行し閉弁</text>
+<text x="40" y="404" font-size="11" fill="#57606a">・起動前に interval_sec 秒待機し、旧 Pod との二重制御を回避</text>
+
+<!-- Layer 6 -->
+<rect x="490" y="320" width="450" height="100" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="510" y="346" font-weight="600" fill="#1f2328">層6: healthz による外部監視（最後の砦）</text>
+<text x="510" y="368" font-size="11" fill="#57606a">・各ワーカが liveness footprint を毎周期更新</text>
+<text x="510" y="386" font-size="11" fill="#57606a">・src/healthz.py が staleness を検査（k8s liveness probe）</text>
+<text x="510" y="404" font-size="11" fill="#57606a">・異常時は Pod 再起動 → 起動時 CLOSE で復帰</text>
+
+<text x="20" y="460" font-size="12" fill="#57606a">補足: 手動オーバーライド（POST /api/override）はフェイルセーフとは独立に、任意の時間だけ強制 IDLE にする運用向け機能。</text>
+<text x="20" y="480" font-size="12" fill="#57606a">層1・2 のハザードは層4 のラッチに記録されるため、原因を確認して解除するまで散水は再開されない。</text>
+</svg>

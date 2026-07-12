@@ -1,0 +1,90 @@
+<svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI','Hiragino Sans','Noto Sans JP',Meiryo,sans-serif" font-size="13">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+  </marker>
+</defs>
+<rect x="0" y="0" width="960" height="560" fill="#ffffff"/>
+<text x="20" y="30" font-size="16" font-weight="700" fill="#1f2328">Web UI: データフロー</text>
+
+<!-- Controller -->
+<rect x="20" y="70" width="150" height="56" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="95" y="94" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Controller</text>
+<text x="95" y="112" text-anchor="middle" font-size="11" fill="#57606a">ZMQ XPUB :2222</text>
+
+<!-- Actuator -->
+<rect x="20" y="160" width="150" height="76" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="95" y="184" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Actuator</text>
+<text x="95" y="202" text-anchor="middle" font-size="11" fill="#57606a">Flask :5001</text>
+<text x="95" y="218" text-anchor="middle" font-size="11" fill="#57606a">PUB :STATUS_PORT（任意）</text>
+
+<!-- InfluxDB -->
+<rect x="20" y="270" width="150" height="56" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="95" y="294" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">InfluxDB</text>
+<text x="95" y="312" text-anchor="middle" font-size="11" fill="#57606a">散水量・センサー履歴</text>
+
+<!-- WebUI box -->
+<rect x="240" y="60" width="440" height="420" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="460" y="84" text-anchor="middle" font-weight="600" fill="#1f2328">Web UI（Flask :5000, prefix /unit-cooler）</text>
+
+<rect x="260" y="100" width="190" height="80" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+<text x="355" y="122" text-anchor="middle" font-weight="600" font-size="11" fill="#1f2328">subscribe_worker</text>
+<text x="355" y="140" text-anchor="middle" font-size="10" fill="#57606a">ControlMessage を購読し</text>
+<text x="355" y="155" text-anchor="middle" font-size="10" fill="#57606a">queue.Queue(10) に投入</text>
+<text x="355" y="170" text-anchor="middle" font-size="10" fill="#57606a">（満杯時は最古を破棄）</text>
+
+<rect x="470" y="100" width="190" height="80" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+<text x="565" y="122" text-anchor="middle" font-weight="600" font-size="11" fill="#1f2328">actuator_status_worker</text>
+<text x="565" y="140" text-anchor="middle" font-size="10" fill="#57606a">ActuatorStatus を購読し</text>
+<text x="565" y="155" text-anchor="middle" font-size="10" fill="#57606a">最新値 + 受信時刻を保持</text>
+<text x="565" y="170" text-anchor="middle" font-size="10" fill="#57606a">（STATUS_PORT 指定時のみ）</text>
+
+<rect x="260" y="200" width="400" height="120" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+<text x="460" y="222" text-anchor="middle" font-weight="600" font-size="11" fill="#1f2328">webapi/cooler_stat.py</text>
+<text x="460" y="242" text-anchor="middle" font-size="10" fill="#57606a">GET /api/stat — 最新 ControlMessage + ActuatorStatus + freshness。</text>
+<text x="460" y="258" text-anchor="middle" font-size="10" fill="#57606a">ActuatorStatus は受信後 60 秒で鮮度切れ（null）扱い</text>
+<text x="460" y="276" text-anchor="middle" font-size="10" fill="#57606a">GET /api/watering — 直近 10 日の散水量・水道代（並列クエリ）</text>
+<text x="460" y="292" text-anchor="middle" font-size="10" fill="#57606a">GET /api/sensor_graph — 過去 12 時間の系列（背景スパークライン用）</text>
+<text x="460" y="308" text-anchor="middle" font-size="10" fill="#57606a">CoolerStats は Controller 停止時も非 null のデフォルト値を返す</text>
+
+<rect x="260" y="340" width="400" height="60" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+<text x="460" y="362" text-anchor="middle" font-weight="600" font-size="11" fill="#1f2328">my_lib.webapp.proxy</text>
+<text x="460" y="380" text-anchor="middle" font-size="10" fill="#57606a">/api/proxy/json/&lt;subpath&gt;・/api/proxy/event/&lt;subpath&gt;（SSE）を</text>
+<text x="460" y="394" text-anchor="middle" font-size="10" fill="#57606a">actuator :5001 へ転送（log_view / valve_status / hazard / override 等）</text>
+
+<rect x="260" y="416" width="400" height="46" rx="6" fill="#ffffff" stroke="#d0d7de"/>
+<text x="460" y="436" text-anchor="middle" font-weight="600" font-size="11" fill="#1f2328">静的配信</text>
+<text x="460" y="452" text-anchor="middle" font-size="10" fill="#57606a">frontend/dist（Vite ビルド成果物）</text>
+
+<!-- Frontend -->
+<rect x="740" y="60" width="200" height="420" rx="8" fill="#f6f8fa" stroke="#1a7f37" stroke-width="1.5"/>
+<text x="840" y="84" text-anchor="middle" font-weight="600" fill="#1f2328">React フロントエンド</text>
+<text x="840" y="108" text-anchor="middle" font-size="11" fill="#57606a">hooks/useDashboardData</text>
+<text x="840" y="124" text-anchor="middle" font-size="10" fill="#57606a">58 秒ポーリング + SSE 連動更新</text>
+<text x="840" y="148" text-anchor="middle" font-size="11" fill="#57606a">hooks/useApi・useEventSource</text>
+<text x="840" y="176" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2328">コンポーネント</text>
+<text x="840" y="196" text-anchor="middle" font-size="10" fill="#57606a">ConnectionStatus（接続・鮮度）</text>
+<text x="840" y="212" text-anchor="middle" font-size="10" fill="#57606a">HazardBanner（ハザード解除）</text>
+<text x="840" y="228" text-anchor="middle" font-size="10" fill="#57606a">Watering / History（散水量）</text>
+<text x="840" y="244" text-anchor="middle" font-size="10" fill="#57606a">CoolingMode（+ 手動停止 UI）</text>
+<text x="840" y="260" text-anchor="middle" font-size="10" fill="#57606a">AirConditioner（電力バー）</text>
+<text x="840" y="276" text-anchor="middle" font-size="10" fill="#57606a">Sensor / Log / Footer</text>
+<text x="840" y="304" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2328">主な呼び出し</text>
+<text x="840" y="324" text-anchor="middle" font-size="10" fill="#57606a">/api/stat /api/watering</text>
+<text x="840" y="340" text-anchor="middle" font-size="10" fill="#57606a">/api/sensor_graph</text>
+<text x="840" y="356" text-anchor="middle" font-size="10" fill="#57606a">/api/proxy/json/api/log_view</text>
+<text x="840" y="372" text-anchor="middle" font-size="10" fill="#57606a">/api/proxy/json/api/valve_status</text>
+<text x="840" y="388" text-anchor="middle" font-size="10" fill="#57606a">/api/proxy/json/api/hazard(/clear)</text>
+<text x="840" y="404" text-anchor="middle" font-size="10" fill="#57606a">/api/proxy/json/api/override(/clear)</text>
+<text x="840" y="420" text-anchor="middle" font-size="10" fill="#57606a">/api/proxy/event/api/event (SSE)</text>
+
+<!-- arrows -->
+<path d="M170,98 C200,100 230,120 258,135" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M170,225 C220,225 400,190 465,182" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M258,375 C220,370 190,300 172,240" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M260,285 C220,285 190,300 172,300" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M680,260 L738,260" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="709" y="252" text-anchor="middle" font-size="10" fill="#57606a">REST</text>
+<path d="M680,375 L738,375" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="709" y="367" text-anchor="middle" font-size="10" fill="#57606a">SSE</text>
+</svg>

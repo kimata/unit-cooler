@@ -1,0 +1,78 @@
+<svg viewBox="0 0 960 440" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI','Hiragino Sans','Noto Sans JP',Meiryo,sans-serif" font-size="13">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+  </marker>
+</defs>
+<rect x="0" y="0" width="960" height="440" fill="#ffffff"/>
+<text x="20" y="30" font-size="16" font-weight="700" fill="#1f2328">Controller: 冷却モード判定と配信（60 秒周期）</text>
+
+<!-- get_sense_data -->
+<rect x="20" y="60" width="200" height="96" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="120" y="84" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">sensor.get_sense_data()</text>
+<text x="120" y="104" text-anchor="middle" font-size="11" fill="#57606a">InfluxDB から並列取得</text>
+<text x="120" y="120" text-anchor="middle" font-size="11" fill="#57606a">temp / humi / lux / solar_rad</text>
+<text x="120" y="136" text-anchor="middle" font-size="11" fill="#57606a">rain / power（エアコン各台）</text>
+
+<!-- night stop -->
+<rect x="280" y="60" width="190" height="96" rx="8" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
+<text x="375" y="84" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">is_night_stop()</text>
+<text x="375" y="104" text-anchor="middle" font-size="11" fill="#57606a">夜間停止時間帯か判定</text>
+<text x="375" y="120" text-anchor="middle" font-size="11" fill="#57606a">decision.night_stop（分単位可）</text>
+<text x="375" y="136" text-anchor="middle" font-size="11" fill="#57606a">既定: 21:00〜6:00 停止</text>
+
+<!-- judge -->
+<rect x="530" y="60" width="230" height="130" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="645" y="84" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">judge_cooling_mode()</text>
+<text x="645" y="104" text-anchor="middle" font-size="11" fill="#57606a">get_cooler_activity()</text>
+<text x="645" y="120" text-anchor="middle" font-size="11" fill="#57606a">エアコン電力 → OFF/IDLE/NORMAL/FULL</text>
+<text x="645" y="140" text-anchor="middle" font-size="11" fill="#57606a">get_outdoor_status()</text>
+<text x="645" y="156" text-anchor="middle" font-size="11" fill="#57606a">外気温・日射・湿度・降雨で補正</text>
+<text x="645" y="176" text-anchor="middle" font-size="11" fill="#57606a">mode = max(cooler + outdoor, 0)</text>
+
+<!-- night stop result -->
+<rect x="280" y="200" width="190" height="60" rx="8" fill="#fff8c5" stroke="#9a6700" stroke-width="1.5"/>
+<text x="375" y="224" text-anchor="middle" font-size="11" fill="#1f2328">夜間停止中 → mode 0 固定</text>
+<text x="375" y="242" text-anchor="middle" font-size="11" fill="#57606a">night_stop=True・通知抑制</text>
+
+<!-- gen_control_msg -->
+<rect x="530" y="230" width="230" height="110" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="645" y="254" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">gen_control_msg()</text>
+<text x="645" y="274" text-anchor="middle" font-size="11" fill="#57606a">CONTROL_MESSAGE_LIST[mode]</text>
+<text x="645" y="290" text-anchor="middle" font-size="11" fill="#57606a">モード 0〜8 の Duty テンプレート</text>
+<text x="645" y="306" text-anchor="middle" font-size="11" fill="#57606a">（ON 1〜10 分 / OFF 14〜5 分）</text>
+<text x="645" y="326" text-anchor="middle" font-size="11" fill="#57606a">ControlMessage を構築</text>
+
+<!-- XPUB -->
+<rect x="20" y="300" width="200" height="110" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="120" y="324" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">publish.start_server()</text>
+<text x="120" y="344" text-anchor="middle" font-size="11" fill="#57606a">ZMQ XPUB :2200（実サーバー）</text>
+<text x="120" y="360" text-anchor="middle" font-size="11" fill="#57606a">ch "unit_cooler" に JSON 配信</text>
+<text x="120" y="376" text-anchor="middle" font-size="11" fill="#57606a">func() 例外時も配信ループ継続</text>
+<text x="120" y="392" text-anchor="middle" font-size="11" fill="#57606a">liveness footprint 更新</text>
+
+<!-- LVC proxy -->
+<rect x="280" y="300" width="200" height="110" rx="8" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
+<text x="380" y="324" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Last Value Caching Proxy</text>
+<text x="380" y="344" text-anchor="middle" font-size="11" fill="#57606a">publish.start_proxy()</text>
+<text x="380" y="360" text-anchor="middle" font-size="11" fill="#57606a">SUB :2200 → XPUB :2222</text>
+<text x="380" y="376" text-anchor="middle" font-size="11" fill="#57606a">最新メッセージをキャッシュし</text>
+<text x="380" y="392" text-anchor="middle" font-size="11" fill="#57606a">新規購読者へ即時再送</text>
+
+<!-- subscribers -->
+<rect x="540" y="370" width="200" height="40" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="640" y="395" text-anchor="middle" font-size="12" fill="#1f2328">購読者: Actuator / Web UI</text>
+
+<!-- arrows -->
+<path d="M220,108 L278,108" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M470,108 L528,108" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="499" y="100" text-anchor="middle" font-size="10" fill="#57606a">昼間</text>
+<path d="M375,156 L375,198" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="400" y="180" text-anchor="middle" font-size="10" fill="#57606a">夜間</text>
+<path d="M645,190 L645,228" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M470,235 C500,240 520,250 528,255" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M530,300 C400,330 280,330 222,340" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M220,355 L278,355" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M480,378 C500,380 520,384 538,388" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="509" y="374" text-anchor="middle" font-size="10" fill="#57606a">:2222</text>
+</svg>

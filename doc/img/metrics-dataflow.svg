@@ -1,0 +1,61 @@
+<svg viewBox="0 0 960 440" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI','Hiragino Sans','Noto Sans JP',Meiryo,sans-serif" font-size="13">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+  </marker>
+</defs>
+<rect x="0" y="0" width="960" height="440" fill="#ffffff"/>
+<text x="20" y="30" font-size="16" font-weight="700" fill="#1f2328">Metrics: 収集とダッシュボード（actuator 内で動作）</text>
+
+<!-- sources -->
+<rect x="20" y="70" width="220" height="130" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="130" y="94" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">データソース（actuator 内）</text>
+<text x="130" y="116" text-anchor="middle" font-size="11" fill="#57606a">control_worker: 冷却モード・Duty 比</text>
+<text x="130" y="134" text-anchor="middle" font-size="11" fill="#57606a">monitor_worker: 開弁中の流量</text>
+<text x="130" y="152" text-anchor="middle" font-size="11" fill="#57606a">ValveController: バルブ操作回数</text>
+<text x="130" y="170" text-anchor="middle" font-size="11" fill="#57606a">sense_data: 温度・湿度・照度・日射</text>
+<text x="130" y="188" text-anchor="middle" font-size="11" fill="#57606a">work_log: エラーイベント</text>
+
+<!-- collector -->
+<rect x="310" y="70" width="280" height="130" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="450" y="94" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">MetricsCollector（collector.py）</text>
+<text x="450" y="116" text-anchor="middle" font-size="11" fill="#57606a">パス毎のシングルトン・分単位バッファ</text>
+<text x="450" y="134" text-anchor="middle" font-size="11" fill="#57606a">SQLite（actuator.metrics.data）</text>
+<text x="450" y="154" text-anchor="middle" font-size="11" fill="#57606a">・minute_metrics（分粒度）</text>
+<text x="450" y="170" text-anchor="middle" font-size="11" fill="#57606a">・hourly_metrics（時粒度）</text>
+<text x="450" y="186" text-anchor="middle" font-size="11" fill="#57606a">・error_events</text>
+
+<!-- dashboard -->
+<rect x="660" y="70" width="280" height="130" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="800" y="94" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">ダッシュボード（webapi/page.py）</text>
+<text x="800" y="116" text-anchor="middle" font-size="11" fill="#57606a">GET /unit-cooler/api/metrics（HTML）</text>
+<text x="800" y="134" text-anchor="middle" font-size="11" fill="#57606a">GET /unit-cooler/api/metrics/data（JSON）</text>
+<text x="800" y="154" text-anchor="middle" font-size="11" fill="#57606a">統計・箱ひげ図・時系列・相関散布図</text>
+<text x="800" y="172" text-anchor="middle" font-size="11" fill="#57606a">（集計は SQL 側で実施）</text>
+<text x="800" y="190" text-anchor="middle" font-size="11" fill="#57606a">Jinja2 テンプレート + Chart.js</text>
+
+<!-- energy -->
+<rect x="310" y="250" width="630" height="150" rx="8" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
+<text x="625" y="274" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">省エネ効果の推定（metrics/energy.py, 1 時間 TTL キャッシュ）</text>
+<text x="625" y="296" text-anchor="middle" font-size="11" fill="#57606a">過去 60 日の全エアコン合算消費電力と外気温を InfluxDB から 10 分粒度で取得し、</text>
+<text x="625" y="314" text-anchor="middle" font-size="11" fill="#57606a">SQLite の duty_ratio で各 10 分バケットを「散水あり / なし」に分類</text>
+<text x="625" y="334" text-anchor="middle" font-size="11" fill="#57606a">外気温ビン（26℃ 未満は除外、26〜38℃ を 1℃ 刻み、38℃ 以上は最終ビン）ごとに</text>
+<text x="625" y="352" text-anchor="middle" font-size="11" fill="#57606a">平均電力を比較 → 削減電力量を推定（各ビン両群 3 サンプル以上で比較）</text>
+<text x="625" y="372" text-anchor="middle" font-size="11" fill="#57606a">電気単価 31 円/kWh で換算し、散水量 × 水道単価と合わせて</text>
+<text x="625" y="390" text-anchor="middle" font-size="11" fill="#57606a">「削減電気代 − 水道代 = 純益」をサマリータイルとビン別チャートで表示</text>
+
+<!-- influx -->
+<rect x="20" y="280" width="220" height="60" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="130" y="304" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">InfluxDB</text>
+<text x="130" y="322" text-anchor="middle" font-size="11" fill="#57606a">エアコン電力・外気温（60 日分）</text>
+
+<!-- arrows -->
+<path d="M240,135 L308,135" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M590,135 L658,135" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="624" y="127" text-anchor="middle" font-size="10" fill="#57606a">SQL 集計</text>
+<path d="M240,310 L308,310" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M450,200 L450,248" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="500" y="228" text-anchor="middle" font-size="10" fill="#57606a">duty_ratio</text>
+<path d="M800,248 L800,202" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="850" y="228" text-anchor="middle" font-size="10" fill="#57606a">1 セクションとして表示</text>
+</svg>

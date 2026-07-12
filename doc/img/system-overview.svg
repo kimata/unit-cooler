@@ -1,0 +1,100 @@
+<svg viewBox="0 0 960 560" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI','Hiragino Sans','Noto Sans JP',Meiryo,sans-serif" font-size="13">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+  </marker>
+</defs>
+<rect x="0" y="0" width="960" height="560" fill="#ffffff"/>
+<text x="20" y="30" font-size="16" font-weight="700" fill="#1f2328">システム構成（3層 + フロントエンド）</text>
+
+<!-- InfluxDB -->
+<rect x="20" y="70" width="150" height="74" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="95" y="100" text-anchor="middle" font-weight="600" fill="#1f2328">InfluxDB</text>
+<text x="95" y="120" text-anchor="middle" font-size="11" fill="#57606a">電力・環境センサー</text>
+
+<!-- Controller -->
+<rect x="240" y="52" width="230" height="128" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="355" y="78" text-anchor="middle" font-weight="600" fill="#1f2328">Controller (src/controller.py)</text>
+<text x="355" y="98" text-anchor="middle" font-size="11" fill="#57606a">controller/engine.py 冷却モード判定</text>
+<text x="355" y="114" text-anchor="middle" font-size="11" fill="#57606a">controller/sensor.py InfluxDB 取得</text>
+<text x="355" y="130" text-anchor="middle" font-size="11" fill="#57606a">pubsub/publish.py XPUB :2200</text>
+<text x="355" y="146" text-anchor="middle" font-size="11" fill="#57606a">Last Value Caching Proxy XPUB :2222</text>
+<text x="355" y="166" text-anchor="middle" font-size="11" fill="#57606a">60 秒周期で ControlMessage を配信</text>
+
+<!-- Actuator -->
+<rect x="580" y="52" width="240" height="170" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="700" y="78" text-anchor="middle" font-weight="600" fill="#1f2328">Actuator (src/actuator.py)</text>
+<text x="700" y="98" text-anchor="middle" font-size="11" fill="#57606a">Raspberry Pi / 特権コンテナ</text>
+<text x="700" y="116" text-anchor="middle" font-size="11" fill="#57606a">subscribe / control / monitor ワーカ</text>
+<text x="700" y="132" text-anchor="middle" font-size="11" fill="#57606a">valve_controller（GPIO・Duty 制御）</text>
+<text x="700" y="148" text-anchor="middle" font-size="11" fill="#57606a">work_log / metrics（SQLite）</text>
+<text x="700" y="164" text-anchor="middle" font-size="11" fill="#57606a">Flask :5001（ログ・状態・ハザード API）</text>
+<text x="700" y="180" text-anchor="middle" font-size="11" fill="#57606a">status_publisher PUB :STATUS_PORT</text>
+<text x="700" y="196" text-anchor="middle" font-size="11" fill="#57606a">（-S 指定時のみ・既定は無効）</text>
+
+<!-- Valve -->
+<rect x="850" y="70" width="94" height="74" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="897" y="100" text-anchor="middle" font-weight="600" fill="#1f2328">電磁弁</text>
+<text x="897" y="120" text-anchor="middle" font-size="11" fill="#57606a">GPIO 17</text>
+
+<!-- Flow sensor -->
+<rect x="850" y="170" width="94" height="74" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="897" y="198" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">FD-Q10C</text>
+<text x="897" y="216" text-anchor="middle" font-size="11" fill="#57606a">流量センサー</text>
+<text x="897" y="232" text-anchor="middle" font-size="11" fill="#57606a">(SPI)</text>
+
+<!-- Fluentd -->
+<rect x="580" y="280" width="130" height="60" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="645" y="306" text-anchor="middle" font-weight="600" fill="#1f2328">Fluentd</text>
+<text x="645" y="324" text-anchor="middle" font-size="11" fill="#57606a">ミスト状態の送信</text>
+
+<!-- WebUI -->
+<rect x="240" y="280" width="230" height="128" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="355" y="306" text-anchor="middle" font-weight="600" fill="#1f2328">Web UI (src/webui.py)</text>
+<text x="355" y="326" text-anchor="middle" font-size="11" fill="#57606a">Flask :5000</text>
+<text x="355" y="342" text-anchor="middle" font-size="11" fill="#57606a">webui/worker.py ZMQ 購読ワーカ</text>
+<text x="355" y="358" text-anchor="middle" font-size="11" fill="#57606a">/api/stat /api/watering /api/sensor_graph</text>
+<text x="355" y="374" text-anchor="middle" font-size="11" fill="#57606a">/api/proxy/json|event/&lt;subpath&gt;</text>
+<text x="355" y="394" text-anchor="middle" font-size="11" fill="#57606a">（actuator :5001 へのリバースプロキシ）</text>
+
+<!-- Frontend -->
+<rect x="240" y="450" width="230" height="90" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="355" y="476" text-anchor="middle" font-weight="600" fill="#1f2328">React フロントエンド</text>
+<text x="355" y="496" text-anchor="middle" font-size="11" fill="#57606a">React 19 + TypeScript + Vite</text>
+<text x="355" y="512" text-anchor="middle" font-size="11" fill="#57606a">Tailwind CSS 4 / Chart.js / Framer Motion</text>
+<text x="355" y="528" text-anchor="middle" font-size="11" fill="#57606a">58 秒ポーリング + SSE</text>
+
+<!-- Slack -->
+<rect x="20" y="280" width="150" height="60" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="95" y="306" text-anchor="middle" font-weight="600" fill="#1f2328">Slack</text>
+<text x="95" y="324" text-anchor="middle" font-size="11" fill="#57606a">エラー通知（レート制限付き）</text>
+
+<!-- arrows -->
+<path d="M170,107 L238,107" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="204" y="100" text-anchor="middle" font-size="10" fill="#57606a">query</text>
+
+<path d="M470,110 L578,110" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="524" y="100" text-anchor="middle" font-size="10" fill="#57606a">ZMQ SUB :2222</text>
+<text x="524" y="126" text-anchor="middle" font-size="10" fill="#57606a">ControlMessage (ch: unit_cooler)</text>
+
+<path d="M820,107 L848,107" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="834" y="98" text-anchor="middle" font-size="10" fill="#57606a">GPIO</text>
+
+<path d="M848,207 L822,207" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="836" y="198" text-anchor="middle" font-size="10" fill="#57606a">流量</text>
+
+<path d="M470,160 C520,220 420,280 415,278" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="505" y="230" text-anchor="middle" font-size="10" fill="#57606a">ZMQ SUB :2222</text>
+
+<path d="M660,222 L650,278" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+<path d="M580,190 C520,240 480,300 472,330" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="560" y="262" text-anchor="middle" font-size="10" fill="#57606a">HTTP proxy / ActuatorStatus</text>
+
+<path d="M355,408 L355,448" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="420" y="432" text-anchor="middle" font-size="10" fill="#57606a">REST + SSE</text>
+
+<path d="M240,330 L172,318" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M240,90 C200,180 140,240 110,278" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="150" y="210" text-anchor="middle" font-size="10" fill="#57606a">notify_error</text>
+</svg>

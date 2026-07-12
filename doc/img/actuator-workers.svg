@@ -1,0 +1,85 @@
+<svg viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI','Hiragino Sans','Noto Sans JP',Meiryo,sans-serif" font-size="13">
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+  </marker>
+</defs>
+<rect x="0" y="0" width="960" height="620" fill="#ffffff"/>
+<text x="20" y="30" font-size="16" font-weight="700" fill="#1f2328">Actuator: 3 ワーカ構成（ThreadPoolExecutor 上のスレッド）</text>
+
+<!-- ZMQ in -->
+<rect x="20" y="70" width="150" height="60" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="95" y="96" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">Controller</text>
+<text x="95" y="114" text-anchor="middle" font-size="11" fill="#57606a">ZMQ XPUB :2222</text>
+
+<!-- subscribe worker -->
+<rect x="230" y="60" width="220" height="80" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="340" y="84" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">subscribe_worker</text>
+<text x="340" y="104" text-anchor="middle" font-size="11" fill="#57606a">ZMQ SUB（1 秒タイムアウト付き）</text>
+<text x="340" y="120" text-anchor="middle" font-size="11" fill="#57606a">ControlMessage に変換してキューへ</text>
+
+<!-- queue -->
+<rect x="510" y="70" width="150" height="60" rx="8" fill="#eaeef2" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="585" y="96" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">message_queue</text>
+<text x="585" y="114" text-anchor="middle" font-size="11" fill="#57606a">multiprocessing.Queue</text>
+
+<!-- control worker -->
+<rect x="230" y="180" width="430" height="150" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="445" y="204" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">control_worker（interval_sec=1 秒周期）</text>
+<text x="445" y="226" text-anchor="middle" font-size="11" fill="#57606a">get_control_message(): キューをドレインし最新を採用。</text>
+<text x="445" y="242" text-anchor="middle" font-size="11" fill="#57606a">受信途絶が controller.interval_sec×3 を超えたら IDLE にフォールバック</text>
+<text x="445" y="262" text-anchor="middle" font-size="11" fill="#57606a">execute(): ハザードラッチ / 手動オーバーライド有効時は IDLE に差し替え、</text>
+<text x="445" y="278" text-anchor="middle" font-size="11" fill="#57606a">実効メッセージを返す（配信・メトリクスにも実効値が反映される）</text>
+<text x="445" y="298" text-anchor="middle" font-size="11" fill="#57606a">イテレーション単位で例外を捕捉して継続。</text>
+<text x="445" y="314" text-anchor="middle" font-size="11" fill="#57606a">脱出時は finally で必ず閉弁</text>
+
+<!-- valve controller -->
+<rect x="720" y="180" width="220" height="150" rx="8" fill="#dafbe1" stroke="#1a7f37" stroke-width="1.5"/>
+<text x="830" y="204" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">ValveController</text>
+<text x="830" y="224" text-anchor="middle" font-size="11" fill="#57606a">シングルトン・threading.Lock</text>
+<text x="830" y="242" text-anchor="middle" font-size="11" fill="#57606a">set_cooling_working(): Duty 制御</text>
+<text x="830" y="258" text-anchor="middle" font-size="11" fill="#57606a">（ON/OFF 経過秒を footprint で計測）</text>
+<text x="830" y="276" text-anchor="middle" font-size="11" fill="#57606a">set_cooling_idle(): 閉弁</text>
+<text x="830" y="294" text-anchor="middle" font-size="11" fill="#57606a">GPIO（BCM, rpi-lgpio）出力</text>
+<text x="830" y="312" text-anchor="middle" font-size="11" fill="#57606a">操作回数を metrics に記録</text>
+
+<!-- monitor worker -->
+<rect x="230" y="370" width="430" height="150" rx="8" fill="#f6f8fa" stroke="#0969da" stroke-width="1.5"/>
+<text x="445" y="394" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">monitor_worker（interval_sec=1 秒周期）</text>
+<text x="445" y="416" text-anchor="middle" font-size="11" fill="#57606a">get_mist_condition(): バルブ状態 + 流量（FD-Q10C）を取得</text>
+<text x="445" y="434" text-anchor="middle" font-size="11" fill="#57606a">check_valve_open_duration(): 連続開弁が max_open_sec 超 → 強制閉弁＋ハザード</text>
+<text x="445" y="452" text-anchor="middle" font-size="11" fill="#57606a">check_mist_condition(): 開弁中の過大流量=水漏れ / 過小流量=元栓閉、</text>
+<text x="445" y="468" text-anchor="middle" font-size="11" fill="#57606a">閉弁後 120 秒超の残流量=電磁弁故障 → ハザード</text>
+<text x="445" y="486" text-anchor="middle" font-size="11" fill="#57606a">check_sensing(): 流量計無応答時のリセット試行</text>
+<text x="445" y="504" text-anchor="middle" font-size="11" fill="#57606a">Fluentd 送信・ActuatorStatus 配信・流量メトリクス記録</text>
+
+<!-- flow sensor -->
+<rect x="720" y="370" width="220" height="66" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="830" y="394" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">FD-Q10C 流量センサー</text>
+<text x="830" y="412" text-anchor="middle" font-size="11" fill="#57606a">actuator/sensor.py（SPI 経由）</text>
+<text x="830" y="428" text-anchor="middle" font-size="11" fill="#57606a">長時間閉弁時は電源 OFF</text>
+
+<!-- web server -->
+<rect x="230" y="550" width="430" height="56" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="445" y="572" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">web_server.py（Flask :5001, werkzeug make_server + スレッド）</text>
+<text x="445" y="592" text-anchor="middle" font-size="11" fill="#57606a">log_view / event(SSE) / valve_status / get_flow / hazard / override / metrics</text>
+
+<!-- work_log -->
+<rect x="720" y="460" width="220" height="90" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.5"/>
+<text x="830" y="484" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2328">work_log</text>
+<text x="830" y="504" text-anchor="middle" font-size="11" fill="#57606a">作動ログ DB + Slack（ERROR 時）</text>
+<text x="830" y="520" text-anchor="middle" font-size="11" fill="#57606a">同一メッセージの抑制間隔つき</text>
+<text x="830" y="536" text-anchor="middle" font-size="11" fill="#57606a">event_queue → SSE で UI へ通知</text>
+
+<!-- arrows -->
+<path d="M170,100 L228,100" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M450,100 L508,100" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M585,130 C585,150 500,165 460,178" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M660,255 L718,255" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="689" y="247" text-anchor="middle" font-size="10" fill="#57606a">set_cooling_state</text>
+<path d="M830,332 L830,368" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<text x="862" y="352" text-anchor="middle" font-size="10" fill="#57606a">状態参照</text>
+<path d="M660,440 L718,410" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M660,490 L718,495" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+<path d="M445,520 L445,548" stroke="#57606a" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+</svg>
