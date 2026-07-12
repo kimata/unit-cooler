@@ -8,6 +8,7 @@ import pathlib
 from unittest.mock import MagicMock
 
 import my_lib.healthz
+import pytest
 
 
 class TestGetLivenessTargets:
@@ -60,6 +61,21 @@ class TestGetLivenessTargets:
         assert targets[0].name == "actuator - subscribe"
         assert targets[1].name == "actuator - control"
         assert targets[2].name == "actuator - monitor"
+
+    def test_raises_value_error_for_unknown_mode(self):
+        """未知モードは暗黙に ACT 扱いせず ValueError を送出する"""
+        from healthz import get_liveness_targets
+
+        config = MagicMock()
+
+        with pytest.raises(ValueError, match="Unknown mode"):
+            get_liveness_targets(config, "CRTL")  # かつての typo
+
+    def test_valid_modes_constant(self):
+        """VALID_MODES に想定モードが定義されている"""
+        import healthz
+
+        assert healthz.VALID_MODES == ("CTRL", "ACT", "WEB")
 
     def test_returns_healthz_target_instances(self):
         """HealthzTarget インスタンスを返す"""

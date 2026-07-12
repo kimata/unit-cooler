@@ -4,15 +4,18 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import os
 import queue
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import flask
 import my_lib.flask_util
 import my_lib.sensor_data
+import my_lib.time
 import my_lib.webapp.config
 
 import unit_cooler.const
@@ -22,13 +25,17 @@ import unit_cooler.webui.worker
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from multiprocessing import Queue
+    import datetime
 
     from unit_cooler.config import Config, SensorItemConfig
-    from unit_cooler.messages import ControlMessage, StatusInfo
+    from unit_cooler.messages import ControlMessage, DutyConfig, StatusInfo
 
 # センサー値列の背景グラフに使う種別（power は UI 非表示のため除外）
 SENSOR_GRAPH_KINDS: tuple[str, ...] = ("temp", "humi", "lux", "solar_rad", "rain")
+
+# ActuatorStatus をこの秒数より長く受信していない場合は None 扱いにする
+# （Actuator 停止後に古い「バルブ OPEN」表示が残留するのを防ぐ）
+ACTUATOR_STATUS_STALE_SEC = 60.0
 
 blueprint = flask.Blueprint("cooler-stat", __name__)
 
@@ -70,31 +77,70 @@ def _status_to_dict(status: StatusInfo | None) -> dict[str, Any]:
 
 
 @dataclass(frozen=True)
+class ModeInfo:
+    """冷却モード情報（/api/stat の mode フィールド）"""
+
+    state: int
+    mode_index: int
+    duty: DutyConfig
+    night_stop: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "state": self.state,
+            "mode_index": self.mode_index,
+            "duty": self.duty.to_dict(),
+            "night_stop": self.night_stop,
+        }
+
+
+@dataclass(frozen=True)
+class FreshnessInfo:
+    """Controller / Actuator からの最終受信からの経過秒（未受信なら None）"""
+
+    controller_sec: float | None
+    actuator_sec: float | None
+
+    def to_dict(self) -> dict[str, float | None]:
+        return {
+            "controller_sec": self.controller_sec,
+            "actuator_sec": self.actuator_sec,
+        }
+
+
+@dataclass(frozen=True)
 class CoolerStats:
     """冷却システム統計情報
 
     Controller 停止時も全フィールドを非 null で返すことで、フロントエンドは
-    単一の Stat 型（null 分岐なし）で扱える。actuator_status のみ未受信時 None。
+    単一の Stat 型（null 分岐なし）で扱える。actuator_status のみ未受信・鮮度切れ時 None。
     """
 
+    # NOTE: sensor / cooler_status / outdoor_status / actuator_status は
+    # シリアライゼーション境界（to_dict 済みの JSON 相当データ）なので dict のまま扱う
     sensor: dict[str, Any]
-    mode: dict[str, Any]
+    mode: ModeInfo
     cooler_status: dict[str, Any]
     outdoor_status: dict[str, Any]
     actuator_status: dict[str, Any] | None
+    freshness: FreshnessInfo
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "sensor": self.sensor,
-            "mode": self.mode,
+            "mode": self.mode.to_dict(),
             "cooler_status": self.cooler_status,
             "outdoor_status": self.outdoor_status,
             "actuator_status": self.actuator_status,
+            "freshness": self.freshness.to_dict(),
         }
 
     @classmethod
     def from_message(
-        cls, control_message: ControlMessage, actuator_status: dict[str, Any] | None
+        cls,
+        control_message: ControlMessage,
+        actuator_status: dict[str, Any] | None,
+        freshness: FreshnessInfo,
     ) -> CoolerStats:
         # NOTE: mode に ControlMessage 全体を入れると sense_data / cooler_status /
         # outdoor_status が重複してペイロードに含まれるため、必要なフィールドのみ返す
@@ -104,29 +150,33 @@ class CoolerStats:
                 if control_message.sense_data
                 else unit_cooler.messages.SenseData().to_dict()
             ),
-            mode={
-                "state": control_message.state.value,
-                "mode_index": control_message.mode_index,
-                "duty": control_message.duty.to_dict(),
-            },
+            mode=ModeInfo(
+                state=control_message.state.value,
+                mode_index=control_message.mode_index,
+                duty=control_message.duty,
+                night_stop=control_message.night_stop,
+            ),
             cooler_status=_status_to_dict(control_message.cooler_status),
             outdoor_status=_status_to_dict(control_message.outdoor_status),
             actuator_status=actuator_status,
+            freshness=freshness,
         )
 
     @classmethod
-    def idle(cls, actuator_status: dict[str, Any] | None) -> CoolerStats:
+    def idle(cls, actuator_status: dict[str, Any] | None, freshness: FreshnessInfo) -> CoolerStats:
         """Controller 未接続時のデフォルト統計情報（全フィールド非 null）"""
         return cls(
             sensor=unit_cooler.messages.SenseData().to_dict(),
-            mode={
-                "state": unit_cooler.const.COOLING_STATE.IDLE.value,
-                "mode_index": 0,
-                "duty": {"enable": False, "on_sec": 0, "off_sec": 0},
-            },
+            mode=ModeInfo(
+                state=unit_cooler.const.COOLING_STATE.IDLE.value,
+                mode_index=0,
+                duty=unit_cooler.messages.DutyConfig(enable=False, on_sec=0, off_sec=0),
+                night_stop=False,
+            ),
             cooler_status={"status": 0, "message": ""},
             outdoor_status={"status": 0, "message": ""},
             actuator_status=actuator_status,
+            freshness=freshness,
         )
 
 
@@ -150,7 +200,10 @@ def watering(config: Config, day_before: int) -> WateringInfo:
 
 
 def watering_list(config: Config) -> list[dict[str, float]]:
-    return [watering(config, i).to_dict() for i in range(10)]
+    # NOTE: InfluxDB へのクエリが直列だと 10 日分で応答が遅くなるため並列化する
+    # （executor.map は入力順を保持する）
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        return [info.to_dict() for info in executor.map(lambda i: watering(config, i), range(10))]
 
 
 def sensor_graph(config: Config) -> dict[str, Any]:
@@ -214,10 +267,10 @@ def sensor_graph(config: Config) -> dict[str, Any]:
 
     results = asyncio.run(my_lib.sensor_data.fetch_data_parallel(config.controller.influxdb, requests))
 
-    def to_series(result: Any) -> dict[str, Any] | None:
+    def to_series(result: Any, scale: float = 1.0) -> dict[str, Any] | None:
         if isinstance(result, BaseException) or not result.valid or not result.value:
             return None
-        values = list(result.value)
+        values = [v * scale for v in result.value]
         return SensorGraphSeries(
             values=values, min=min(values), max=max(values), current=values[-1]
         ).to_dict()
@@ -225,18 +278,10 @@ def sensor_graph(config: Config) -> dict[str, Any]:
     graph: dict[str, Any] = {}
     n_single = len(kinds)
     for kind, result in zip(kinds, results[:n_single], strict=True):
-        if isinstance(result, BaseException) or not result.valid or not result.value:
-            continue
-        values = list(result.value)
-        if kind == "rain":
-            # NOTE: 観測値は1分間の降水量なので、1時間雨量に換算（sensor.py と同様）
-            values = [v * 60 for v in values]
-        graph[kind] = SensorGraphSeries(
-            values=values,
-            min=min(values),
-            max=max(values),
-            current=values[-1],
-        ).to_dict()
+        # NOTE: rain の観測値は1分間の降水量なので、1時間雨量に換算（sensor.py と同様）
+        series = to_series(result, scale=60.0 if kind == "rain" else 1.0)
+        if series is not None:
+            graph[kind] = series
 
     power_series = [to_series(result) for result in results[n_single:]]
     if any(series is not None for series in power_series):
@@ -246,34 +291,57 @@ def sensor_graph(config: Config) -> dict[str, Any]:
 
 
 # モジュールレベル変数（関数属性パターンの代替）
+# _last_message_time は ControlMessage の最終受信時刻（鮮度表示用）
 _last_message: ControlMessage | None = None
+_last_message_time: datetime.datetime | None = None
+_last_message_lock = threading.Lock()
 
 
-def get_last_message(message_queue: Queue[ControlMessage]) -> ControlMessage | None:
+def get_last_message(message_queue: queue.Queue[ControlMessage]) -> ControlMessage | None:
     # NOTE: 現在の実際の制御モードを取得する。
     # empty() でチェックしてから get() すると、並行リクエストが間にキューを空にした場合に
     # get() がブロックし得る（TOCTOU）。get_nowait() + queue.Empty 捕捉でブロックを避ける。
-    global _last_message
-    while True:
-        try:
-            _last_message = message_queue.get_nowait()
-        except queue.Empty:
-            break
-    return _last_message
+    global _last_message, _last_message_time
+    with _last_message_lock:
+        while True:
+            try:
+                _last_message = message_queue.get_nowait()
+                _last_message_time = my_lib.time.now()
+            except queue.Empty:
+                break
+        return _last_message
 
 
-def get_stats(message_queue: Queue[ControlMessage]) -> CoolerStats:
+def _get_freshness() -> FreshnessInfo:
+    """Controller / Actuator からの最終受信からの経過秒を取得する"""
+    now = my_lib.time.now()
+
+    with _last_message_lock:
+        last_message_time = _last_message_time
+    controller_sec = (now - last_message_time).total_seconds() if last_message_time else None
+
+    actuator_time = unit_cooler.webui.worker.get_last_actuator_status_time()
+    actuator_sec = (now - actuator_time).total_seconds() if actuator_time else None
+
+    return FreshnessInfo(controller_sec=controller_sec, actuator_sec=actuator_sec)
+
+
+def get_stats(message_queue: queue.Queue[ControlMessage]) -> CoolerStats:
     # ZMQ 経由で Controller から受信したメッセージを使用
     control_message = get_last_message(message_queue)
 
+    freshness = _get_freshness()
+
     # ActuatorStatus を取得（ZeroMQ 経由で受信した最新のステータス）
+    # 鮮度切れ（Actuator 停止等）の場合は None にして古い表示の残留を防ぐ
     actuator_status = unit_cooler.webui.worker.get_last_actuator_status()
-    actuator_status_dict = actuator_status.to_dict() if actuator_status else None
+    is_stale = freshness.actuator_sec is None or freshness.actuator_sec > ACTUATOR_STATUS_STALE_SEC
+    actuator_status_dict = actuator_status.to_dict() if actuator_status and not is_stale else None
 
     if control_message is None:
-        return CoolerStats.idle(actuator_status_dict)
+        return CoolerStats.idle(actuator_status_dict, freshness)
 
-    return CoolerStats.from_message(control_message, actuator_status_dict)
+    return CoolerStats.from_message(control_message, actuator_status_dict, freshness)
 
 
 @blueprint.route("/api/stat", methods=["GET"])

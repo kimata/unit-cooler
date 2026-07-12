@@ -8,8 +8,6 @@ import datetime
 import multiprocessing
 from unittest.mock import MagicMock
 
-import pytest
-
 import unit_cooler.actuator.control
 from unit_cooler.const import COOLING_STATE, LOG_LEVEL
 from unit_cooler.messages import ControlMessage, DutyConfig
@@ -81,36 +79,48 @@ class TestHazardClear:
 class TestHazardNotify:
     """hazard_notify のテスト"""
 
-    def test_notifies_when_interval_exceeded(self, config, mocker):
-        """間隔超過時に通知"""
-        mocker.patch("my_lib.footprint.elapsed", return_value=31 * 60)  # 31分
+    def test_notifies_with_suppress_interval(self, config, mocker):
+        """work_log の共通抑制機構を使って ERROR を記録する"""
+        mocker.patch("my_lib.footprint.exists", return_value=False)
         mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
         mocker.patch("my_lib.footprint.update")
         mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
-        unit_cooler.actuator.control.hazard_notify(config, "テストメッセージ")
+        unit_cooler.actuator.control.hazard_notify(config, "テストメッセージ", suppress_key="テスト")
 
-        mock_add.assert_called_once()
-        args = mock_add.call_args[0]
-        assert args[0] == "テストメッセージ"
-        assert args[1] == LOG_LEVEL.ERROR
+        mock_add.assert_called_once_with(
+            "テストメッセージ",
+            LOG_LEVEL.ERROR,
+            suppress_interval_min=unit_cooler.actuator.control.HAZARD_NOTIFY_INTERVAL_MIN,
+            suppress_key="テスト",
+        )
 
-    def test_no_notify_when_interval_not_exceeded(self, config, mocker):
-        """間隔未満で通知しない"""
-        mocker.patch("my_lib.footprint.elapsed", return_value=10 * 60)  # 10分
-        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
-        mocker.patch("my_lib.footprint.update")
+    def test_registers_latch_on_first_detection(self, config, mocker):
+        """ラッチが存在しない場合は登録する"""
+        mocker.patch("my_lib.footprint.exists", return_value=False)
+        mocker.patch("unit_cooler.actuator.work_log.add")
+        mock_update = mocker.patch("my_lib.footprint.update")
         mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
         unit_cooler.actuator.control.hazard_notify(config, "テストメッセージ")
 
-        mock_add.assert_not_called()
+        mock_update.assert_called_once_with(config.actuator.control.hazard.file)
+
+    def test_keeps_first_detection_time_when_latch_exists(self, config, mocker):
+        """既にラッチが存在する場合は上書きせず初回検知時刻を保持する"""
+        mocker.patch("my_lib.footprint.exists", return_value=True)
+        mocker.patch("unit_cooler.actuator.work_log.add")
+        mock_update = mocker.patch("my_lib.footprint.update")
+        mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
+
+        unit_cooler.actuator.control.hazard_notify(config, "テストメッセージ")
+
+        mock_update.assert_not_called()
 
     def test_closes_valve(self, config, mocker):
         """バルブを閉じる"""
-        mocker.patch("my_lib.footprint.elapsed", return_value=10 * 60)
+        mocker.patch("my_lib.footprint.exists", return_value=True)
         mocker.patch("unit_cooler.actuator.work_log.add")
-        mocker.patch("my_lib.footprint.update")
         mock_controller = MagicMock()
         mocker.patch(
             "unit_cooler.actuator.valve_controller.get_valve_controller", return_value=mock_controller
@@ -129,9 +139,7 @@ class TestHazardCheck:
     def test_returns_true_when_hazard_exists(self, config, mocker):
         """hazard 存在時に True"""
         mocker.patch("my_lib.footprint.exists", return_value=True)
-        mocker.patch("my_lib.footprint.elapsed", return_value=31 * 60)
         mocker.patch("unit_cooler.actuator.work_log.add")
-        mocker.patch("my_lib.footprint.update")
         mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
         result = unit_cooler.actuator.control.hazard_check(config)
@@ -149,9 +157,7 @@ class TestHazardCheck:
     def test_calls_hazard_notify_when_exists(self, config, mocker):
         """hazard 存在時に hazard_notify を呼ぶ"""
         mocker.patch("my_lib.footprint.exists", return_value=True)
-        mocker.patch("my_lib.footprint.elapsed", return_value=31 * 60)
         mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
-        mocker.patch("my_lib.footprint.update")
         mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
 
         unit_cooler.actuator.control.hazard_check(config)
@@ -354,6 +360,7 @@ class TestExecute:
     def test_calls_set_cooling_state(self, config, mocker):
         """set_cooling_state を呼ぶ"""
         mocker.patch("my_lib.footprint.exists", return_value=False)  # hazard なし
+        mocker.patch("unit_cooler.actuator.override.is_active", return_value=False)
         mocker.patch("unit_cooler.metrics.get_metrics_collector", return_value=MagicMock())
         mock_controller = MagicMock()
         mocker.patch(
@@ -365,16 +372,16 @@ class TestExecute:
             state=COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
         )
-        unit_cooler.actuator.control.execute(config, control_message)
+        result = unit_cooler.actuator.control.execute(config, control_message)
 
         mock_controller.set_cooling_state.assert_called_once_with(control_message)
+        # 差し替えがない場合は受信メッセージがそのまま実効メッセージになる
+        assert result == control_message
 
     def test_overrides_to_idle_when_hazard(self, config, mocker):
-        """hazard 時に IDLE に上書き"""
+        """hazard 時に IDLE に上書きし、実効メッセージを返す"""
         mocker.patch("my_lib.footprint.exists", return_value=True)  # hazard あり
-        mocker.patch("my_lib.footprint.elapsed", return_value=10 * 60)
         mocker.patch("unit_cooler.actuator.work_log.add")
-        mocker.patch("my_lib.footprint.update")
         mocker.patch("unit_cooler.metrics.get_metrics_collector", return_value=MagicMock())
         mock_controller = MagicMock()
         mocker.patch(
@@ -386,12 +393,57 @@ class TestExecute:
             state=COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
         )
-        unit_cooler.actuator.control.execute(config, control_message)
+        result = unit_cooler.actuator.control.execute(config, control_message)
 
         # IDLE に上書きされることを確認
         call_args = mock_controller.set_cooling_state.call_args[0][0]
         assert call_args.mode_index == 0
         assert call_args.state == COOLING_STATE.IDLE
+        # 実効メッセージ（IDLE）が返されることを確認
+        assert result.mode_index == 0
+        assert result.state == COOLING_STATE.IDLE
+
+    def test_overrides_to_idle_when_manual_override(self, config, mocker):
+        """手動オーバーライド有効時に IDLE に差し替える"""
+        mocker.patch("my_lib.footprint.exists", return_value=False)  # hazard なし
+        mocker.patch("unit_cooler.actuator.override.is_active", return_value=True)
+        mocker.patch("unit_cooler.metrics.get_metrics_collector", return_value=MagicMock())
+        mock_controller = MagicMock()
+        mocker.patch(
+            "unit_cooler.actuator.valve_controller.get_valve_controller", return_value=mock_controller
+        )
+
+        control_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
+        )
+        result = unit_cooler.actuator.control.execute(config, control_message)
+
+        call_args = mock_controller.set_cooling_state.call_args[0][0]
+        assert call_args.state == COOLING_STATE.IDLE
+        assert result.mode_index == 0
+        assert result.state == COOLING_STATE.IDLE
+
+    def test_returns_to_normal_when_override_inactive(self, config, mocker):
+        """オーバーライドが無効（失効）なら通常運転に戻る"""
+        mocker.patch("my_lib.footprint.exists", return_value=False)
+        mocker.patch("unit_cooler.actuator.override.is_active", return_value=False)
+        mocker.patch("unit_cooler.metrics.get_metrics_collector", return_value=MagicMock())
+        mock_controller = MagicMock()
+        mocker.patch(
+            "unit_cooler.actuator.valve_controller.get_valve_controller", return_value=mock_controller
+        )
+
+        control_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
+        )
+        result = unit_cooler.actuator.control.execute(config, control_message)
+
+        assert result == control_message
+        mock_controller.set_cooling_state.assert_called_once_with(control_message)
 
     def test_collects_metrics(self, config, mocker):
         """メトリクスを収集"""
@@ -432,31 +484,11 @@ class TestExecute:
 
 
 class TestHazardNotifyInterval:
-    """HAZARD_NOTIFY_INTERVAL_MIN のテスト"""
+    """HAZARD_NOTIFY_INTERVAL_MIN のテスト
+
+    抑制間隔の境界動作自体は work_log 側の共通機構のテスト（test_work_log.py）で担保する。
+    """
 
     def test_interval_is_30_minutes(self):
         """間隔は 30 分"""
         assert unit_cooler.actuator.control.HAZARD_NOTIFY_INTERVAL_MIN == 30
-
-    @pytest.mark.parametrize(
-        "elapsed_min,should_notify",
-        [
-            (29, False),  # 29分 < 30分
-            (30, False),  # 30分 = 30分 (境界)
-            (31, True),  # 31分 > 30分
-            (60, True),  # 60分 > 30分
-        ],
-    )
-    def test_notify_interval_boundary(self, config, mocker, elapsed_min, should_notify):
-        """通知間隔の境界テスト"""
-        mocker.patch("my_lib.footprint.elapsed", return_value=elapsed_min * 60)
-        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
-        mocker.patch("my_lib.footprint.update")
-        mocker.patch("unit_cooler.actuator.valve_controller.get_valve_controller", return_value=MagicMock())
-
-        unit_cooler.actuator.control.hazard_notify(config, "テスト")
-
-        if should_notify:
-            mock_add.assert_called()
-        else:
-            mock_add.assert_not_called()

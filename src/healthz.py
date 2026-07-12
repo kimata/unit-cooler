@@ -7,7 +7,7 @@ Usage:
 
 Options:
   -c CONFIG         : CONFIG を設定ファイルとして読み込んで実行します。[default: config.yaml]
-  -m (CRTL|ACT|WEB) : 動作モード [default: CTRL]
+  -m (CTRL|ACT|WEB) : 動作モード [default: CTRL]
   -p PORT           : WEB サーバのポートを指定します。[default: 5000]
   -D                : デバッグモードで動作します。
 """
@@ -15,7 +15,6 @@ Options:
 from __future__ import annotations
 
 import logging
-import pathlib
 from typing import TYPE_CHECKING
 
 import my_lib.healthz
@@ -25,7 +24,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from unit_cooler.config import Config
 
-SCHEMA_CONFIG = "schema/config.schema"
+VALID_MODES = ("CTRL", "ACT", "WEB")
 
 
 def get_liveness_targets(config: Config, mode: str) -> list[my_lib.healthz.HealthzTarget]:
@@ -57,7 +56,7 @@ def get_liveness_targets(config: Config, mode: str) -> list[my_lib.healthz.Healt
                 interval=default_interval,
             )
         ]
-    else:  # ACT
+    elif mode == "ACT":
         return [
             my_lib.healthz.HealthzTarget(
                 name="actuator - subscribe",
@@ -75,30 +74,29 @@ def get_liveness_targets(config: Config, mode: str) -> list[my_lib.healthz.Healt
                 interval=config.actuator.monitor.interval_sec,
             ),
         ]
+    else:
+        # NOTE: 暗黙に ACT 扱いすると typo に気付けないため、未知モードは明示エラーにする
+        raise ValueError(f"Unknown mode: {mode} (expected one of {VALID_MODES})")
 
 
 if __name__ == "__main__":
     import sys
 
-    import docopt
-    import my_lib.logger
     import my_lib.pretty
 
-    from unit_cooler.config import Config
+    import unit_cooler.cli
 
     assert __doc__ is not None  # noqa: S101
-    args = docopt.docopt(__doc__)
+    args, config = unit_cooler.cli.init(__doc__)
 
-    config_file = args["-c"]
     mode = args["-m"]
     port = args["-p"]
-    debug_mode = args["-D"]
-
-    my_lib.logger.init("hems.unit_cooler", level=logging.DEBUG if debug_mode else logging.INFO)
-
-    config = Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
 
     logger.info("Mode: %s", mode)
+    if mode not in VALID_MODES:
+        logger.error("Unknown mode: %s (expected one of %s)", mode, ", ".join(VALID_MODES))
+        sys.exit(1)
+
     if mode == "CTRL" or mode == "ACT":
         port = None
 

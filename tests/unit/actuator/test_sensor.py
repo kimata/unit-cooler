@@ -10,8 +10,8 @@ from unittest.mock import MagicMock
 class TestSensorInit:
     """sensor.init のテスト"""
 
-    def test_init_sets_pin_no(self, monkeypatch):
-        """init で pin_no を設定"""
+    def test_init_creates_sensor_with_pin_no(self, monkeypatch):
+        """init でセンサーを pin_no 付きで生成"""
         monkeypatch.setenv("DUMMY_MODE", "true")
 
         import importlib
@@ -22,7 +22,9 @@ class TestSensorInit:
 
         unit_cooler.actuator.sensor.init(17)
 
-        assert unit_cooler.actuator.sensor._pin_no == 17
+        sensor = unit_cooler.actuator.sensor._sensor
+        assert isinstance(sensor, unit_cooler.actuator.sensor.DummyFlowSensor)
+        assert sensor._pin_no == 17
 
     def test_init_creates_fd_q10c(self, monkeypatch):
         """init で FD_Q10C を作成"""

@@ -1,7 +1,7 @@
 controller:
     influxdb:
         url: http://proxy.green-rabbit.net:8086
-        token: TUi-cgEEDqEeD1o14fLaH6FdEgMoeqShRYlCHxuo63weJ5Nnmze_MFqRHJ0XeGlMS9r_1iZe3-HGgJDqZ9bqRA==
+        token: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX==
         org: home
         bucket: sensor
     sensor:
@@ -83,8 +83,12 @@ controller:
             enable: true
             # 停止を開始する時刻（時, 0-23）
             start_hour: 21
+            # 停止を開始する時刻の分（0-59, 省略時: 0）。start_hour: 21, start_minute: 30 で 21:30 開始。
+            # start_minute: 30
             # 停止を終了する時刻（時, 0-23）。この時刻になると冷却を再開する。
             end_hour: 6
+            # 停止を終了する時刻の分（0-59, 省略時: 0）
+            # end_minute: 0
     interval_sec: 60
     liveness:
         file: /dev/shm/healthz.controller
@@ -97,22 +101,14 @@ actuator:
             # 電磁弁制御用の GPIO 端子番号のデフォルト値。
             # この端子が H になった場合に、水が出るように回路を組んでおく。
             pin_no: 17 # BCM で指定
-            "on":
-                # ON にしたときの最低流量。実際の流量がこれ未満になっている場合、
-                # 元栓が閉じている可能性あり。
-                min: 0.02
-                # ON にした時の最大流量。実際の流量がこれより大きくになっている場合、
-                # 水漏れしている可能性あり。
-                max: 3.8
-            "off":
-                # OFF にした時の最大流量。実際の流量がこれより大きくなっている場合、
-                # 水漏れしている可能性あり。
-                max: 0.01
-            # 元栓を閉じてからこの時間経過したら、流量センサの電源を落とす
-            power_off_sec: 7200
         interval_sec: 1
+        # バルブが連続して開いたままでいられる時間の上限〔秒〕（省略時: 1800）。
+        # 超えた場合は上流の状態によらず強制的に閉弁し、ハザードとして記録する（フェイルセーフ）。
+        max_open_sec: 1800
         hazard:
-            file: /dev/shm/unit_cooler.hazard
+            # 水漏れ等の検知を記録するラッチファイル。再起動で消えないよう、
+            # /dev/shm ではなく永続領域（base_dir 相対 or 絶対パス）に置くこと。
+            file: data/unit_cooler.hazard
         liveness:
             file: /dev/shm/healthz.actuator.control
     monitor:

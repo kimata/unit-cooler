@@ -259,18 +259,9 @@ class TestValveConfig:
 
     def test_from_dict(self):
         """dict から変換"""
-        data = {
-            "pin_no": 17,
-            "on": {"min": 2.0, "max": 10.0},
-            "off": {"max": 0.5},
-            "power_off_sec": 300,
-        }
+        data = {"pin_no": 17}
         config = dacite.from_dict(ValveConfig, data, DACITE_CONFIG)
         assert config.pin_no == 17
-        assert config.on.min == 2.0
-        assert config.on.max == 10.0
-        assert config.off.max == 0.5
-        assert config.power_off_sec == 300
 
 
 class TestFlowConfig:
@@ -319,12 +310,7 @@ class TestControlConfig:
     def test_from_dict(self):
         """dict から変換"""
         data = {
-            "valve": {
-                "pin_no": 17,
-                "on": {"min": 2.0, "max": 10.0},
-                "off": {"max": 0.5},
-                "power_off_sec": 300,
-            },
+            "valve": {"pin_no": 17},
             "interval_sec": 5,
             "hazard": {"file": "/tmp/hazard.json"},
             "liveness": {"file": "/tmp/control.txt"},
@@ -332,7 +318,20 @@ class TestControlConfig:
         config = dacite.from_dict(ControlConfig, data, DACITE_CONFIG)
         assert config.valve.pin_no == 17
         assert config.interval_sec == 5
-        assert config.hazard.file == "/tmp/hazard.json"
+        assert config.hazard.file == pathlib.Path("/tmp/hazard.json")
+        assert config.max_open_sec == 1800
+
+    def test_max_open_sec_override(self):
+        """max_open_sec を指定した場合"""
+        data = {
+            "valve": {"pin_no": 17},
+            "interval_sec": 5,
+            "max_open_sec": 600,
+            "hazard": {"file": "/tmp/hazard.json"},
+            "liveness": {"file": "/tmp/control.txt"},
+        }
+        config = dacite.from_dict(ControlConfig, data, DACITE_CONFIG)
+        assert config.max_open_sec == 600
 
 
 class TestWebServerConfig:
@@ -342,7 +341,7 @@ class TestWebServerConfig:
         """dict から変換"""
         data = {"webapp": {"data": {"log_file_path": "/tmp/log.db"}}}
         config = dacite.from_dict(WebServerConfig, data, DACITE_CONFIG)
-        assert config.webapp.data.log_file_path == "/tmp/log.db"
+        assert config.webapp.data.log_file_path == pathlib.Path("/tmp/log.db")
 
 
 class TestMetricsConfig:

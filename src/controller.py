@@ -30,8 +30,6 @@ from unit_cooler.config import Config, RuntimeSettings
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_CONFIG = "schema/config.schema"
-
 
 # NOTE: Last Value Caching Proxy
 def cache_proxy_start(server_host, real_port, server_port, msg_count, idle_timeout_sec=0):
@@ -75,7 +73,7 @@ def control_server_start(
 def start(
     config: Config, settings: RuntimeSettings
 ) -> tuple[threading.Thread | None, threading.Thread | None]:
-    logger.info("Start controller (port: %d", settings.server_port)
+    logger.info("Start controller (port: %d)", settings.server_port)
 
     if settings.dummy_mode:
         logger.warning("DUMMY mode")

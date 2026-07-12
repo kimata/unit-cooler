@@ -118,6 +118,68 @@ class TestCheckMistConditionOpen:
         mock_add.assert_not_called()
 
 
+class TestCheckValveOpenDuration:
+    """check_valve_open_duration のテスト（最大連続開弁時間のフェイルセーフ）"""
+
+    def test_triggers_hazard_when_open_too_long(self, config, mocker):
+        """上限を超えて OPEN が続いたらハザード通知（強制閉弁）する"""
+        mock_hazard = mocker.patch("unit_cooler.actuator.control.hazard_notify")
+        max_open_sec = config.actuator.control.max_open_sec
+
+        result = unit_cooler.actuator.monitor.check_valve_open_duration(
+            config, _condition(VALVE_STATE.OPEN, max_open_sec + 1, 2.0)
+        )
+
+        assert result is True
+        mock_hazard.assert_called_once()
+
+    def test_does_not_trigger_at_boundary(self, config, mocker):
+        """上限ちょうどでは発動しない（境界）"""
+        mock_hazard = mocker.patch("unit_cooler.actuator.control.hazard_notify")
+        max_open_sec = config.actuator.control.max_open_sec
+
+        result = unit_cooler.actuator.monitor.check_valve_open_duration(
+            config, _condition(VALVE_STATE.OPEN, max_open_sec, 2.0)
+        )
+
+        assert result is False
+        mock_hazard.assert_not_called()
+
+    def test_does_not_trigger_when_closed(self, config, mocker):
+        """CLOSE 中は経過時間が長くても発動しない"""
+        mock_hazard = mocker.patch("unit_cooler.actuator.control.hazard_notify")
+        max_open_sec = config.actuator.control.max_open_sec
+
+        result = unit_cooler.actuator.monitor.check_valve_open_duration(
+            config, _condition(VALVE_STATE.CLOSE, max_open_sec + 100, 0.0)
+        )
+
+        assert result is False
+        mock_hazard.assert_not_called()
+
+    def test_checked_from_monitor_check_path(self, config, mocker):
+        """monitor の check() 経路で毎回確認される（control_worker 停止時にも効く）"""
+        mock_hazard = mocker.patch("unit_cooler.actuator.control.hazard_notify")
+        handle = _gen_handle(config)
+        max_open_sec = config.actuator.control.max_open_sec
+
+        unit_cooler.actuator.monitor.check(
+            handle, _condition(VALVE_STATE.OPEN, max_open_sec + 1, 2.0), need_logging=False
+        )
+
+        mock_hazard.assert_called_once()
+
+    def test_max_open_sec_exceeds_max_legitimate_duty(self, config):
+        """max_open_sec は正当な duty 運転の最大 ON 時間より十分大きい（誤発動しない根拠）"""
+        import unit_cooler.controller.message
+
+        max_duty_on_sec = max(
+            template.duty.on_sec for template in unit_cooler.controller.message.CONTROL_MESSAGE_LIST
+        )
+
+        assert max_duty_on_sec < config.actuator.control.max_open_sec
+
+
 class TestCheckMistConditionClose:
     """check_mist_condition のテスト（バルブ CLOSE 時）"""
 

@@ -11,6 +11,7 @@ Options:
 """
 
 import asyncio
+import dataclasses
 import logging
 import os
 from collections.abc import Callable
@@ -21,7 +22,7 @@ import my_lib.time
 
 import unit_cooler.const
 import unit_cooler.util
-from unit_cooler.config import Config, DecisionThresholdsConfig, SensorItemConfig
+from unit_cooler.config import Config, DecisionThresholdsConfig, SensorConfig, SensorItemConfig
 from unit_cooler.messages import SenseData, SensorReading, StatusInfo
 
 logger = logging.getLogger(__name__)
@@ -85,20 +86,17 @@ COOLER_ACTIVITY_LIST: list[CoolerActivityCondition] = [
 # (数字が大きいほど冷却を強める)
 def get_outdoor_status(
     sense_data: SenseData,
-    thresholds: DecisionThresholdsConfig | None = None,
+    thresholds: DecisionThresholdsConfig,
 ) -> StatusInfo:
     """外部環境の状況を評価する
 
     Args:
         sense_data: センサーデータ
-        thresholds: 閾値（指定しない場合はデフォルト値を使用）
+        thresholds: 判定閾値
 
     Returns:
         外部環境の状況（StatusInfo dataclass）
     """
-    # 閾値を取得（指定がない場合はデフォルト値）
-    th = thresholds if thresholds else DecisionThresholdsConfig.default()
-
     temp_val = sense_data.first_value("temp")
     humi_val = sense_data.first_value("humi")
     solar_rad_val = sense_data.first_value("solar_rad")
@@ -129,15 +127,15 @@ def get_outdoor_status(
     assert lux_val is not None  # noqa: S101
     assert rain_val is not None  # noqa: S101
 
-    rain_max = th.rain_max
-    humi_max = th.humi_max
-    temp_high_h = th.temp_high_h
-    temp_high_l = th.temp_high_l
-    temp_mid = th.temp_mid
-    solar_rad_daytime = th.solar_rad_daytime
-    solar_rad_high = th.solar_rad_high
-    solar_rad_low = th.solar_rad_low
-    lux = th.lux
+    rain_max = thresholds.rain_max
+    humi_max = thresholds.humi_max
+    temp_high_h = thresholds.temp_high_h
+    temp_high_l = thresholds.temp_high_l
+    temp_mid = thresholds.temp_mid
+    solar_rad_daytime = thresholds.solar_rad_daytime
+    solar_rad_high = thresholds.solar_rad_high
+    solar_rad_low = thresholds.solar_rad_low
+    lux = thresholds.lux
 
     if rain_val > rain_max:
         return StatusInfo(
@@ -218,13 +216,13 @@ def get_outdoor_status(
 # (数字が大きいほど稼働状況が活発)
 def get_cooler_activity(
     sense_data: SenseData,
-    thresholds: DecisionThresholdsConfig | None = None,
+    thresholds: DecisionThresholdsConfig,
 ) -> StatusInfo:
     """クーラーの稼働状況を評価する
 
     Args:
         sense_data: センサーデータ
-        thresholds: 閾値（指定しない場合はデフォルト値を使用）
+        thresholds: 判定閾値
 
     Returns:
         稼働状況（StatusInfo dataclass）
@@ -253,21 +251,18 @@ def get_cooler_activity(
 def get_cooler_state(
     aircon_power: SensorReading,
     temp: float | None,
-    thresholds: DecisionThresholdsConfig | None = None,
+    thresholds: DecisionThresholdsConfig,
 ) -> unit_cooler.const.AIRCON_MODE:
     """エアコンの動作モードを判定する
 
     Args:
         aircon_power: エアコンの消費電力データ
         temp: 外気温
-        thresholds: 閾値（指定しない場合はデフォルト値を使用）
+        thresholds: 判定閾値
 
     Returns:
         エアコンの動作モード
     """
-    # 閾値を取得（指定がない場合はデフォルト値）
-    th = thresholds if thresholds else DecisionThresholdsConfig.default()
-
     mode = unit_cooler.const.AIRCON_MODE.OFF
     if temp is None:
         # NOTE: 外気温がわからないと暖房と冷房の区別がつかないので、致命的エラー扱いにする
@@ -279,12 +274,12 @@ def get_cooler_state(
         )
         return unit_cooler.const.AIRCON_MODE.OFF
 
-    if temp >= th.temp_cooling:
-        if aircon_power.value > th.power_full:
+    if temp >= thresholds.temp_cooling:
+        if aircon_power.value > thresholds.power_full:
             mode = unit_cooler.const.AIRCON_MODE.FULL
-        elif aircon_power.value > th.power_normal:
+        elif aircon_power.value > thresholds.power_normal:
             mode = unit_cooler.const.AIRCON_MODE.NORMAL
-        elif aircon_power.value > th.power_work:
+        elif aircon_power.value > thresholds.power_work:
             mode = unit_cooler.const.AIRCON_MODE.IDLE
 
     logger.info(
@@ -298,7 +293,17 @@ def get_cooler_state(
     return mode
 
 
-def get_sense_data(config: Config) -> SenseData:
+def get_sense_data(config: Config, notify_failure: bool = True) -> SenseData:
+    """InfluxDB からセンサーデータを取得する
+
+    Args:
+        config: 設定
+        notify_failure: 取得失敗時に Slack 通知するか。
+            False の場合は logger.warning のみ（夜間停止時間帯の通知抑制用）。
+
+    Returns:
+        センサーデータ
+    """
     if os.environ.get("DUMMY_MODE", "false") == "true":
         start = "-169h"
         stop = "-168h"
@@ -310,13 +315,10 @@ def get_sense_data(config: Config) -> SenseData:
     influxdb_config = config.controller.influxdb
 
     # センサー種別とセンサーリストのマッピング
-    sensor_kinds = {
-        "temp": config.controller.sensor.temp,
-        "humi": config.controller.sensor.humi,
-        "lux": config.controller.sensor.lux,
-        "solar_rad": config.controller.sensor.solar_rad,
-        "rain": config.controller.sensor.rain,
-        "power": config.controller.sensor.power,
+    # NOTE: SensorConfig のフィールド定義から導出することで、センサー追加時の漏れを防ぐ
+    sensor_kinds: dict[str, list[SensorItemConfig]] = {
+        field.name: getattr(config.controller.sensor, field.name)
+        for field in dataclasses.fields(SensorConfig)
     }
 
     # 全センサーの DataRequest を作成
@@ -368,9 +370,10 @@ def get_sense_data(config: Config) -> SenseData:
     # まとめてエラー通知
     if failed_sensors:
         sensor_names = "、".join(failed_sensors)
-        unit_cooler.util.notify_error(
-            config,
-            f"次のセンサーのデータを取得できませんでした: {sensor_names}",
-        )
+        message = f"次のセンサーのデータを取得できませんでした: {sensor_names}"
+        if notify_failure:
+            unit_cooler.util.notify_error(config, message)
+        else:
+            logger.warning(message)
 
     return SenseData(**readings)

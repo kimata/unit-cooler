@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 
 import my_lib.time
 import zmq
@@ -17,21 +18,29 @@ from unit_cooler.messages import ActuatorStatus, ControlMessage
 logger = logging.getLogger(__name__)
 
 
-def create_publisher(host: str, port: int) -> zmq.Socket:
-    """ZeroMQ Publisher ソケットを作成する
+@dataclass
+class StatusPublisherHandle:
+    """ActuatorStatus 配信用の ZeroMQ ハンドル"""
+
+    context: zmq.Context
+    socket: zmq.Socket
+
+
+def create_publisher(host: str, port: int) -> StatusPublisherHandle:
+    """ZeroMQ Publisher を作成する
 
     Args:
         host: バインドするホスト
         port: バインドするポート
 
     Returns:
-        ZeroMQ Socket
+        StatusPublisherHandle
     """
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
     socket.bind(f"tcp://{host}:{port}")
     logger.info("ActuatorStatus publisher bound to %s:%d", host, port)
-    return socket
+    return StatusPublisherHandle(context=context, socket=socket)
 
 
 def create_status(
@@ -58,11 +67,11 @@ def create_status(
     )
 
 
-def publish_status(socket: zmq.Socket, status: ActuatorStatus) -> bool:
+def publish_status(handle: StatusPublisherHandle, status: ActuatorStatus) -> bool:
     """ActuatorStatus を配信する
 
     Args:
-        socket: ZeroMQ Socket
+        handle: StatusPublisherHandle
         status: ActuatorStatus
 
     Returns:
@@ -72,7 +81,7 @@ def publish_status(socket: zmq.Socket, status: ActuatorStatus) -> bool:
         # トピック付きでメッセージを送信
         topic = "actuator_status"
         message = json.dumps(status.to_dict())
-        socket.send_string(f"{topic} {message}")
+        handle.socket.send_string(f"{topic} {message}")
         logger.debug("Published ActuatorStatus: %s", message)
         return True
     except Exception:
@@ -80,14 +89,15 @@ def publish_status(socket: zmq.Socket, status: ActuatorStatus) -> bool:
         return False
 
 
-def close_publisher(socket: zmq.Socket) -> None:
-    """Publisher ソケットを閉じる
+def close_publisher(handle: StatusPublisherHandle) -> None:
+    """Publisher を閉じる（ソケットとコンテキストの両方を解放する）
 
     Args:
-        socket: ZeroMQ Socket
+        handle: StatusPublisherHandle
     """
     try:
-        socket.close()
+        handle.socket.close()
+        handle.context.term()
         logger.info("ActuatorStatus publisher closed")
     except Exception:
         logger.exception("Failed to close publisher")

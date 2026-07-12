@@ -12,7 +12,9 @@ Options:
 
 from __future__ import annotations
 
+import collections
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import my_lib.webapp.event
@@ -28,10 +30,16 @@ if TYPE_CHECKING:
 
     from unit_cooler.config import Config
 
+# NOTE: テスト用の履歴。本番でも add される度に伸び続けないよう上限を設ける。
+LOG_HIST_MAX = 1000
+
 config: Config | None = None
 event_queue: Queue[Any] | None = None
 
-log_hist: list[str] = []
+log_hist: collections.deque[str] = collections.deque(maxlen=LOG_HIST_MAX)
+
+# 同一メッセージの抑制管理（抑制キー → 最終記録時刻 [time.monotonic() ベース]）
+_last_add_time: dict[str, float] = {}
 
 
 def init(config_: Config, event_queue_: Queue[Any]) -> None:
@@ -43,22 +51,18 @@ def init(config_: Config, event_queue_: Queue[Any]) -> None:
 
 
 def term() -> None:
-    global event_queue
     my_lib.webapp.log.term()
 
 
 # NOTE: テスト用
 def hist_clear() -> None:
-    global log_hist
-
-    log_hist = []
+    log_hist.clear()
+    _last_add_time.clear()
 
 
 # NOTE: テスト用
 def hist_get() -> list[str]:
-    global log_hist
-
-    return log_hist
+    return list(log_hist)
 
 
 def _record_error_metrics(message: str) -> None:
@@ -73,10 +77,39 @@ def _record_error_metrics(message: str) -> None:
         logger.debug("Failed to record error metrics")
 
 
-def add(message: str, level: unit_cooler.const.LOG_LEVEL = unit_cooler.const.LOG_LEVEL.INFO) -> None:
-    global log_hist
-    global config
-    global event_queue
+def _should_suppress(key: str, suppress_interval_min: int) -> bool:
+    """同一メッセージの抑制間隔内かどうかを判定し、最終記録時刻を更新する"""
+    now_monotonic = time.monotonic()
+    last_add = _last_add_time.get(key)
+
+    if last_add is not None and (now_monotonic - last_add) <= suppress_interval_min * 60:
+        return True
+
+    _last_add_time[key] = now_monotonic
+    return False
+
+
+def add(
+    message: str,
+    level: unit_cooler.const.LOG_LEVEL = unit_cooler.const.LOG_LEVEL.INFO,
+    suppress_interval_min: int | None = None,
+    suppress_key: str | None = None,
+) -> None:
+    """作動ログを記録する
+
+    Args:
+        message: 記録するメッセージ
+        level: ログレベル（ERROR の場合は Slack 通知とメトリクス記録も行う）
+        suppress_interval_min: 指定した場合、同一メッセージ（suppress_key 単位）の記録を
+            この間隔〔分〕に 1 回に抑制する
+        suppress_key: 抑制の判定キー。メッセージに可変値（流量等）が含まれる場合に指定する。
+            省略時は message 全体をキーとする。
+    """
+    if suppress_interval_min is not None and _should_suppress(
+        suppress_key if suppress_key is not None else message, suppress_interval_min
+    ):
+        logger.debug("Suppress work log (interval=%d min): %s", suppress_interval_min, message)
+        return
 
     if event_queue is not None:
         event_queue.put(my_lib.webapp.event.EVENT_TYPE.LOG)

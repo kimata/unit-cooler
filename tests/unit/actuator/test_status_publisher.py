@@ -57,19 +57,25 @@ class TestCreateStatus:
         assert status.flow_lpm is None
 
 
+def _handle() -> unit_cooler.actuator.status_publisher.StatusPublisherHandle:
+    return unit_cooler.actuator.status_publisher.StatusPublisherHandle(
+        context=MagicMock(), socket=MagicMock()
+    )
+
+
 class TestPublishStatus:
     """publish_status のテスト"""
 
     def test_sends_topic_and_json(self):
         """トピック付きで JSON を送信し True を返す"""
-        socket = MagicMock()
+        handle = _handle()
         status = unit_cooler.actuator.status_publisher.create_status(_mist_condition(), _control_message())
 
-        result = unit_cooler.actuator.status_publisher.publish_status(socket, status)
+        result = unit_cooler.actuator.status_publisher.publish_status(handle, status)
 
         assert result is True
-        socket.send_string.assert_called_once()
-        sent = socket.send_string.call_args[0][0]
+        handle.socket.send_string.assert_called_once()
+        sent = handle.socket.send_string.call_args[0][0]
         topic, payload = sent.split(" ", 1)
         assert topic == "actuator_status"
         # ペイロードが ActuatorStatus.to_dict() の JSON であること
@@ -77,11 +83,11 @@ class TestPublishStatus:
 
     def test_returns_false_on_error(self):
         """送信失敗時は False を返す"""
-        socket = MagicMock()
-        socket.send_string.side_effect = RuntimeError("boom")
+        handle = _handle()
+        handle.socket.send_string.side_effect = RuntimeError("boom")
         status = unit_cooler.actuator.status_publisher.create_status(_mist_condition(), _control_message())
 
-        result = unit_cooler.actuator.status_publisher.publish_status(socket, status)
+        result = unit_cooler.actuator.status_publisher.publish_status(handle, status)
 
         assert result is False
 
@@ -89,27 +95,37 @@ class TestPublishStatus:
 class TestPublisherLifecycle:
     """create_publisher / close_publisher のテスト"""
 
-    def test_create_publisher_binds(self, mocker):
-        """PUB ソケットを生成して指定ポートにバインドする"""
+    def test_create_publisher_binds_and_keeps_context(self, mocker):
+        """PUB ソケットを生成して指定ポートにバインドし、コンテキストも保持する"""
         mock_socket = MagicMock()
         mock_context = MagicMock()
         mock_context.socket.return_value = mock_socket
         mocker.patch("zmq.Context", return_value=mock_context)
 
-        socket = unit_cooler.actuator.status_publisher.create_publisher("127.0.0.1", 5800)
+        handle = unit_cooler.actuator.status_publisher.create_publisher("127.0.0.1", 5800)
 
-        assert socket is mock_socket
+        assert handle.socket is mock_socket
+        assert handle.context is mock_context
         mock_socket.bind.assert_called_once_with("tcp://127.0.0.1:5800")
+
+    def test_close_publisher_terminates_context(self):
+        """close でソケットとコンテキストの両方を解放する"""
+        handle = _handle()
+
+        unit_cooler.actuator.status_publisher.close_publisher(handle)
+
+        handle.socket.close.assert_called_once()
+        handle.context.term.assert_called_once()
 
     def test_close_publisher_swallows_errors(self):
         """close 時の例外は送出しない"""
-        socket = MagicMock()
-        socket.close.side_effect = RuntimeError("boom")
+        handle = _handle()
+        handle.socket.close.side_effect = RuntimeError("boom")
 
         # 例外を送出しないこと
-        unit_cooler.actuator.status_publisher.close_publisher(socket)
+        unit_cooler.actuator.status_publisher.close_publisher(handle)
 
-        socket.close.assert_called_once()
+        handle.socket.close.assert_called_once()
 
 
 if __name__ == "__main__":

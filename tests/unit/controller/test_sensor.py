@@ -316,6 +316,28 @@ class TestGetSenseData:
         assert "センサー" in call_args[1]
         assert "取得できませんでした" in call_args[1]
 
+    def test_notify_failure_false_suppresses_notification(self, config, mocker, caplog):
+        """notify_failure=False では通知せず logger.warning のみ"""
+        import logging
+
+        from unit_cooler.controller.sensor import get_sense_data
+
+        # 無効なデータを返す
+        mock_data = mocker.MagicMock()
+        mock_data.valid = False
+
+        async def mock_fetch_parallel(db_config, requests):
+            return [mock_data] * len(requests)
+
+        mocker.patch("my_lib.sensor_data.fetch_data_parallel", side_effect=mock_fetch_parallel)
+        mock_notify = mocker.patch("unit_cooler.util.notify_error")
+
+        with caplog.at_level(logging.WARNING, logger="unit_cooler.controller.sensor"):
+            get_sense_data(config, notify_failure=False)
+
+        mock_notify.assert_not_called()
+        assert any("取得できませんでした" in record.message for record in caplog.records)
+
     def test_dummy_mode_uses_old_data_range(self, config, mocker):
         """DUMMY_MODEでは古いデータ範囲を使用"""
         import datetime

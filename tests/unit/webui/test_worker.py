@@ -17,10 +17,12 @@ class TestGetLastActuatorStatus:
 
         # リセット
         unit_cooler.webui.worker._last_actuator_status = None
+        unit_cooler.webui.worker._last_actuator_status_time = None
 
         result = unit_cooler.webui.worker.get_last_actuator_status()
 
         assert result is None
+        assert unit_cooler.webui.worker.get_last_actuator_status_time() is None
 
 
 class TestSetLastActuatorStatus:
@@ -28,6 +30,8 @@ class TestSetLastActuatorStatus:
 
     def test_sets_status(self):
         """ステータスを設定"""
+        import my_lib.time
+
         import unit_cooler.webui.worker
         from unit_cooler.const import VALVE_STATE
         from unit_cooler.messages import ActuatorStatus, ValveStatus
@@ -44,10 +48,17 @@ class TestSetLastActuatorStatus:
             hazard_detected=False,
         )
 
+        before = my_lib.time.now()
         unit_cooler.webui.worker.set_last_actuator_status(status)
+        after = my_lib.time.now()
+
         result = unit_cooler.webui.worker.get_last_actuator_status()
+        received_time = unit_cooler.webui.worker.get_last_actuator_status_time()
 
         assert result == status
+        # 受信時刻も一緒に記録される（鮮度判定用）
+        assert received_time is not None
+        assert before <= received_time <= after
 
 
 class TestTerm:

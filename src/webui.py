@@ -21,8 +21,8 @@ Options:
 from __future__ import annotations
 
 import logging
-import multiprocessing
 import os
+import queue
 import signal
 import sys
 import threading
@@ -30,14 +30,12 @@ from typing import TYPE_CHECKING
 
 import flask
 import flask_cors
-import my_lib.proc_util
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from unit_cooler.config import Config, RuntimeSettings
-
-SCHEMA_CONFIG = "schema/config.schema"
+    from unit_cooler.messages import ControlMessage
 
 # グローバル変数でワーカースレッドを管理
 worker_threads: list[threading.Thread] = []
@@ -56,9 +54,7 @@ def term():
             thread.join(timeout=5)
             if thread.is_alive():
                 logger.warning("Worker thread did not finish in time")
-
-    # 子プロセスを終了
-    my_lib.proc_util.kill_child()
+    worker_threads.clear()
 
     # プロセス終了
     logger.info("Graceful shutdown completed")
@@ -89,8 +85,13 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
         url_prefix=unit_cooler.const.URL_PREFIX,
     )
 
-    message_queue = multiprocessing.Manager().Queue(10)
-    global worker_threads
+    # NOTE: 生産者（購読ワーカスレッド）も消費者（Flask スレッド）も同一プロセス内のため、
+    # multiprocessing.Manager().Queue ではなく queue.Queue で十分
+    message_queue: queue.Queue[ControlMessage] = queue.Queue(10)
+
+    # NOTE: 再呼び出し（テスト等）に備えて、前回のワーカ状態をリセットする
+    unit_cooler.webui.worker.should_terminate.clear()
+    worker_threads.clear()
 
     # 制御メッセージ購読ワーカ
     subscribe_thread = threading.Thread(

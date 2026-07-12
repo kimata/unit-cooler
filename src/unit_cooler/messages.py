@@ -134,6 +134,8 @@ class CoolingModeResult:
     cooler_status: StatusInfo
     outdoor_status: StatusInfo
     sense_data: SenseData | None = None
+    # 夜間停止によってモード 0 に固定されているか
+    night_stop: bool = False
 
 
 @dataclass(frozen=True)
@@ -146,6 +148,8 @@ class ControlMessage:
     sense_data: SenseData | None = None
     cooler_status: StatusInfo | None = None
     outdoor_status: StatusInfo | None = None
+    # 夜間停止によってモード 0 に固定されているか（フロントエンドの表示用）
+    night_stop: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -155,6 +159,7 @@ class ControlMessage:
             "sense_data": self.sense_data.to_dict() if self.sense_data else None,
             "cooler_status": self.cooler_status.to_dict() if self.cooler_status else None,
             "outdoor_status": self.outdoor_status.to_dict() if self.outdoor_status else None,
+            "night_stop": self.night_stop,
         }
 
     def to_json(self) -> str:
@@ -172,6 +177,7 @@ class ControlMessage:
             sense_data=SenseData.from_dict(sense_data) if sense_data else None,
             cooler_status=StatusInfo.from_dict(cooler_status_data) if cooler_status_data else None,
             outdoor_status=StatusInfo.from_dict(outdoor_status_data) if outdoor_status_data else None,
+            night_stop=data.get("night_stop", False),
         )
 
     @classmethod

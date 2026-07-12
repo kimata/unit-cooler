@@ -79,16 +79,29 @@ def get_dummy_prev_mode() -> int:
 
 
 def is_night_stop(night_stop: NightStopConfig, now: datetime.datetime) -> bool:
-    """現在時刻が夜間停止時間帯かどうかを判定する。"""
+    """現在時刻が夜間停止時間帯かどうかを判定する。
+
+    開始・終了時刻は分単位（時×60＋分）で比較する。
+
+    - start < end の場合: start <= now < end で停止
+    - start > end の場合（日またぎ、例: 21:00〜6:00）: now >= start または now < end で停止
+    - start == end の場合: 一度も停止しない（常に False）
+    """
     if not night_stop.enable:
         return False
 
-    hour = now.hour
-    if night_stop.start_hour <= night_stop.end_hour:
-        return night_stop.start_hour <= hour < night_stop.end_hour
+    now_minutes = now.hour * 60 + now.minute
+    start_minutes = night_stop.start_hour * 60 + night_stop.start_minute
+    end_minutes = night_stop.end_hour * 60 + night_stop.end_minute
+
+    if start_minutes == end_minutes:
+        return False
+
+    if start_minutes < end_minutes:
+        return start_minutes <= now_minutes < end_minutes
 
     # 日をまたぐ場合（例: 21時〜6時）
-    return hour >= night_stop.start_hour or hour < night_stop.end_hour
+    return now_minutes >= start_minutes or now_minutes < end_minutes
 
 
 def judge_cooling_mode(config: Config, sense_data: SenseData) -> CoolingModeResult:
@@ -102,6 +115,7 @@ def judge_cooling_mode(config: Config, sense_data: SenseData) -> CoolingModeResu
             cooler_status=StatusInfo(status=0, message="夜間停止時間帯"),
             outdoor_status=StatusInfo(status=0, message=None),
             sense_data=sense_data,
+            night_stop=True,
         )
 
     # 閾値を config から取得
@@ -149,7 +163,12 @@ def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) 
             sense_data=None,
         )
     else:
-        sense_data = unit_cooler.controller.sensor.get_sense_data(config)
+        # NOTE: 夜間停止時間帯はどうせモード 0 になるので、
+        # センサーデータ欠損による Slack 通知を抑制する（logger.warning のみ）
+        night_stop_active = is_night_stop(config.controller.decision.night_stop, my_lib.time.now())
+        sense_data = unit_cooler.controller.sensor.get_sense_data(
+            config, notify_failure=not night_stop_active
+        )
         mode_result = judge_cooling_mode(config, sense_data)
 
     mode_index = min(mode_result.cooling_mode, len(unit_cooler.controller.message.CONTROL_MESSAGE_LIST) - 1)
@@ -179,6 +198,7 @@ def gen_control_msg(config: Config, dummy_mode: bool = False, speedup: int = 1) 
         sense_data=mode_result.sense_data,
         cooler_status=mode_result.cooler_status,
         outdoor_status=mode_result.outdoor_status,
+        night_stop=mode_result.night_stop,
     )
 
     logger.info(control_msg.to_dict())

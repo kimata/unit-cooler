@@ -45,8 +45,6 @@ def wait_first_client(socket: zmq.Socket[bytes], timeout: float = 1.0) -> None:
             event = socket.recv()
             if event[0] == 1:  # 購読開始
                 logger.info("First client connected.")
-                # 購読イベントを処理
-                socket.send(event)
                 # NOTE: 接続済みなのにループを継続すると、タイムアウト経過後に
                 # 「Timeout」の誤警告を出してしまうため、ここで抜ける。
                 return
@@ -83,8 +81,6 @@ def start_server(
                 logger.debug("Client unsubscribed.")
             elif event[0] == 1:  # 購読開始
                 logger.debug("New client subscribed.")
-            # イベントを転送
-            socket.send(event)
         except zmq.Again:
             pass  # イベントなし
 
@@ -166,36 +162,43 @@ def start_proxy(
             break
 
         frontend_message_received = False
-        if frontend in events:
-            recv_data = frontend.recv_string()
-            ch, json_str = recv_data.split(" ", 1)
-            logger.debug("Store cache")
-            cache[ch] = json_str
+        # NOTE: 不正なメッセージ 1 通や一過性のエラーで Proxy が止まらないよう、
+        # イベント処理単位で例外を処理して継続する
+        try:
+            if frontend in events:
+                recv_data = frontend.recv_string()
+                ch, json_str = recv_data.split(" ", 1)
+                logger.debug("Store cache")
+                cache[ch] = json_str
 
-            logger.info("Proxy message")
-            backend.send_string(recv_data)
+                logger.info("Proxy message")
+                backend.send_string(recv_data)
 
-            if subscribed:
-                proxy_count += 1
-            frontend_message_received = True
-
-        if backend in events:
-            logger.debug("Backend event")
-            event = backend.recv()
-            if event[0] == 0:
-                logger.info("Client unsubscribed.")
-            elif event[0] == 1:
-                logger.info("New client subscribed.")
-                subscribed = True
-                ch = event[1:].decode("utf-8")
-                if ch in cache:
-                    logger.info("Send cache")
-                    backend.send_string(f"{unit_cooler.const.PUBSUB_CH} {cache[unit_cooler.const.PUBSUB_CH]}")
+                if subscribed:
                     proxy_count += 1
-                else:
-                    logger.warning("Cache is empty")
-            else:  # pragma: no cover
-                pass
+                frontend_message_received = True
+
+            if backend in events:
+                logger.debug("Backend event")
+                event = backend.recv()
+                if event[0] == 0:
+                    logger.info("Client unsubscribed.")
+                elif event[0] == 1:
+                    logger.info("New client subscribed.")
+                    subscribed = True
+                    ch = event[1:].decode("utf-8")
+                    if ch in cache:
+                        logger.info("Send cache")
+                        backend.send_string(
+                            f"{unit_cooler.const.PUBSUB_CH} {cache[unit_cooler.const.PUBSUB_CH]}"
+                        )
+                        proxy_count += 1
+                    else:
+                        logger.warning("Cache is empty")
+                else:  # pragma: no cover
+                    pass
+        except Exception:
+            logger.exception("Failed to process proxy event, continuing")
 
         # アイドルタイムアウト処理（frontend からメッセージがない場合）
         # NOTE: subscribed がなくても、キャッシュがあれば（メッセージを受信済み）タイムアウトを有効にする

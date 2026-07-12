@@ -9,13 +9,17 @@ HTML/CSS/JS は templates/ と static/ 配下の静的ファイルで管理し�
 import datetime
 import logging
 import pathlib
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import flask
 
+import unit_cooler.config
 import unit_cooler.const
 import unit_cooler.metrics.collector
+import unit_cooler.metrics.energy
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +40,6 @@ TIMESERIES_COLUMNS = [
     "humidity",
     "lux",
     "solar_radiation",
-    "rain_amount",
 ]
 
 # 散布図のペア定義 (JSON キー, X カラム, Y カラム)
@@ -56,6 +59,11 @@ BOXPLOT_COLUMNS = [
 
 TIMESERIES_MAX_POINTS = 144000  # 直近 100 日分（分単位）
 TIMESERIES_TARGET_POINTS = 1000  # 平均化後の目標ポイント数
+
+# 省エネ効果分析のキャッシュ TTL〔秒〕（InfluxDB からの取得と集計が重いため）
+_ENERGY_CACHE_TTL_SEC = 3600.0
+_energy_cache: tuple[float, unit_cooler.metrics.energy.EnergyAnalysis] | None = None
+_energy_cache_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -110,15 +118,17 @@ def metrics_view():
                 f"<html><body><h1>{error}</h1></body></html>", mimetype="text/html", status=503
             )
 
-        minute_data = collector.get_minute_data()
-        hourly_data = collector.get_hourly_data()
+        config = flask.current_app.config["CONFIG"]
         period = collector.get_period_summary()
-        stats = generate_statistics(minute_data, hourly_data, collector.count_errors(), period.total_days)
+        stats = generate_statistics(
+            collector.get_statistics_summary(), collector.count_errors(), period.total_days
+        )
 
         return flask.render_template(
             "metrics.html",
             period_text=format_period_text(period),
             stats=format_statistics(stats),
+            energy=format_energy(get_energy_analysis(config, collector)),
             data_url=flask.url_for("metrics.metrics_data"),
         )
     except Exception as e:
@@ -134,13 +144,15 @@ def metrics_data():
         if collector is None:
             return flask.jsonify({"error": error}), 503
 
-        minute_data = collector.get_minute_data()
+        config = flask.current_app.config["CONFIG"]
+        timeseries_rows = collector.get_timeseries_data(TIMESERIES_MAX_POINTS, TIMESERIES_TARGET_POINTS)
 
         return flask.jsonify(
             {
                 **prepare_boxplot_data(collector),
-                "timeseries": prepare_timeseries_data(minute_data),
-                "correlation": prepare_correlation_data(minute_data),
+                "timeseries": prepare_timeseries_data(timeseries_rows),
+                "correlation": prepare_correlation_data(collector),
+                "energy_savings": get_energy_analysis(config, collector).to_chart_dict(),
             }
         )
     except Exception as e:
@@ -167,19 +179,16 @@ def format_period_text(period: unit_cooler.metrics.collector.PeriodSummary) -> s
 
 
 def generate_statistics(
-    minute_data: list[dict], hourly_data: list[dict], error_count: int, total_days: int
+    summary: unit_cooler.metrics.collector.StatisticsSummary, error_count: int, total_days: int
 ) -> dict:
-    """メトリクスデータから統計情報を生成"""
-    cooling_modes = [d["cooling_mode"] for d in minute_data if d.get("cooling_mode") is not None]
-    duty_ratios = [d["duty_ratio"] for d in minute_data if d.get("duty_ratio") is not None]
-
+    """SQL 側で集計したサマリーから統計情報を生成"""
     return {
         "total_days": total_days,
-        "cooling_mode_avg": sum(cooling_modes) / len(cooling_modes) if cooling_modes else None,
-        "duty_ratio_avg": sum(duty_ratios) / len(duty_ratios) if duty_ratios else None,
-        "valve_operations_total": sum(d.get("valve_operations") or 0 for d in hourly_data),
+        "cooling_mode_avg": summary.cooling_mode_avg,
+        "duty_ratio_avg": summary.duty_ratio_avg,
+        "valve_operations_total": summary.valve_operations_total,
         "error_total": error_count,
-        "data_points": len(minute_data),
+        "data_points": summary.data_points,
     }
 
 
@@ -241,31 +250,15 @@ def prepare_boxplot_data(collector: unit_cooler.metrics.collector.MetricsCollect
     return result
 
 
-def _average_chunk(chunk: list[dict]) -> dict:
-    """チャンク内の数値カラムを平均化する"""
-    averaged: dict[str, Any] = {"timestamp": chunk[0].get("timestamp")}
-    for column in TIMESERIES_COLUMNS:
-        values = [d[column] for d in chunk if d.get(column) is not None]
-        averaged[column] = sum(values) / len(values) if values else None
-    return averaged
+def prepare_timeseries_data(aggregated_rows: list[dict]) -> list[dict]:
+    """時系列チャート用データを準備
 
-
-def prepare_timeseries_data(minute_data: list[dict]) -> list[dict]:
-    """時系列チャート用データを準備（直近 100 日分）
-
-    minute_data は新しい順（DESC）で渡される前提。
+    aggregated_rows は MetricsCollector.get_timeseries_data() で
+    SQL 側で平均化済みのデータ（古い順）を渡す前提。
+    ここではタイムスタンプの表示用フォーマットのみを行う。
     """
-    recent_data = list(reversed(minute_data[:TIMESERIES_MAX_POINTS]))
-
-    # データポイント数が多い場合は平均化して間引く
-    if len(recent_data) > TIMESERIES_TARGET_POINTS:
-        chunk_size = len(recent_data) // TIMESERIES_TARGET_POINTS
-        recent_data = [
-            _average_chunk(recent_data[i : i + chunk_size]) for i in range(0, len(recent_data), chunk_size)
-        ]
-
     timeseries_data = []
-    for data in recent_data:
+    for data in aggregated_rows:
         if not data.get("timestamp"):
             continue
 
@@ -283,19 +276,73 @@ def prepare_timeseries_data(minute_data: list[dict]) -> list[dict]:
     return timeseries_data
 
 
-def prepare_correlation_data(minute_data: list[dict]) -> dict[str, dict[str, list]]:
+def prepare_correlation_data(
+    collector: unit_cooler.metrics.collector.MetricsCollector,
+) -> dict[str, dict[str, list]]:
     """散布図用データを準備
 
-    ペアの両カラムが non-None の行だけを {x: [], y: []} 形式で返す。
+    ペアの両カラムが non-NULL の行だけを SQL 側で抽出し {x: [], y: []} 形式で返す。
     """
     result = {}
     for key, x_column, y_column in CORRELATION_PAIRS:
-        x_values: list[float] = []
-        y_values: list[float] = []
-        for data in minute_data:
-            x, y = data.get(x_column), data.get(y_column)
-            if x is not None and y is not None:
-                x_values.append(x)
-                y_values.append(y)
+        x_values, y_values = collector.get_correlation_pairs(x_column, y_column)
         result[key] = {"x": x_values, "y": y_values}
     return result
+
+
+@dataclass(frozen=True)
+class EnergyView:
+    """省エネ効果セクションのテンプレート表示用データ"""
+
+    valid: bool
+    note: str
+    saved_energy: str = ""
+    saved_cost: str = ""
+    water_cost: str = ""
+    net_benefit: str = ""
+
+
+def format_energy(analysis: unit_cooler.metrics.energy.EnergyAnalysis) -> EnergyView:
+    """省エネ効果の推定結果をテンプレート表示用に変換"""
+    if not analysis.valid:
+        return EnergyView(valid=False, note=analysis.message)
+
+    unit_price = unit_cooler.metrics.energy.ELECTRICITY_UNIT_PRICE
+    return EnergyView(
+        valid=True,
+        note=(
+            f"{analysis.message}。"
+            f"散水あり {analysis.watering_hours:,.0f} 時間 / 散水量 {analysis.water_amount:,.0f} L、"
+            f"電気単価 {unit_price:.0f} 円/kWh で換算。"
+        ),
+        saved_energy=f"{analysis.saved_energy_kwh:,.1f} kWh",
+        saved_cost=f"{analysis.saved_cost:,.0f} 円",
+        water_cost=f"{analysis.water_cost:,.0f} 円",
+        net_benefit=f"{analysis.net_benefit:+,.0f} 円",
+    )
+
+
+def get_energy_analysis(
+    config: unit_cooler.config.Config, collector: unit_cooler.metrics.collector.MetricsCollector
+) -> unit_cooler.metrics.energy.EnergyAnalysis:
+    """省エネ効果分析を TTL キャッシュ付きで取得する
+
+    InfluxDB からの取得と集計が重いため、結果を _ENERGY_CACHE_TTL_SEC の間
+    キャッシュする（失敗結果もキャッシュして外部サービスへの連続アクセスを避ける）。
+    """
+    global _energy_cache
+
+    with _energy_cache_lock:
+        if _energy_cache is not None and time.monotonic() - _energy_cache[0] < _ENERGY_CACHE_TTL_SEC:
+            return _energy_cache[1]
+
+        try:
+            analysis = unit_cooler.metrics.energy.collect_energy_analysis(config, collector)
+        except Exception:
+            # NOTE: InfluxDB クライアントは接続・認証・パース等の多様な例外を送出し得るため、
+            # I/O 境界としてここで包括的に受けてダッシュボード全体が落ちるのを防ぐ
+            logger.exception("省エネ効果の分析に失敗しました")
+            analysis = unit_cooler.metrics.energy.insufficient_analysis("分析処理でエラーが発生しました")
+
+        _energy_cache = (time.monotonic(), analysis)
+        return analysis

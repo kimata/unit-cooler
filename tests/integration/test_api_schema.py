@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import flask
+import my_lib.time
 
 import unit_cooler.const
 from unit_cooler.messages import (
@@ -141,6 +142,7 @@ def validate_mode(data: dict[str, Any], path: str = "") -> list[str]:
         duty: { enable: boolean; off_sec: number; on_sec: number; };
         mode_index: number;
         state: number;
+        night_stop: boolean;
     }
     """
     errors: list[str] = []
@@ -148,9 +150,25 @@ def validate_mode(data: dict[str, Any], path: str = "") -> list[str]:
         SchemaField("duty", dict, nested_validator=validate_duty),
         SchemaField("mode_index", int),
         SchemaField("state", int),
+        SchemaField("night_stop", bool),
     ]
     errors.extend(validate_schema(data, fields, path))
     return errors
+
+
+def validate_freshness(data: dict[str, Any], path: str = "") -> list[str]:
+    """Stat.freshness インターフェースの検証
+
+    freshness: {
+        controller_sec: number | null;
+        actuator_sec: number | null;
+    }
+    """
+    fields = [
+        SchemaField("controller_sec", (int, float), nullable=True),
+        SchemaField("actuator_sec", (int, float), nullable=True),
+    ]
+    return validate_schema(data, fields, path)
 
 
 def validate_cooler_status(data: dict[str, Any], path: str = "") -> list[str]:
@@ -239,6 +257,7 @@ def validate_stat_response(data: dict[str, Any]) -> list[str]:
         ("outdoor_status", validate_cooler_status),
         ("mode", validate_mode),
         ("sensor", validate_sensor_object),
+        ("freshness", validate_freshness),
     ):
         if key not in data or data[key] is None:
             errors.append(f"Expected non-null {key}")
@@ -435,6 +454,7 @@ class TestApiStatSchema:
                 "state": 0,
                 "mode_index": 0,
                 "duty": {"enable": False, "on_sec": 0, "off_sec": 0},
+                "night_stop": False,
             }
             assert data["cooler_status"] == {"status": 0, "message": ""}
             assert data["outdoor_status"] == {"status": 0, "message": ""}
@@ -463,6 +483,11 @@ class TestApiStatSchema:
         )
 
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=actuator_status)
+        # NOTE: 鮮度チェック（P2-2）で actuator_status が None にならないよう、受信時刻も現在にする
+        mocker.patch(
+            "unit_cooler.webui.worker.get_last_actuator_status_time",
+            return_value=my_lib.time.now(),
+        )
 
         app = flask.Flask(__name__)
         app.register_blueprint(cooler_stat.blueprint)

@@ -237,6 +237,10 @@ class NightStopConfig:
     start_hour: int
     # 停止を終了する時刻（時, 0-23）。この時刻になると冷却を再開する。
     end_hour: int
+    # 停止を開始する時刻（分, 0-59）
+    start_minute: int = 0
+    # 停止を終了する時刻（分, 0-59）
+    end_minute: int = 0
 
     @classmethod
     def default(cls) -> Self:
@@ -283,35 +287,17 @@ class SubscribeConfig:
 
 
 @dataclass(frozen=True)
-class ValveOnConfig:
-    """バルブ ON 時設定"""
-
-    min: float
-    max: float
-
-
-@dataclass(frozen=True)
-class ValveOffConfig:
-    """バルブ OFF 時設定"""
-
-    max: float
-
-
-@dataclass(frozen=True)
 class ValveConfig:
     """バルブ設定"""
 
     pin_no: int
-    on: ValveOnConfig
-    off: ValveOffConfig
-    power_off_sec: int
 
 
 @dataclass(frozen=True)
 class HazardConfig:
     """ハザード設定"""
 
-    file: str
+    file: pathlib.Path
 
 
 @dataclass(frozen=True)
@@ -322,6 +308,9 @@ class ControlConfig:
     interval_sec: int
     hazard: HazardConfig
     liveness: LivenessConfig
+    # バルブが連続して開いたままでいられる時間の上限〔秒〕。
+    # 超えた場合は上流の状態によらず強制的に閉弁し、ハザードとして記録する（フェイルセーフ）。
+    max_open_sec: int = 1800
 
 
 @dataclass(frozen=True)
@@ -377,7 +366,7 @@ class MonitorConfig:
 class WebServerDataConfig:
     """Web サーバーデータ設定"""
 
-    log_file_path: str
+    log_file_path: pathlib.Path
 
 
 @dataclass(frozen=True)
@@ -392,7 +381,7 @@ class WebServerWebappConfig:
         Args:
             base_dir: 設定ファイルの基準ディレクトリ。相対パスを解決するために使用。
         """
-        log_path = pathlib.Path(self.data.log_file_path)
+        log_path = self.data.log_file_path
         if base_dir and not log_path.is_absolute():
             log_path = base_dir / log_path
         static_path = pathlib.Path()
@@ -547,5 +536,16 @@ def _resolve_relative_paths(actuator_data: dict[str, Any], base_dir: pathlib.Pat
             data_path = base_dir / data_path
         metrics["data"] = str(data_path.resolve())
         result["metrics"] = metrics
+
+    # control.hazard.file の相対パスを解決（永続領域への配置を config で指定できるようにする）
+    if "control" in result and "hazard" in result["control"]:
+        control = dict(result["control"])
+        hazard = dict(control["hazard"])
+        hazard_path = pathlib.Path(hazard["file"])
+        if not hazard_path.is_absolute():
+            hazard_path = base_dir / hazard_path
+        hazard["file"] = str(hazard_path.resolve())
+        control["hazard"] = hazard
+        result["control"] = control
 
     return result

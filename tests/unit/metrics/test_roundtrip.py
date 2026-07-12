@@ -120,7 +120,9 @@ class TestRoundtrip:
     def test_timeseries_is_ascending(self, tmp_path):
         """時系列データは古い順に並ぶ"""
         collector = self.setup_collector(tmp_path)
-        timeseries = page.prepare_timeseries_data(collector.get_minute_data())
+        timeseries = page.prepare_timeseries_data(
+            collector.get_timeseries_data(page.TIMESERIES_MAX_POINTS, page.TIMESERIES_TARGET_POINTS)
+        )
 
         assert timeseries[0]["timestamp"] == "06/15 03:00"
         assert timeseries[0]["cooling_mode"] == 2
@@ -131,7 +133,7 @@ class TestRoundtrip:
     def test_correlation_pairs_exclude_partial_rows(self, tmp_path):
         """相関ペアは両カラムが non-None の行のみ"""
         collector = self.setup_collector(tmp_path)
-        correlation = page.prepare_correlation_data(collector.get_minute_data())
+        correlation = page.prepare_correlation_data(collector)
 
         # temperature と cooling_mode が両方あるのは 8 行
         # （temperature=20.0 の行は cooling_mode がないので除外）
@@ -146,16 +148,14 @@ class TestRoundtrip:
         assert correlation["lux_duty"] == {"x": [], "y": []}
 
     def test_statistics(self, tmp_path):
-        """統計情報が正しく得られる"""
+        """統計情報が正しく得られる（SQL 側集計）"""
         collector = self.setup_collector(tmp_path)
-        minute_data = collector.get_minute_data()
-        hourly_data = collector.get_hourly_data()
         period = collector.get_period_summary()
 
         assert collector.count_errors() == 1
 
         stats = page.generate_statistics(
-            minute_data, hourly_data, collector.count_errors(), period.total_days
+            collector.get_statistics_summary(), collector.count_errors(), period.total_days
         )
         assert stats["data_points"] == 9
         assert stats["cooling_mode_avg"] == (2 * 5 + 1 * 3) / 8
@@ -207,4 +207,54 @@ class TestTimestampMigration:
 
         period = collector.get_period_summary()
         assert period.total_days == 1
+        collector.close()
+
+    def test_collision_between_old_and_new_format_rows(self, tmp_path):
+        """旧形式行と新形式行が同一時刻で共存しても初期化が失敗しない (UNIQUE 衝突)"""
+        db_path = tmp_path / "metrics.db"
+
+        collector = MetricsCollector(db_path)
+        resolved_path = collector.db_path
+        collector.close()
+
+        with contextlib.closing(sqlite3.connect(resolved_path)) as conn:
+            # 新形式（マイグレーション済み相当）の行
+            conn.execute(
+                "INSERT INTO minute_metrics (timestamp, cooling_mode, duty_ratio) VALUES (?, ?, ?)",
+                ("2024-06-15T12:30:00+09:00", 3, 0.7),
+            )
+            # 同一時刻の旧形式行（UPDATE で REPLACE すると UNIQUE 違反になる）
+            conn.execute(
+                "INSERT INTO minute_metrics (timestamp, cooling_mode, duty_ratio) VALUES (?, ?, ?)",
+                ("2024-06-15 12:30:00+09:00", 2, 0.5),
+            )
+            # 衝突しない旧形式行（こちらは通常どおり変換される）
+            conn.execute(
+                "INSERT INTO minute_metrics (timestamp, cooling_mode, duty_ratio) VALUES (?, ?, ?)",
+                ("2024-06-15 12:31:00+09:00", 1, 0.1),
+            )
+            conn.execute(
+                "INSERT INTO hourly_metrics (timestamp, valve_operations) VALUES (?, ?)",
+                ("2024-06-15T12:00:00+09:00", 5),
+            )
+            conn.execute(
+                "INSERT INTO hourly_metrics (timestamp, valve_operations) VALUES (?, ?)",
+                ("2024-06-15 12:00:00+09:00", 3),
+            )
+            conn.commit()
+
+        # 再初期化でマイグレーションが実行される（以前はここで sqlite3.IntegrityError）
+        collector = MetricsCollector(db_path)
+
+        rows = collector.get_minute_data()
+        timestamps = [row["timestamp"] for row in rows]
+        # 旧形式行は削除され、変換済み + 変換対象の 2 行が残る
+        assert timestamps == ["2024-06-15T12:31:00+09:00", "2024-06-15T12:30:00+09:00"]
+        assert rows[1]["cooling_mode"] == 3  # 新形式行（マイグレーション済み）が優先される
+
+        hourly = collector.get_hourly_data()
+        assert len(hourly) == 1
+        assert hourly[0]["timestamp"] == "2024-06-15T12:00:00+09:00"
+        assert hourly[0]["valve_operations"] == 5
+
         collector.close()

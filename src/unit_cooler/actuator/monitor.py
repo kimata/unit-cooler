@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from unit_cooler.config import Config
 
+# 毎イテレーション発火し得るエラーの work_log 抑制間隔〔分〕
+ERROR_SUPPRESS_INTERVAL_MIN = 10
+
 # last_flow をモジュールレベル変数として管理
 _last_flow: float = 0.0
 
@@ -153,11 +156,15 @@ def check_sensing(handle: MonitorHandle, mist_condition: MistCondition) -> None:
 
     if handle.flow_unknown > giveup:
         unit_cooler.actuator.work_log.add(
-            "流量計が使えません。リセットを試みます。", unit_cooler.const.LOG_LEVEL.ERROR
+            "流量計が使えません。リセットを試みます。",
+            unit_cooler.const.LOG_LEVEL.ERROR,
+            suppress_interval_min=ERROR_SUPPRESS_INTERVAL_MIN,
         )
     else:
         unit_cooler.actuator.work_log.add(
-            "流量計が応答しないので一旦、リセットします。", unit_cooler.const.LOG_LEVEL.WARN
+            "流量計が応答しないので一旦、リセットします。",
+            unit_cooler.const.LOG_LEVEL.WARN,
+            suppress_interval_min=ERROR_SUPPRESS_INTERVAL_MIN,
         )
     unit_cooler.actuator.sensor.stop()
 
@@ -183,6 +190,7 @@ def check_mist_condition(handle: MonitorHandle, mist_condition: MistCondition) -
                         f"(バルブを開いてから{mist_condition.valve.duration_sec:.1f}秒経過しても流量が "
                         f"{mist_condition.flow:.1f} L/min [> {flow_config.on.max[i]:.1f} L/min])"
                     ),
+                    suppress_key="水漏れしています。",
                 )
 
         if (mist_condition.flow < flow_config.on.min) and (mist_condition.valve.duration_sec > 5):
@@ -192,6 +200,8 @@ def check_mist_condition(handle: MonitorHandle, mist_condition: MistCondition) -
             unit_cooler.actuator.work_log.add(
                 f"元栓が閉じています。(バルブを開いてから{duration:.1f}秒経過しても流量が {flow:.1f} L/min)",
                 unit_cooler.const.LOG_LEVEL.ERROR,
+                suppress_interval_min=ERROR_SUPPRESS_INTERVAL_MIN,
+                suppress_key="元栓が閉じています。",
             )
     else:
         logger.debug("Valve is close for %.1f sec", mist_condition.valve.duration_sec)
@@ -207,7 +217,36 @@ def check_mist_condition(handle: MonitorHandle, mist_condition: MistCondition) -
             flow = mist_condition.flow
             msg = "電磁弁が壊れていますので制御を停止します。"
             msg += f"(バルブを閉じてから{duration:.1f}秒経過しても流量が {flow:.1f} L/min)"
-            unit_cooler.actuator.control.hazard_notify(config, msg)
+            unit_cooler.actuator.control.hazard_notify(
+                config, msg, suppress_key="電磁弁が壊れていますので制御を停止します。"
+            )
+
+
+def check_valve_open_duration(config: Config, mist_condition: MistCondition) -> bool:
+    """バルブの連続開弁時間がフェイルセーフ上限を超えていたら強制閉弁する
+
+    control_worker が停止していても効くように、monitor 側の経路で毎イテレーション確認する。
+    超過時はハザードとして登録し、バルブを強制的に閉じる。
+
+    Returns:
+        フェイルセーフが発動したかどうか
+    """
+    max_open_sec = config.actuator.control.max_open_sec
+
+    if mist_condition.valve.state != unit_cooler.const.VALVE_STATE.OPEN:
+        return False
+    if mist_condition.valve.duration_sec <= max_open_sec:
+        return False
+
+    unit_cooler.actuator.control.hazard_notify(
+        config,
+        (
+            f"バルブが連続開弁の上限時間（{max_open_sec}秒）を超えたため、強制的に閉弁しました。"
+            f"(連続開弁 {mist_condition.valve.duration_sec:.0f} 秒)"
+        ),
+        suppress_key="バルブが連続開弁の上限時間を超えました。",
+    )
+    return True
 
 
 def check(handle: MonitorHandle, mist_condition: MistCondition, need_logging: bool) -> bool:
@@ -219,6 +258,8 @@ def check(handle: MonitorHandle, mist_condition: MistCondition, need_logging: bo
             mist_condition.valve.state.name,
             "?" if mist_condition.flow is None else f"{mist_condition.flow:.2f}",
         )
+
+    check_valve_open_duration(handle.config, mist_condition)
 
     check_sensing(handle, mist_condition)
 

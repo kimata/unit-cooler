@@ -256,7 +256,7 @@ class ComponentManager:
                 )
             elif component == "actuator":
                 executor, thread_list, _ = self.handles[component]
-                return any(t["future"].running() for t in thread_list)
+                return any(t.future.running() for t in thread_list)
             elif component == "webui":
                 thread, _ = self.handles[component]
                 return thread.is_alive()

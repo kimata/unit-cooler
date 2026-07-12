@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import contextlib
 import logging
+import queue
 import traceback
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +24,9 @@ if TYPE_CHECKING:
     from multiprocessing import Queue
 
     from unit_cooler.config import Config
+
+    # NOTE: actuator は multiprocessing.Queue、webui はスレッド内完結のため queue.Queue を使う
+    MessageQueue = Queue[ControlMessage] | queue.Queue[ControlMessage]
 
 
 def start_client(
@@ -83,7 +88,7 @@ def start_client(
 
 
 def queue_put(
-    message_queue: Queue[ControlMessage],
+    message_queue: MessageQueue,
     message: dict[str, Any],
     liveness_file: pathlib.Path,
     drop_oldest: bool = False,
@@ -92,9 +97,12 @@ def queue_put(
     control_message = ControlMessage.from_dict(message)
 
     if drop_oldest and message_queue.full():
-        message_queue.get()
+        # NOTE: full() チェックと get() の間に消費側がキューを空にすると
+        # ブロッキング get() で凍結する（TOCTOU）ため、get_nowait() で空振りを許容する
+        with contextlib.suppress(queue.Empty):
+            message_queue.get_nowait()
 
-    logger.info("Receive message: %s", control_message)
+    logger.debug("Receive message: %s", control_message)
 
     message_queue.put(control_message)
     my_lib.footprint.update(liveness_file)

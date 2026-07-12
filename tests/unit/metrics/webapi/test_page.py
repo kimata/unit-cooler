@@ -28,6 +28,16 @@ def create_app(config) -> flask.Flask:
     return app
 
 
+@pytest.fixture(autouse=True)
+def _reset_energy_cache():
+    """テスト間で省エネ効果分析の TTL キャッシュを共有しない"""
+    import unit_cooler.metrics.webapi.page as page
+
+    page._energy_cache = None
+    yield
+    page._energy_cache = None
+
+
 @pytest.fixture
 def real_collector(tmp_path):
     """実 SQLite にデータを書き込んだ MetricsCollector"""
@@ -40,7 +50,7 @@ def real_collector(tmp_path):
         collector.update_cooling_mode(2)
         collector.update_duty_ratio(30.0, 60.0)
         collector.update_environmental_data(
-            temperature=30.0 + i, humidity=60.0, lux=1000.0, solar_radiation=500.0, rain_amount=0.0
+            temperature=30.0 + i, humidity=60.0, lux=1000.0, solar_radiation=500.0
         )
         current["now"] += datetime.timedelta(minutes=1)
 
@@ -87,8 +97,11 @@ class TestMetricsView:
                 "humidityDutyCorrelationChart",
                 "solarCoolingCorrelationChart",
                 "luxDutyCorrelationChart",
+                "energySavingsChart",
             ]:
                 assert canvas_id in html
+            # 省エネ効果セクションが存在する
+            assert "省エネ効果" in html
             # JS にデータ取得先 URL が渡される
             assert 'data-api-url="/unit-cooler/api/metrics/data"' in html
 
@@ -158,8 +171,12 @@ class TestMetricsData:
                 "boxplot_valve_ops",
                 "timeseries",
                 "correlation",
+                "energy_savings",
             ]:
                 assert key in data
+
+            # MagicMock config ではセンサー設定が空になるため、省エネ効果はデータ不足
+            assert data["energy_savings"]["valid"] is False
 
             # 箱ヒゲ図は 24 時間分
             assert len(data["boxplot_cooling_mode"]) == 24

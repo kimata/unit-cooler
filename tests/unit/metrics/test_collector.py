@@ -80,13 +80,13 @@ class TestMetricsCollectorUpdateMethods:
             humidity=60.0,
             lux=50000.0,
             solar_radiation=800.0,
-            rain_amount=0.0,
         )
         assert collector._current_minute_data["temperature"] == 30.5
         assert collector._current_minute_data["humidity"] == 60.0
         assert collector._current_minute_data["lux"] == 50000.0
         assert collector._current_minute_data["solar_radiation"] == 800.0
-        assert collector._current_minute_data["rain_amount"] == 0.0
+        # rain_amount は読み取り経路がないため保存対象外
+        assert "rain_amount" not in collector._current_minute_data
 
     def test_update_environmental_data_partial(self, collector):
         """update_environmental_data で一部の値のみ設定"""
@@ -358,6 +358,43 @@ class TestMetricsCollectorClose:
         data = collector2.get_hourly_data()
         assert len(data) == 1
         assert data[0]["valve_operations"] == 3
+        collector2.close()
+
+    def test_close_saves_data_to_original_period_after_idle(self, tmp_path):
+        """長時間アイドル後の close でも、データが属する期間に保存される (BUG #17 と同型)"""
+        db_path = tmp_path / "metrics.db"
+
+        holder = {"time": datetime.datetime(2024, 6, 15, 12, 30, 30, tzinfo=TIMEZONE)}
+        collector = MetricsCollector(db_path, time_func=lambda: holder["time"])
+
+        # 12:30 にデータを記録
+        collector.update_cooling_mode(2)
+        collector.record_valve_operation()
+
+        # 夜間アイドル後（数時間後）に終了
+        holder["time"] = datetime.datetime(2024, 6, 15, 18, 45, 0, tzinfo=TIMEZONE)
+        collector.close()
+
+        collector2 = MetricsCollector(db_path)
+        minute_data = collector2.get_minute_data()
+        hourly_data = collector2.get_hourly_data()
+        collector2.close()
+
+        # 現在時刻 (18:45 / 18:00) ではなく、データが属する期間 (12:30 / 12:00) に記帳される
+        assert len(minute_data) == 1
+        assert minute_data[0]["timestamp"] == "2024-06-15T12:30:00+09:00"
+        assert len(hourly_data) == 1
+        assert hourly_data[0]["timestamp"] == "2024-06-15T12:00:00+09:00"
+
+    def test_close_without_any_update_saves_nothing(self, tmp_path):
+        """一度も更新がないまま close してもデータは保存されない（_last_minute が None）"""
+        db_path = tmp_path / "metrics.db"
+        collector = MetricsCollector(db_path)
+        collector.close()
+
+        collector2 = MetricsCollector(db_path)
+        assert collector2.get_minute_data() == []
+        assert collector2.get_hourly_data() == []
         collector2.close()
 
 

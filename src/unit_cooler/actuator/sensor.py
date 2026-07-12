@@ -58,7 +58,6 @@ class DummyFlowSensor:
 
 # グローバル変数
 _sensor: FlowSensorProtocol | None = None
-_pin_no: int | None = None
 
 
 def init(pin_no: int) -> None:
@@ -68,9 +67,6 @@ def init(pin_no: int) -> None:
         pin_no: バルブの GPIO ピン番号
     """
     global _sensor
-    global _pin_no
-
-    _pin_no = pin_no
 
     if os.environ.get("DUMMY_MODE", "false") != "true":  # pragma: no cover
         from my_lib.sensor.fd_q10c import FD_Q10C

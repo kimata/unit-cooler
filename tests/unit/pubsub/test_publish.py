@@ -26,7 +26,9 @@ class TestWaitFirstClient:
 
         unit_cooler.pubsub.publish.wait_first_client(mock_socket, timeout=0.1)
 
-        mock_socket.send.assert_called()
+        mock_socket.recv.assert_called()
+        # NOTE: XPUB の購読イベントフレームを send() で再配信しないこと
+        mock_socket.send.assert_not_called()
 
 
 class TestStartServer:

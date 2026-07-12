@@ -8,6 +8,7 @@ import threading
 import traceback
 from typing import TYPE_CHECKING
 
+import my_lib.time
 import zmq
 
 import unit_cooler.pubsub.subscribe
@@ -17,15 +18,17 @@ from unit_cooler.messages import ActuatorStatus, ControlMessage
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from multiprocessing import Queue
+    import datetime
+    import queue
 
     from unit_cooler.config import Config
 
 # グローバル終了フラグ
 should_terminate = threading.Event()
 
-# 最新の ActuatorStatus を保持
+# 最新の ActuatorStatus とその受信時刻を保持
 _last_actuator_status: ActuatorStatus | None = None
+_last_actuator_status_time: datetime.datetime | None = None
 _actuator_status_lock = threading.Lock()
 
 
@@ -35,11 +38,18 @@ def get_last_actuator_status() -> ActuatorStatus | None:
         return _last_actuator_status
 
 
+def get_last_actuator_status_time() -> datetime.datetime | None:
+    """最新の ActuatorStatus の受信時刻を取得する（未受信なら None）"""
+    with _actuator_status_lock:
+        return _last_actuator_status_time
+
+
 def set_last_actuator_status(status: ActuatorStatus) -> None:
-    """ActuatorStatus を設定する"""
-    global _last_actuator_status
+    """ActuatorStatus を受信時刻とともに設定する"""
+    global _last_actuator_status, _last_actuator_status_time
     with _actuator_status_lock:
         _last_actuator_status = status
+        _last_actuator_status_time = my_lib.time.now()
 
 
 def term() -> None:
@@ -53,7 +63,7 @@ def subscribe_worker(
     config: Config,
     control_host: str,
     pub_port: int,
-    message_queue: Queue[ControlMessage],
+    message_queue: queue.Queue[ControlMessage],
     liveness_file: pathlib.Path,
     msg_count: int = 0,
 ) -> int:
@@ -118,7 +128,7 @@ def actuator_status_worker(
                 # タイムアウト - 終了フラグをチェックして継続
                 continue
             except Exception:
-                logger.debug("Failed to parse ActuatorStatus")
+                logger.warning("Failed to parse ActuatorStatus", exc_info=True)
 
     except Exception:
         logger.exception("Failed to subscribe ActuatorStatus")

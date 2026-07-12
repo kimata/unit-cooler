@@ -169,21 +169,6 @@ class PortManager:
         for port in self.allocated_ports.copy():
             self.release_port(port)
 
-    @classmethod
-    def cleanup_stale_ports(cls) -> None:
-        """古いポート情報をクリーンアップ"""
-        fd = cls._acquire_lock()
-        try:
-            used_ports = cls._load_used_ports()
-            available_ports = {p for p in used_ports if cls._is_port_available(p)}
-            stale_ports = used_ports - available_ports
-
-            if stale_ports:
-                logging.debug("Cleaning up stale ports: %s", stale_ports)
-                cls._save_used_ports(available_ports)
-        finally:
-            cls._release_lock(fd)
-
 
 # シングルトンインスタンス
 _port_manager: PortManager | None = None

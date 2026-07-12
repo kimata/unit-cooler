@@ -213,6 +213,8 @@ class TestQueuePut:
 
     def test_removes_old_message_when_queue_full(self, mocker):
         """キューが満杯の場合、古いメッセージを削除"""
+        import time
+
         import unit_cooler.pubsub.subscribe
 
         mocker.patch("my_lib.footprint.update")
@@ -227,6 +229,10 @@ class TestQueuePut:
         first_message = {"state": 1, "mode_index": 1, "duty": duty_dict}
         unit_cooler.pubsub.subscribe.queue_put(queue, first_message, liveness_file, drop_oldest=True)
 
+        # NOTE: multiprocessing.Queue は put() 直後だと feeder スレッドが未フラッシュで
+        # get_nowait() が空振りし得るため、フラッシュを待つ
+        time.sleep(0.1)
+
         # 2番目のメッセージを追加（最初のメッセージは削除される）(state=0: IDLE)
         second_message = {"state": 0, "mode_index": 2, "duty": duty_dict}
         unit_cooler.pubsub.subscribe.queue_put(queue, second_message, liveness_file, drop_oldest=True)
@@ -234,4 +240,48 @@ class TestQueuePut:
         # 2番目のメッセージが取得される
         result = queue.get(timeout=1)
         assert result.state == COOLING_STATE.IDLE
+        assert result.mode_index == 2
+
+    def test_does_not_block_when_queue_drained_between_full_and_get(self, mocker):
+        """full() チェック後に消費側がキューを空にしてもブロックしない（TOCTOU）"""
+        import queue as queue_module
+
+        import unit_cooler.pubsub.subscribe
+
+        mocker.patch("my_lib.footprint.update")
+
+        # full() は True を返すが実際には空、というレース状態をモックで再現する
+        mock_queue = MagicMock()
+        mock_queue.full.return_value = True
+        mock_queue.get_nowait.side_effect = queue_module.Empty()
+
+        duty_dict = {"enable": True, "on_sec": 100, "off_sec": 60}
+        message = {"state": 1, "mode_index": 3, "duty": duty_dict}
+        liveness_file = pathlib.Path("/tmp/test_liveness")
+
+        # ブロッキング get() を使っているとここで凍結する
+        unit_cooler.pubsub.subscribe.queue_put(mock_queue, message, liveness_file, drop_oldest=True)
+
+        mock_queue.get_nowait.assert_called_once()
+        mock_queue.put.assert_called_once()
+
+    def test_works_with_thread_queue(self, mocker):
+        """queue.Queue（webui で使用）でも動作する"""
+        import queue as queue_module
+
+        import unit_cooler.pubsub.subscribe
+
+        mocker.patch("my_lib.footprint.update")
+
+        thread_queue: queue_module.Queue = queue_module.Queue(maxsize=1)
+        liveness_file = pathlib.Path("/tmp/test_liveness")
+
+        duty_dict = {"enable": True, "on_sec": 100, "off_sec": 60}
+        first_message = {"state": 1, "mode_index": 1, "duty": duty_dict}
+        second_message = {"state": 0, "mode_index": 2, "duty": duty_dict}
+
+        unit_cooler.pubsub.subscribe.queue_put(thread_queue, first_message, liveness_file, drop_oldest=True)
+        unit_cooler.pubsub.subscribe.queue_put(thread_queue, second_message, liveness_file, drop_oldest=True)
+
+        result = thread_queue.get_nowait()
         assert result.mode_index == 2

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import my_lib.footprint
+import my_lib.pytest_util
 import my_lib.rpi
 
 import unit_cooler.actuator.work_log
@@ -28,14 +29,20 @@ if TYPE_CHECKING:
 
 STAT_DIR_PATH = pathlib.Path("/dev/shm")  # noqa: S108
 
+# NOTE: my_lib.pytest_util.get_path は pytest-xdist 並列実行時のみワーカー ID を付加する
+# （本番では no-op）。ワーカー間で状態ファイルを消し合うフレーク（P2-9）を防ぐ。
 # STATE が WORKING になった際に作られるファイル
-STAT_PATH_VALVE_STATE_WORKING = STAT_DIR_PATH / "unit_cooler" / "valve" / "state" / "working"
+STAT_PATH_VALVE_STATE_WORKING = my_lib.pytest_util.get_path(
+    STAT_DIR_PATH / "unit_cooler" / "valve" / "state" / "working"
+)
 # STATE が IDLE になった際に作られるファイル
-STAT_PATH_VALVE_STATE_IDLE = STAT_DIR_PATH / "unit_cooler" / "valve" / "state" / "idle"
+STAT_PATH_VALVE_STATE_IDLE = my_lib.pytest_util.get_path(
+    STAT_DIR_PATH / "unit_cooler" / "valve" / "state" / "idle"
+)
 # 実際にバルブを開いた際に作られるファイル
-STAT_PATH_VALVE_OPEN = STAT_DIR_PATH / "unit_cooler" / "valve" / "open"
+STAT_PATH_VALVE_OPEN = my_lib.pytest_util.get_path(STAT_DIR_PATH / "unit_cooler" / "valve" / "open")
 # 実際にバルブを閉じた際に作られるファイル
-STAT_PATH_VALVE_CLOSE = STAT_DIR_PATH / "unit_cooler" / "valve" / "close"
+STAT_PATH_VALVE_CLOSE = my_lib.pytest_util.get_path(STAT_DIR_PATH / "unit_cooler" / "valve" / "close")
 
 
 @dataclass
@@ -48,7 +55,6 @@ class ValveController:
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _operation_count: int = field(default=0, init=False)
     _ctrl_hist: list[unit_cooler.const.VALVE_STATE] = field(default_factory=list, init=False, repr=False)
-    _initialized: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
         """初期化処理"""
@@ -60,7 +66,6 @@ class ValveController:
         my_lib.rpi.gpio.setup(self.pin_no, my_lib.rpi.gpio.OUT)
 
         self.set_state(unit_cooler.const.VALVE_STATE.CLOSE)
-        self._initialized = True
 
     def get_state(self) -> unit_cooler.const.VALVE_STATE:
         """現在のバルブ状態を取得"""
@@ -105,7 +110,6 @@ class ValveController:
             valve_state = self.get_state()
 
             if valve_state == unit_cooler.const.VALVE_STATE.OPEN:
-                assert my_lib.footprint.exists(STAT_PATH_VALVE_OPEN)  # noqa: S101
                 duration = my_lib.footprint.elapsed(STAT_PATH_VALVE_OPEN)
             elif my_lib.footprint.exists(STAT_PATH_VALVE_CLOSE):
                 duration = my_lib.footprint.elapsed(STAT_PATH_VALVE_CLOSE)

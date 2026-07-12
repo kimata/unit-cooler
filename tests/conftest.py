@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import contextlib
 import pathlib
+import tempfile
 import unittest.mock
 from typing import TYPE_CHECKING
 
+import my_lib.pytest_util
 import my_lib.webapp.config
 import pytest
+import yaml
 
 if TYPE_CHECKING:
     from unit_cooler.config import Config
@@ -59,12 +62,48 @@ def slack_mock():
         yield fixture
 
 
+def _gen_worker_config_file() -> str:
+    """pytest-xdist ワーカー固有のパスに書き換えた config ファイルを生成する
+
+    並列実行時に全ワーカーが同一の liveness / hazard / metrics / ログファイルを
+    消し合ってフレークする構造（P2-9）を避けるため、ファイル系のパスに
+    ワーカー ID サフィックスを付加した config を各ワーカー専用に用意する。
+    逐次実行時（ワーカー ID なし）は元の config をそのまま使う。
+    """
+    if my_lib.pytest_util.get_worker_id() == "main":
+        return CONFIG_FILE
+
+    with pathlib.Path(CONFIG_FILE).open() as f:
+        raw = yaml.safe_load(f)
+
+    def add_suffix(node: dict, key: str) -> None:
+        node[key] = str(my_lib.pytest_util.get_path(node[key]))
+
+    add_suffix(raw["controller"]["liveness"], "file")
+    add_suffix(raw["actuator"]["subscribe"]["liveness"], "file")
+    add_suffix(raw["actuator"]["control"]["liveness"], "file")
+    add_suffix(raw["actuator"]["control"]["hazard"], "file")
+    add_suffix(raw["actuator"]["monitor"]["liveness"], "file")
+    add_suffix(raw["actuator"]["metrics"], "data")
+    add_suffix(raw["actuator"]["web_server"]["webapp"]["data"], "log_file_path")
+    add_suffix(raw["webui"]["subscribe"]["liveness"], "file")
+
+    worker_config = (
+        pathlib.Path(tempfile.gettempdir())
+        / f"unit_cooler_test_config.{my_lib.pytest_util.get_worker_id()}.yaml"
+    )
+    with worker_config.open("w") as f:
+        yaml.safe_dump(raw, f, allow_unicode=True)
+
+    return str(worker_config)
+
+
 @pytest.fixture(scope="session")
 def config() -> Config:
-    """Config クラス形式の設定"""
+    """Config クラス形式の設定（xdist 並列実行時はワーカー毎に独立したパスを使用）"""
     from unit_cooler.config import Config
 
-    return Config.load(CONFIG_FILE, pathlib.Path(SCHEMA_CONFIG))
+    return Config.load(_gen_worker_config_file(), pathlib.Path(SCHEMA_CONFIG))
 
 
 # =============================================================================

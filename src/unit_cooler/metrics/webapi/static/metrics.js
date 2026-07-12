@@ -340,6 +340,66 @@ function makeScatterChart(canvasId, pair, opts) {
     });
 }
 
+function makeEnergySavingsChart(canvasId, data) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) {
+        return;
+    }
+
+    if (!data || !data.valid || !data.labels || data.labels.length === 0) {
+        // データ不足時はチャートの代わりにメッセージを表示する
+        const note = document.createElement("p");
+        note.className = "has-text-centered has-text-grey";
+        note.textContent = "データ不足のため表示できません";
+        ctx.parentElement.replaceChild(note, ctx);
+        return;
+    }
+
+    new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: data.labels,
+            datasets: [
+                {
+                    label: "散水あり 平均消費電力（W）",
+                    data: data.power_on,
+                    backgroundColor: "rgba(52, 152, 219, 0.6)",
+                    borderColor: "rgb(52, 152, 219)",
+                    borderWidth: 1,
+                },
+                {
+                    label: "散水なし 平均消費電力（W）",
+                    data: data.power_off,
+                    backgroundColor: "rgba(149, 165, 166, 0.6)",
+                    borderColor: "rgb(149, 165, 166)",
+                    borderWidth: 1,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            scales: {
+                x: { title: { display: true, text: "外気温" } },
+                y: { beginAtZero: true, title: { display: true, text: "平均消費電力（W）" } },
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const counts = context.datasetIndex === 0 ? data.on_counts : data.off_counts;
+                            const value =
+                                context.parsed.y == null ? "データ不足" : context.parsed.y.toFixed(0) + " W";
+                            return `${context.dataset.label}: ${value}（サンプル数 ${counts[context.dataIndex]}）`;
+                        },
+                    },
+                },
+            },
+        },
+    });
+}
+
 function renderCharts(chartData) {
     for (const cfg of BOXPLOT_CHARTS) {
         makeBoxplotChart(cfg.canvasId, chartData[cfg.key], cfg);
@@ -350,6 +410,7 @@ function renderCharts(chartData) {
     for (const cfg of SCATTER_CHARTS) {
         makeScatterChart(cfg.canvasId, chartData.correlation && chartData.correlation[cfg.key], cfg);
     }
+    makeEnergySavingsChart("energySavingsChart", chartData.energy_savings);
 }
 
 // パーマリンク機能

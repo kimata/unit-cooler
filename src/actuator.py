@@ -30,8 +30,6 @@ from unit_cooler.config import Config, RuntimeSettings
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_CONFIG = "schema/config.schema"
-
 # Global variable for web server handle
 log_server_handle: Any = None
 
@@ -120,14 +118,14 @@ def wait_and_term(executor, thread_list, log_server_handle, terminate=True, time
         unit_cooler.actuator.worker.term()
 
     for thread_info in thread_list:
-        logger.info("Wait %s finish", thread_info["name"])
+        logger.info("Wait %s finish", thread_info.name)
 
         try:
-            if thread_info["future"].result(timeout=timeout) != 0:
-                logger.error("Error occurred in %s", thread_info["name"])
+            if thread_info.future.result(timeout=timeout) != 0:
+                logger.error("Error occurred in %s", thread_info.name)
                 ret = -1
         except TimeoutError:
-            logger.warning("Timeout waiting for %s", thread_info["name"])
+            logger.warning("Timeout waiting for %s", thread_info.name)
             ret = -1
 
     logger.info("Shutdown executor")

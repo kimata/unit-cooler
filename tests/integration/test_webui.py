@@ -10,6 +10,7 @@ from __future__ import annotations
 import multiprocessing
 
 import flask
+import my_lib.time
 
 
 class TestWebuiApi:
@@ -133,6 +134,11 @@ class TestWebuiApi:
         mocker.patch(
             "unit_cooler.webui.worker.get_last_actuator_status",
             return_value=actuator_status,
+        )
+        # NOTE: 鮮度チェック（P2-2）で actuator_status が None にならないよう、受信時刻も現在にする
+        mocker.patch(
+            "unit_cooler.webui.worker.get_last_actuator_status_time",
+            return_value=my_lib.time.now(),
         )
 
         app = flask.Flask(__name__)

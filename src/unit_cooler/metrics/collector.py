@@ -4,7 +4,7 @@ New metrics collection system for outdoor unit cooler.
 Collects:
 - 1分毎の cooling_mode の値
 - 1分毎の Duty 比 (ON と ON+OFF の比率)
-- 1分毎の 気温、照度、日射量、降水量、湿度
+- 1分毎の 気温、照度、日射量、湿度
 - 1時間あたりのバルブ操作回数
 - ON している際の流量
 - エラー発生
@@ -38,6 +38,16 @@ _HOURLY_VALUE_TABLES = {
     "valve_operations": "hourly_metrics",
 }
 
+# minute_metrics のうち集計クエリで参照を許可するカラム（SQL インジェクション防止のホワイトリスト）
+_MINUTE_METRIC_COLUMNS = (
+    "cooling_mode",
+    "duty_ratio",
+    "temperature",
+    "humidity",
+    "lux",
+    "solar_radiation",
+)
+
 
 @dataclass(frozen=True)
 class PeriodSummary:
@@ -46,6 +56,16 @@ class PeriodSummary:
     start: datetime.datetime | None
     end: datetime.datetime | None
     total_days: int  # データが存在する日数（重複なし）
+
+
+@dataclass(frozen=True)
+class StatisticsSummary:
+    """基本統計のサマリー（SQL 側で集計した結果）"""
+
+    cooling_mode_avg: float | None
+    duty_ratio_avg: float | None
+    valve_operations_total: int
+    data_points: int
 
 
 class MetricsCollector:
@@ -98,14 +118,27 @@ class MetricsCollector:
         以前は sqlite3 のデフォルトアダプタ経由でスペース区切り
         ("2026-06-15 12:30:00+09:00") で保存されていたため、
         ISO 8601 (T 区切り) に変換する。
+
+        NOTE: 旧形式と新形式の行が同一時刻で共存している場合、UPDATE が
+        UNIQUE(timestamp) 違反になり初期化ごと失敗してしまうため、
+        UPDATE OR IGNORE で変換できる行のみ変換し、衝突で残った旧形式行
+        （変換済みの行と同時刻の重複データ）は削除する。
         """
         for table in ("minute_metrics", "hourly_metrics", "error_events"):
             cursor = conn.execute(
-                f"UPDATE {table} SET timestamp = REPLACE(timestamp, ' ', 'T') "  # noqa: S608
+                f"UPDATE OR IGNORE {table} SET timestamp = REPLACE(timestamp, ' ', 'T') "  # noqa: S608
                 "WHERE timestamp LIKE '% %'"
             )
             if cursor.rowcount > 0:
                 logger.info("Migrated %d timestamps in %s to ISO 8601", cursor.rowcount, table)
+
+            cursor = conn.execute(f"DELETE FROM {table} WHERE timestamp LIKE '% %'")  # noqa: S608
+            if cursor.rowcount > 0:
+                logger.warning(
+                    "Removed %d old-format rows in %s that conflicted with migrated rows",
+                    cursor.rowcount,
+                    table,
+                )
 
     @contextmanager
     def _get_db_connection(self):
@@ -140,7 +173,6 @@ class MetricsCollector:
         humidity: float | None = None,
         lux: float | None = None,
         solar_radiation: float | None = None,
-        rain_amount: float | None = None,
     ) -> None:
         """Update environmental sensor data."""
         with self._lock:
@@ -153,8 +185,6 @@ class MetricsCollector:
                 self._current_minute_data["lux"] = lux
             if solar_radiation is not None:
                 self._current_minute_data["solar_radiation"] = solar_radiation
-            if rain_amount is not None:
-                self._current_minute_data["rain_amount"] = rain_amount
 
     def update_flow_value(self, flow_value: float) -> None:
         """Update flow value when valve is ON."""
@@ -228,7 +258,6 @@ class MetricsCollector:
                 self._current_minute_data.get("humidity"),
                 self._current_minute_data.get("lux"),
                 self._current_minute_data.get("solar_radiation"),
-                self._current_minute_data.get("rain_amount"),
                 self._current_minute_data.get("flow_value"),
             )
             logger.info("Saving minute metrics for %s: %s", timestamp, self._current_minute_data)
@@ -238,8 +267,8 @@ class MetricsCollector:
                     """
                     INSERT OR REPLACE INTO minute_metrics
                     (timestamp, cooling_mode, duty_ratio, temperature, humidity,
-                     lux, solar_radiation, rain_amount, flow_value)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     lux, solar_radiation, flow_value)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     data,
                 )
@@ -341,6 +370,99 @@ class MetricsCollector:
             ).fetchall()
             return [(row["hour"], row["value"]) for row in rows]
 
+    def get_statistics_summary(self) -> StatisticsSummary:
+        """基本統計（平均値・件数）を SQL 側で集計して取得する"""
+        with self._get_db_connection() as conn:
+            row = conn.execute(
+                "SELECT AVG(cooling_mode), AVG(duty_ratio), COUNT(*) FROM minute_metrics"
+            ).fetchone()
+            valve_total = conn.execute(
+                "SELECT COALESCE(SUM(valve_operations), 0) FROM hourly_metrics"
+            ).fetchone()[0]
+
+        return StatisticsSummary(
+            cooling_mode_avg=row[0],
+            duty_ratio_avg=row[1],
+            valve_operations_total=valve_total,
+            data_points=row[2],
+        )
+
+    def get_timeseries_data(self, max_points: int, target_points: int) -> list[dict]:
+        """時系列チャート用に直近 max_points 分のデータを SQL 側で平均化して取得する（古い順）
+
+        件数が target_points を超える場合は、行番号ベースのチャンク
+        （chunk_size = 件数 // target_points）ごとに AVG で平均化し、
+        各チャンクの先頭タイムスタンプを代表値として返す。
+        """
+        columns = ", ".join(_MINUTE_METRIC_COLUMNS)
+
+        with self._get_db_connection() as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM (SELECT 1 FROM minute_metrics LIMIT ?)", (max_points,)
+            ).fetchone()[0]
+
+            if count <= target_points:
+                rows = conn.execute(
+                    f"SELECT timestamp, {columns} FROM "  # noqa: S608
+                    "(SELECT * FROM minute_metrics ORDER BY timestamp DESC LIMIT ?) "
+                    "ORDER BY timestamp ASC",
+                    (max_points,),
+                ).fetchall()
+                return [dict(row) for row in rows]
+
+            chunk_size = count // target_points
+            averages = ", ".join(f"AVG({column}) AS {column}" for column in _MINUTE_METRIC_COLUMNS)
+            rows = conn.execute(
+                f"""
+                WITH recent AS (
+                    SELECT timestamp, {columns}
+                    FROM minute_metrics ORDER BY timestamp DESC LIMIT ?
+                ),
+                numbered AS (
+                    SELECT *, (ROW_NUMBER() OVER (ORDER BY timestamp ASC) - 1) / ? AS chunk
+                    FROM recent
+                )
+                SELECT MIN(timestamp) AS timestamp, {averages}
+                FROM numbered GROUP BY chunk ORDER BY chunk
+                """,  # noqa: S608
+                (max_points, chunk_size),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_correlation_pairs(self, x_column: str, y_column: str) -> tuple[list[float], list[float]]:
+        """両カラムが non-NULL の行の (x, y) 値リストを取得する（新しい順）"""
+        for column in (x_column, y_column):
+            if column not in _MINUTE_METRIC_COLUMNS:
+                raise ValueError(f"Unsupported column: {column}")
+
+        with self._get_db_connection() as conn:
+            rows = conn.execute(
+                f"SELECT {x_column}, {y_column} FROM minute_metrics "  # noqa: S608
+                f"WHERE {x_column} IS NOT NULL AND {y_column} IS NOT NULL "
+                "ORDER BY timestamp DESC"
+            ).fetchall()
+
+        return [row[0] for row in rows], [row[1] for row in rows]
+
+    def get_duty_by_bucket(self, start_time: datetime.datetime, bucket_minutes: int = 10) -> dict[str, float]:
+        """10 分バケットごとの平均 Duty 比を取得する
+
+        キーはローカル時刻 ISO 8601 の先頭 15 文字（"YYYY-MM-DDTHH:M"）で、
+        分の 10 の位までを含むため 10 分単位のバケットになる。
+        duty_ratio が NULL の行は 0（散水なし）として扱う。
+        """
+        if bucket_minutes != 10:
+            raise ValueError("Only 10-minute buckets are supported")
+
+        with self._get_db_connection() as conn:
+            rows = conn.execute(
+                "SELECT substr(timestamp, 1, 15) AS bucket, AVG(COALESCE(duty_ratio, 0)) AS duty "
+                "FROM minute_metrics WHERE timestamp >= ? GROUP BY bucket",
+                (start_time.isoformat(),),
+            ).fetchall()
+
+        return {row["bucket"]: row["duty"] for row in rows}
+
     def count_errors(self) -> int:
         """エラーイベントの総数を取得する"""
         with self._get_db_connection() as conn:
@@ -371,15 +493,14 @@ class MetricsCollector:
     def close(self) -> None:
         """Clean shutdown of metrics collector."""
         with self._lock:
-            # 最後のデータを保存
-            now = self._time_func()
-            current_minute = now.replace(second=0, microsecond=0)
-            if self._current_minute_data:
-                self._save_minute_data(current_minute)
+            # NOTE: 最後のデータは「現在時刻の期間」ではなく「データが属する期間」
+            # (_last_minute / _last_hour) に保存する。現在時刻を使うと、長時間
+            # アイドル後の終了時に数時間先のバケットへ記帳されてしまう (BUG #17 と同型)。
+            if self._current_minute_data and self._last_minute is not None:
+                self._save_minute_data(self._last_minute)
 
-            current_hour = now.replace(minute=0, second=0, microsecond=0)
-            if self._current_hour_data.get("valve_operations", 0) > 0:
-                self._save_hour_data(current_hour)
+            if self._current_hour_data.get("valve_operations", 0) > 0 and self._last_hour is not None:
+                self._save_hour_data(self._last_hour)
 
             # WALチェックポイントを実行
             try:

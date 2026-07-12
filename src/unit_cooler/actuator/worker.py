@@ -27,11 +27,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import my_lib.footprint
-import my_lib.time
 
 import unit_cooler.actuator.control
 import unit_cooler.actuator.monitor
 import unit_cooler.actuator.status_publisher
+import unit_cooler.actuator.valve_controller
 import unit_cooler.actuator.work_log
 import unit_cooler.const
 import unit_cooler.pubsub.subscribe
@@ -52,6 +52,14 @@ class WorkerDef:
 
     name: str
     param: list[Any]
+
+
+@dataclass
+class WorkerThread:
+    """起動済みワーカースレッド"""
+
+    name: str
+    future: concurrent.futures.Future[int]
 
 
 # =============================================================================
@@ -117,7 +125,6 @@ def collect_environmental_metrics(config: Config, current_message: ControlMessag
             humidity=sense_data.first_value("humi"),
             lux=sense_data.first_value("lux"),
             solar_radiation=sense_data.first_value("solar_rad"),
-            rain_amount=sense_data.first_value("rain"),
         )
     except Exception:
         logger.exception("Failed to collect environmental metrics")
@@ -192,10 +199,10 @@ def monitor_worker(
         return -1
 
     # ActuatorStatus 配信用の ZeroMQ パブリッシャを作成
-    status_socket = None
+    status_handle = None
     if status_pub_port > 0:
         try:
-            status_socket = unit_cooler.actuator.status_publisher.create_publisher("*", status_pub_port)
+            status_handle = unit_cooler.actuator.status_publisher.create_publisher("*", status_pub_port)
         except Exception:
             logger.exception("Failed to create status publisher")
 
@@ -216,12 +223,14 @@ def monitor_worker(
             collect_flow_metrics(config, mist_condition)
 
             # ActuatorStatus を ZeroMQ で配信
-            if status_socket is not None:
+            if status_handle is not None:
                 try:
                     status = unit_cooler.actuator.status_publisher.create_status(
-                        mist_condition, get_last_control_message()
+                        mist_condition,
+                        get_last_control_message(),
+                        hazard_detected=my_lib.footprint.exists(config.actuator.control.hazard.file),
                     )
-                    unit_cooler.actuator.status_publisher.publish_status(status_socket, status)
+                    unit_cooler.actuator.status_publisher.publish_status(status_handle, status)
                 except Exception:
                     logger.debug("Failed to publish ActuatorStatus")
 
@@ -246,10 +255,10 @@ def monitor_worker(
         unit_cooler.util.notify_error(config, traceback.format_exc())
         ret = -1
     finally:
-        # ソケットをクローズ
-        if status_socket is not None:
+        # パブリッシャをクローズ
+        if status_handle is not None:
             try:
-                unit_cooler.actuator.status_publisher.close_publisher(status_socket)
+                unit_cooler.actuator.status_publisher.close_publisher(status_handle)
             except Exception:
                 logger.debug("Failed to close status publisher")
 
@@ -279,21 +288,28 @@ def control_worker(
         while True:
             start_time = time.monotonic()
 
-            current_message = unit_cooler.actuator.control.get_control_message(
-                handle, get_last_control_message()
-            )
-
-            set_last_control_message(current_message)
-
-            unit_cooler.actuator.control.execute(config, current_message)
-
-            # 環境データのメトリクス収集（定期的に実行）
+            # NOTE: 一過性の例外 1 回でワーカーが恒久停止し、バルブが最後の状態
+            # （OPEN もあり得る）のまま放置されないよう、イテレーション単位で例外を
+            # 処理して継続する。Slack 通知はレート制限があるためスパムにはならない。
             try:
-                collect_environmental_metrics(config, current_message)
-            except Exception:
-                logger.debug("Failed to collect environmental metrics")
+                current_message = unit_cooler.actuator.control.get_control_message(
+                    handle, get_last_control_message()
+                )
 
-            my_lib.footprint.update(liveness_file)
+                # NOTE: ハザードやオーバーライドで IDLE に差し替えられた「実効メッセージ」を
+                # 保存し、monitor 側の送信・配信に実際の運転状態が反映されるようにする
+                set_last_control_message(unit_cooler.actuator.control.execute(config, current_message))
+
+                # 環境データのメトリクス収集（定期的に実行）
+                try:
+                    collect_environmental_metrics(config, current_message)
+                except Exception:
+                    logger.debug("Failed to collect environmental metrics")
+
+                my_lib.footprint.update(liveness_file)
+            except Exception:
+                logger.exception("Failed to control valve")
+                unit_cooler.util.notify_error(config, traceback.format_exc())
 
             terminate_event = get_should_terminate()
             if terminate_event is not None and terminate_event.is_set():
@@ -311,6 +327,14 @@ def control_worker(
         logger.exception("Failed to control valve")
         unit_cooler.util.notify_error(config, traceback.format_exc())
         ret = -1
+    finally:
+        # NOTE: どの経路で脱出してもバルブを開いたまま放置しない（フェイルセーフ）
+        try:
+            unit_cooler.actuator.valve_controller.get_valve_controller().close()
+        except RuntimeError:
+            pass  # バルブが未初期化の場合は何もしない
+        except Exception:
+            logger.exception("Failed to close valve")
 
     logger.warning("Stop control worker")
     # NOTE: Queue を close した後に put されると ValueError が発生するので、
@@ -361,7 +385,7 @@ def get_worker_def(config: Config, message_queue: Queue[Any], settings: RuntimeS
     ]
 
 
-def start(executor, worker_def: list[WorkerDef]):
+def start(executor, worker_def: list[WorkerDef]) -> list[WorkerThread]:
     init_should_terminate()
     thread_list = []
 
@@ -371,7 +395,7 @@ def start(executor, worker_def: list[WorkerDef]):
         if worker_info.name == "subscribe_worker":
             params.append(get_should_terminate())
         future = executor.submit(*params)
-        thread_list.append({"name": worker_info.name, "future": future})
+        thread_list.append(WorkerThread(name=worker_info.name, future=future))
 
     return thread_list
 
@@ -391,9 +415,7 @@ if __name__ == "__main__":
     import my_lib.webapp.config
     import my_lib.webapp.log
 
-    import unit_cooler.actuator.valve_controller
     import unit_cooler.cli
-    import unit_cooler.const
     from unit_cooler.config import RuntimeSettings
 
     assert __doc__ is not None  # noqa: S101
@@ -431,10 +453,10 @@ if __name__ == "__main__":
     thread_list = start(executor, get_worker_def(config, message_queue, settings))
 
     for thread_info in thread_list:
-        logger.info("Wait %s finish", thread_info["name"])
+        logger.info("Wait %s finish", thread_info.name)
 
-        if thread_info["future"].result() != 0:
-            logger.warning("Error occurred in %s", thread_info["name"])
+        if thread_info.future.result() != 0:
+            logger.warning("Error occurred in %s", thread_info.name)
 
     unit_cooler.actuator.work_log.term()
 

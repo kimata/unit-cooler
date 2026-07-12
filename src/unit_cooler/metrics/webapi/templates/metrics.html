@@ -90,6 +90,41 @@
                         </div>
                     </div>
 
+                    <!-- 省エネ効果 -->
+                    <div class="section">
+                        {{ section_header("energy-savings", "fa-leaf", "省エネ効果（過去60日間の推定）") }}
+                        <div class="columns">
+                            <div class="column">
+                                <div class="card metrics-card">
+                                    <div class="card-header">
+                                        <p class="card-header-title">削減効果サマリー</p>
+                                    </div>
+                                    <div class="card-content">
+                                        {% if energy.valid %}
+                                        <div class="columns is-multiline">
+                                            {{ stat_item("⚡ 推定削減電力量", energy.saved_energy, "info") }}
+                                            {{ stat_item("💴 推定削減電気代", energy.saved_cost, "success") }}
+                                            {{ stat_item("🚰 水道代", energy.water_cost, "warning") }} {{
+                                            stat_item("💰 純益（電気代 − 水道代）", energy.net_benefit,
+                                            "primary") }}
+                                        </div>
+                                        <p class="help has-text-centered">{{ energy.note }}</p>
+                                        {% else %}
+                                        <p class="has-text-centered has-text-grey">
+                                            データ不足のため省エネ効果を推定できません（{{ energy.note }}）
+                                        </p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% set energy_card = {"anchor": "energy-savings-chart", "title": "🌡️⚡
+                        外気温別の平均消費電力（散水あり vs なし）", "canvas": "energySavingsChart"} %}
+                        <div class="columns">
+                            <div class="column">{{ chart_card(energy_card) }}</div>
+                        </div>
+                    </div>
+
                     <!-- 時間別分布分析 -->
                     <div class="section">
                         {{ section_header("hourly-analysis", "fa-clock", "時間別分布分析") }} {% for card in

@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS minute_metrics (
     humidity REAL,
     lux REAL,
     solar_radiation REAL,
-    rain_amount REAL,
     flow_value REAL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(timestamp)

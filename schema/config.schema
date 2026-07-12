@@ -205,10 +205,24 @@
                                     "type": "boolean"
                                 },
                                 "start_hour": {
-                                    "type": "integer"
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 23
                                 },
                                 "end_hour": {
-                                    "type": "integer"
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 23
+                                },
+                                "start_minute": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 59
+                                },
+                                "end_minute": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 59
                                 }
                             },
                             "required": [
@@ -272,46 +286,18 @@
                             "properties": {
                                 "pin_no": {
                                     "type": "integer"
-                                },
-                                "on": {
-                                    "type": "object",
-                                    "properties": {
-                                        "min": {
-                                            "type": "number"
-                                        },
-                                        "max": {
-                                            "type": "number"
-                                        }
-                                    },
-                                    "required": [
-                                        "max",
-                                        "min"
-                                    ]
-                                },
-                                "off": {
-                                    "type": "object",
-                                    "properties": {
-                                        "max": {
-                                            "type": "number"
-                                        }
-                                    },
-                                    "required": [
-                                        "max"
-                                    ]
-                                },
-                                "power_off_sec": {
-                                    "type": "integer"
                                 }
                             },
                             "required": [
-                                "off",
-                                "on",
-                                "pin_no",
-                                "power_off_sec"
+                                "pin_no"
                             ]
                         },
                         "interval_sec": {
                             "type": "integer"
+                        },
+                        "max_open_sec": {
+                            "type": "integer",
+                            "minimum": 60
                         },
                         "hazard": {
                             "type": "object",
