@@ -232,7 +232,9 @@ tests/
 - **ZeroMQ Publisher-Subscriber** パターンでリアルタイム分散メッセージング
 - **Last Value Caching Proxy** による信頼性向上
 - ポート: 2222（ZeroMQ Pub。Controller → Actuator / Web UI が購読）,
-  5001（Actuator の Flask API。Web UI がプロキシ）, 5000（Web UI の Flask）
+  5001（Actuator の Flask API。Web UI がプロキシ）, 5000（Web UI の Flask）,
+  2223（ZeroMQ Pub。Actuator → Web UI の ActuatorStatus 配信。`-S` /
+  `HEMS_STATUS_PUB_PORT` で有効化。デフォルト 0 = 無効）
 - ポートは config ではなくコマンドライン引数（`-p` 等）/ 環境変数（`HEMS_CONTROL_HOST` 等）で指定
 
 ### 技術スタック

@@ -103,7 +103,8 @@ class TestMetricsView:
             # 省エネ効果セクションが存在する
             assert "省エネ効果" in html
             # JS にデータ取得先 URL が渡される
-            assert 'data-api-url="/unit-cooler/api/metrics/data"' in html
+            # NOTE: 直接アクセスと Web UI プロキシ経由の両方で解決できるよう相対パスで渡す
+            assert 'data-api-url="metrics/data"' in html
 
     def test_returns_503_when_db_not_found(self, mocker):
         """データベースが存在しない場合に 503 を返す"""
@@ -230,3 +231,15 @@ class TestStatic:
         with app.test_client() as client:
             assert client.get("/unit-cooler/metrics/static/metrics.css").status_code == 200
             assert client.get("/unit-cooler/metrics/static/metrics.js").status_code == 200
+
+    def test_static_blueprint_serves_same_paths(self):
+        """Web UI 用 static_blueprint が同じパスで JS/CSS/favicon を配信する"""
+        import unit_cooler.metrics.webapi.page as page
+
+        app = flask.Flask(__name__)
+        app.register_blueprint(page.static_blueprint, url_prefix="/unit-cooler")
+
+        with app.test_client() as client:
+            assert client.get("/unit-cooler/metrics/static/metrics.css").status_code == 200
+            assert client.get("/unit-cooler/metrics/static/metrics.js").status_code == 200
+            assert client.get("/unit-cooler/metrics/static/favicon.ico").status_code == 200

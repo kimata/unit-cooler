@@ -74,8 +74,13 @@ spec:
     selector:
         app: unit-cooler-actuator
     ports:
-        - port: 5001
+        - name: api
+          port: 5001
           targetPort: 5001
+        # NOTE: ActuatorStatus の ZeroMQ 配信ポート（webui が購読）
+        - name: status
+          port: 2223
+          targetPort: 2223
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -119,6 +124,10 @@ spec:
                   env:
                       - name: HEMS_CONTROL_HOST
                         value: unit-cooler-controller.hems.svc.cluster.local
+                      # NOTE: 未設定（デフォルト 0）だと ActuatorStatus が配信されず、
+                      # Web UI に「Actuator 途絶」が常時表示される
+                      - name: HEMS_STATUS_PUB_PORT
+                        value: "2223"
                       - name: NODE_HOSTNAME
                         value: rasp-cooler-1
                   volumeMounts:
@@ -197,6 +206,8 @@ spec:
                         value: unit-cooler-controller.hems.svc.cluster.local
                       - name: HEMS_ACTUATOR_HOST
                         value: unit-cooler-actuator.hems.svc.cluster.local
+                      - name: HEMS_STATUS_PUB_PORT
+                        value: "2223"
                   resources:
                       requests:
                           memory: 128Mi
@@ -263,6 +274,8 @@ spec:
                         value: unit-cooler-controller.hems.svc.cluster.local
                       - name: HEMS_ACTUATOR_HOST
                         value: unit-cooler-actuator.hems.svc.cluster.local
+                      - name: HEMS_STATUS_PUB_PORT
+                        value: "2223"
                   resources:
                       requests:
                           memory: 128Mi

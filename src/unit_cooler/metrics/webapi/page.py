@@ -32,6 +32,17 @@ blueprint = flask.Blueprint(
     static_url_path="/metrics/static",
 )
 
+# Web UI 用の静的ファイル配信 blueprint。
+# メトリクスページは Web UI のプロキシ（/api/proxy/html/api/metrics）経由でも表示されるが、
+# ページ内の url_for("metrics.static", ...) は Actuator 上の絶対パスを生成するため、
+# Web UI 側にも同じパスで JS/CSS/favicon を配信するルートが必要になる。
+static_blueprint = flask.Blueprint(
+    "metrics-static",
+    __name__,
+    static_folder="static",
+    static_url_path="/metrics/static",
+)
+
 # 時系列チャートで扱うカラム
 TIMESERIES_COLUMNS = [
     "cooling_mode",
@@ -129,7 +140,9 @@ def metrics_view():
             period_text=format_period_text(period),
             stats=format_statistics(stats),
             energy=format_energy(get_energy_analysis(config, collector)),
-            data_url=flask.url_for("metrics.metrics_data"),
+            # NOTE: 相対パスにすることで、直接アクセス（/unit-cooler/api/metrics）と
+            # Web UI プロキシ経由（/unit-cooler/api/proxy/html/api/metrics）の両方で解決できる
+            data_url="metrics/data",
         )
     except Exception as e:
         logger.exception("メトリクス表示の生成エラー")

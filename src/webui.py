@@ -77,6 +77,7 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
     import my_lib.webapp.util
 
     import unit_cooler.const
+    import unit_cooler.metrics.webapi.page
     import unit_cooler.webui.webapi.cooler_stat
     import unit_cooler.webui.worker
 
@@ -146,6 +147,10 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
     app.register_blueprint(my_lib.webapp.util.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
     app.register_blueprint(
         unit_cooler.webui.webapi.cooler_stat.blueprint, url_prefix=unit_cooler.const.URL_PREFIX
+    )
+    # メトリクスページ（プロキシ経由で表示）が参照する JS/CSS/favicon を Web UI 側でも配信する
+    app.register_blueprint(
+        unit_cooler.metrics.webapi.page.static_blueprint, url_prefix=unit_cooler.const.URL_PREFIX
     )
 
     my_lib.webapp.config.show_handler_list(app)

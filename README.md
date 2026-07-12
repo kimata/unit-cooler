@@ -248,6 +248,7 @@ sequenceDiagram
 - **Last Value Caching (LVC) Proxy**による信頼性向上と最新値キャッシュ
 - Controller → Actuator / Web UI: ポート2222（ZeroMQ Pub、制御信号）
 - Web UI → Actuator: ポート5001（HTTP、ログ・バルブ状態のプロキシ）
+- Actuator → Web UI: ポート2223（ZeroMQ Pub、ActuatorStatus。`-S` / `HEMS_STATUS_PUB_PORT` で有効化）
 - Web UI: ポート5000（Flask、ブラウザ向け）
 
 ### 技術スタック
