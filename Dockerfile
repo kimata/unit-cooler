@@ -1,4 +1,5 @@
-ARG PYTHON_VERSION=3.13
+# NOTE: .python-version（テスト済みランタイム）と揃えること
+ARG PYTHON_VERSION=3.12
 FROM python:${PYTHON_VERSION}-bookworm AS build
 
 RUN --mount=type=cache,target=/var/lib/apt,sharing=locked \

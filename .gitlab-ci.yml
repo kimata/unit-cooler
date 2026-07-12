@@ -153,6 +153,30 @@ test-pytest:
                 coverage_format: cobertura
                 path: reports/coverage.xml
 
+# NOTE: プロジェクト固有ジョブ。
+# 本番 config（hems-config）が現行 schema で読み込めることを push 時点で検証する。
+# schema の必須化・キー変更に対して本番 config の更新が漏れると、デプロイ後に
+# 起動不能（crash-loop）になるため、それをデプロイ前に検出するのが目的。
+# hems-config の取得方法は build-image と同じ（CI_JOB_TOKEN でクローン）。
+test-config-compat:
+    extends: .cache-base
+    stage: test
+    needs: []
+
+    before_script:
+        - uv sync --locked --no-editable
+
+    script:
+        # サンプル config の検証
+        - >
+            uv run python -c "import unit_cooler.config;
+            unit_cooler.config.Config.load('config.example.yaml', 'schema/config.schema')"
+        # 本番 config の検証
+        - git clone --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.green-rabbit.net/kimata/hems-config.git
+        - >
+            uv run python -c "import unit_cooler.config;
+            unit_cooler.config.Config.load('hems-config/unit-cooler.yaml', 'schema/config.schema')"
+
 # Base templates
 .docker-cleanup-base:
     before_script:
@@ -250,7 +274,7 @@ test-controller-regular:
         - >
             timeout 60 bash -c "until curl --fail --connect-timeout 10 --max-time 15 \"${LOG_URL}\" > /dev/null 2>&1;
             do echo 'Retrying in 5 seconds...'; sleep 5; done" || ACCESS_FAILED=1
-        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > controller_log.txt
+        - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-CTRL > controller_log.txt
         - docker logs ${CI_JOB_NAME}-${CI_JOB_ID}-ACT > actuator_log.txt
         - |
             if [ "$ACCESS_FAILED" = "1" ]; then
@@ -544,6 +568,8 @@ tag-latest:
           artifacts: false
         - job: test-pytest
           artifacts: false
+        - job: test-config-compat
+          artifacts: false
 
     before_script:
         - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
@@ -576,6 +602,8 @@ deploy:
         - job: test-healthz-docker
           artifacts: false
         - job: test-pytest
+          artifacts: false
+        - job: test-config-compat
           artifacts: false
 
     before_script: []

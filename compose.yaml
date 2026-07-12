@@ -15,6 +15,9 @@ services:
         command: ./src/actuator.py
         tty: true
         stdin_open: true
+        volumes:
+            # ハザードラッチ・メトリクス DB・作動ログの永続化
+            - ./data:/opt/unit_cooler/data
         ports:
             - "5001:5001"
         environment:
@@ -31,8 +34,6 @@ services:
         command: ./src/webui.py
         tty: true
         stdin_open: true
-        volumes:
-            - ./data:/opt/unit_cooler/data
         ports:
             - "5000:5000"
         environment:

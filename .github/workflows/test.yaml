@@ -25,21 +25,21 @@ jobs:
               with:
                   node-version: ${{ matrix.node-version }}
                   cache: "npm"
-                  cache-dependency-path: "react/package-lock.json"
+                  cache-dependency-path: "frontend/package-lock.json"
 
             - name: Install Dependencies
               run: npm ci
-              working-directory: ./react
+              working-directory: ./frontend
 
             - name: Build
               run: npm run build
-              working-directory: ./react
+              working-directory: ./frontend
 
             - name: Upload built file
               uses: actions/upload-artifact@v4
               with:
-                  name: react-dist
-                  path: react/dist
+                  name: frontend-dist
+                  path: frontend/dist
 
     test:
         needs: build
@@ -60,11 +60,11 @@ jobs:
               with:
                   python-version: ${{ matrix.python-version }}
 
-            - name: Download react built files
+            - name: Download frontend built files
               uses: actions/download-artifact@v4
               with:
-                  name: react-dist
-                  path: react/dist
+                  name: frontend-dist
+                  path: frontend/dist
 
             - name: Set locale
               run: |
@@ -138,11 +138,11 @@ jobs:
               with:
                   python-version: "3.12"
 
-            - name: Download react built files
+            - name: Download frontend built files
               uses: actions/download-artifact@v4
               with:
-                  name: react-dist
-                  path: react/dist
+                  name: frontend-dist
+                  path: frontend/dist
 
             - name: Set locale
               run: |

@@ -104,6 +104,13 @@ spec:
                 - name: dev-tty
                   hostPath:
                       path: /dev/ttyAMA0
+                # NOTE: ハザードラッチ（data/unit_cooler.hazard）・メトリクス DB（data/metrics.db）・
+                # 作動ログを Pod 再作成後も保持するための永続領域。
+                # actuator は nodeSelector で rasp-cooler-1 に固定されているため hostPath で問題ない。
+                - name: data
+                  hostPath:
+                      path: /home/ubuntu/github/unit-cooler/data
+                      type: DirectoryOrCreate
             containers:
                 - name: unit-cooler-actuator
                   image: registry.green-rabbit.net:5000/kimata/unit-cooler:latest
@@ -121,6 +128,8 @@ spec:
                         name: dev-spidev
                       - mountPath: /dev/ttyAMA0
                         name: dev-tty
+                      - mountPath: /opt/unit_cooler/data
+                        name: data
                   securityContext:
                       privileged: true
                   resources:
@@ -177,10 +186,76 @@ spec:
                 app: unit-cooler-webui
         spec:
             containers:
-                - name: unit-cooler-controller
+                - name: unit-cooler-webui
                   image: registry.green-rabbit.net:5000/kimata/unit-cooler:latest
                   imagePullPolicy: Always
                   command: ["./src/webui.py"]
+                  ports:
+                      - containerPort: 5000
+                  env:
+                      - name: HEMS_CONTROL_HOST
+                        value: unit-cooler-controller.hems.svc.cluster.local
+                      - name: HEMS_ACTUATOR_HOST
+                        value: unit-cooler-actuator.hems.svc.cluster.local
+                  resources:
+                      requests:
+                          memory: 128Mi
+                      limits:
+                          memory: 256Mi
+                  livenessProbe:
+                      exec:
+                          command:
+                              - /opt/unit_cooler/src/healthz.py
+                              - "-m"
+                              - WEB
+                      initialDelaySeconds: 120
+                      periodSeconds: 120
+                      timeoutSeconds: 30
+                      successThreshold: 1
+                      failureThreshold: 3
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+                kubernetes.io/hostname: worker
+---
+kind: Service
+apiVersion: v1
+metadata:
+    name: unit-cooler-webui-demo
+    namespace: hems
+    annotations:
+        metallb.universe.tf/address-pool: default
+        external-dns.alpha.kubernetes.io/hostname: unit-cooler-webui-demo.kubernetes.green-rabbit.net
+spec:
+    selector:
+        app: unit-cooler-webui-demo
+    ports:
+        - port: 5000
+          targetPort: 5000
+    type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: unit-cooler-webui-demo
+    namespace: hems
+    labels:
+        app: unit-cooler-webui-demo
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: unit-cooler-webui-demo
+    template:
+        metadata:
+            labels:
+                app: unit-cooler-webui-demo
+        spec:
+            containers:
+                - name: unit-cooler-webui-demo
+                  image: registry.green-rabbit.net:5000/kimata/unit-cooler:latest
+                  imagePullPolicy: Always
+                  # NOTE: -d でダミーモード（webui.py が DUMMY_MODE=true を設定する）
+                  command: ["./src/webui.py", "-d"]
                   ports:
                       - containerPort: 5000
                   env:
