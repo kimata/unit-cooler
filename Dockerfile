@@ -1,3 +1,4 @@
+
 # NOTE: .python-version（テスト済みランタイム）と揃えること
 ARG PYTHON_VERSION=3.12
 FROM python:${PYTHON_VERSION}-bookworm AS build
@@ -24,6 +25,7 @@ RUN make -C lg
 RUN make -C lg install
 
 # NOTE: システムにインストール
+# NOTE: .git は uv-dynamic-versioning がバージョン取得に必要
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=.python-version,target=.python-version \
     --mount=type=bind,source=uv.lock,target=uv.lock \
@@ -46,13 +48,14 @@ COPY --from=build /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/loca
 COPY --from=build /usr/local/lib/liblgpio.so* /usr/local/lib
 RUN ldconfig
 
-
 WORKDIR /opt/unit_cooler
 
 COPY . .
 
 EXPOSE 2222
+
 EXPOSE 5000
+
 EXPOSE 5001
 
 CMD ["./src/controller.py"]
