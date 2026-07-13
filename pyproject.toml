@@ -15,7 +15,7 @@ dependencies = [
     "flask-cors>=6.0.2",
     "docopt-ng>=0.9.0",
     "influxdb-client[ciso]>=1.49.0",
-    "my-lib @ git+https://github.com/kimata/my-py-lib@be74e66ae2d2edb25dd829aee56f8a96f7860cc8",
+    "my-lib @ git+https://github.com/kimata/my-py-lib@738656ce5aae03d551e81dc2fad89b2466fb9626",
     "flask-pydantic>=0.12.0",
     "spidev>=3.8",
     "fluent-logger>=0.11.1",
@@ -78,7 +78,7 @@ select = ["E", "F", "W", "I", "B", "UP"]
 minversion = "6.0"
 # E2E テストはデフォルトで除外（外部サーバーが必要なため）
 # E2E テスト実行: uv run pytest tests/e2e/ --host <host> --port <port>
-addopts = "--verbose --timeout=300 --durations=10 --log-file-level=DEBUG --log-format=\"%(asctime)s %(levelname)s %(message)s\" --log-format=\"%(asctime)s %(levelname)s [%(filename)s:%(lineno)s %(funcName)s] %(message)s\" --capture=sys --junit-xml=reports/junit-report.xml --html=reports/pytest.html --self-contained-html --cov=src --cov-report=html --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-report=lcov:reports/coverage.lcov --numprocesses=auto --ignore=tests/e2e"
+addopts = "--verbose --timeout=300 --durations=10 --log-file-level=DEBUG --log-format=\"%(asctime)s %(levelname)s [%(filename)s:%(lineno)s %(funcName)s] %(message)s\" --capture=sys --junit-xml=reports/junit-report.xml --html=reports/pytest.html --self-contained-html --cov=src --cov-report=html --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-report=lcov:reports/coverage.lcov --numprocesses=auto --ignore=tests/e2e"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:datetime\\.datetime\\.utcfromtimestamp\\(\\) is deprecated:DeprecationWarning",
