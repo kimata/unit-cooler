@@ -10,7 +10,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-07-07T02:05:40.684392891Z"
+exclude-newer = "2026-07-07T03:48:23.555787362Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -1289,7 +1289,7 @@ wheels = [
 [[package]]
 name = "my-lib"
 version = "0.2.0"
-source = { git = "https://github.com/kimata/my-py-lib?rev=4e93797441d3b509925c900d3a16d4b8f534fee9#4e93797441d3b509925c900d3a16d4b8f534fee9" }
+source = { git = "https://github.com/kimata/my-py-lib?rev=0726f8b7cccd8f83b76989b2496afea556f62728#0726f8b7cccd8f83b76989b2496afea556f62728" }
 dependencies = [
     { name = "coloredlogs" },
     { name = "dacite" },
@@ -2499,7 +2499,7 @@ requires-dist = [
     { name = "flask-pydantic", specifier = ">=0.12.0" },
     { name = "fluent-logger", specifier = ">=0.11.1" },
     { name = "influxdb-client", extras = ["ciso"], specifier = ">=1.49.0" },
-    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=4e93797441d3b509925c900d3a16d4b8f534fee9" },
+    { name = "my-lib", git = "https://github.com/kimata/my-py-lib?rev=0726f8b7cccd8f83b76989b2496afea556f62728" },
     { name = "pillow", specifier = ">=12.1.0" },
     { name = "pyzmq", specifier = ">=27.1.0" },
     { name = "rpi-lgpio", specifier = ">=0.6" },

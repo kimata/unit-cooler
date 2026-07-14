@@ -14,17 +14,17 @@ Options:
 
 from __future__ import annotations
 
-import logging
+import pathlib
 from typing import TYPE_CHECKING
 
 import my_lib.healthz
-
-logger = logging.getLogger(__name__)
+import my_lib.healthz.cli
 
 if TYPE_CHECKING:
     from unit_cooler.config import Config
 
 VALID_MODES = ("CTRL", "ACT", "WEB")
+SCHEMA_CONFIG = "schema/config.schema"
 
 
 def get_liveness_targets(config: Config, mode: str) -> list[my_lib.healthz.HealthzTarget]:
@@ -79,38 +79,25 @@ def get_liveness_targets(config: Config, mode: str) -> list[my_lib.healthz.Healt
         raise ValueError(f"Unknown mode: {mode} (expected one of {VALID_MODES})")
 
 
+def _load_config(config_file, args):
+    from unit_cooler.config import Config
+
+    return Config.load(config_file, pathlib.Path(SCHEMA_CONFIG))
+
+
+def _targets(config, args):
+    return get_liveness_targets(config, args["-m"])
+
+
+SPEC = my_lib.healthz.cli.HealthzCliSpec(
+    logger_name="hems.unit_cooler",
+    config_loader=_load_config,
+    targets_builder=_targets,
+    use_http_port=True,
+    # CTRL / ACT は WEB サーバを持たないためポートチェックしない
+    http_port_enabled=lambda config, args: args["-m"] == "WEB",
+)
+
 if __name__ == "__main__":
-    import sys
-
-    import my_lib.pretty
-
-    import unit_cooler.cli
-
     assert __doc__ is not None  # noqa: S101
-    args, config = unit_cooler.cli.init(__doc__)
-
-    mode = args["-m"]
-    port = args["-p"]
-
-    logger.info("Mode: %s", mode)
-    if mode not in VALID_MODES:
-        logger.error("Unknown mode: %s (expected one of %s)", mode, ", ".join(VALID_MODES))
-        sys.exit(1)
-
-    if mode == "CTRL" or mode == "ACT":
-        port = None
-
-    target_list = get_liveness_targets(config, mode)
-
-    logger.debug(my_lib.pretty.format(target_list))
-
-    failed_targets = my_lib.healthz.check_liveness_all_with_ports(
-        target_list,
-        http_port=port,
-    )
-
-    if not failed_targets:
-        logger.info("OK.")
-        sys.exit(0)
-    else:
-        sys.exit(-1)
+    my_lib.healthz.cli.run(SPEC, __doc__)
