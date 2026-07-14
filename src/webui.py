@@ -23,13 +23,13 @@ from __future__ import annotations
 import logging
 import os
 import queue
-import signal
 import sys
 import threading
 from typing import TYPE_CHECKING
 
 import flask
 import flask_cors
+import my_lib.webapp.runner
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,8 @@ if TYPE_CHECKING:
 worker_threads: list[threading.Thread] = []
 
 
-def term():
+def _shutdown_workers():
+    """ワーカーを停止して終了を待つ (プロセス終了はしない)"""
     # ワーカーの終了フラグを設定
     import unit_cooler.webui.worker
 
@@ -56,16 +57,13 @@ def term():
                 logger.warning("Worker thread did not finish in time")
     worker_threads.clear()
 
+
+def term():
+    _shutdown_workers()
+
     # プロセス終了
     logger.info("Graceful shutdown completed")
     sys.exit(0)
-
-
-def signal_handler(signum, _frame):
-    """シグナルハンドラー: CTRL-Cや終了シグナルを受け取った際の処理"""
-    logger.info("Received signal %d, shutting down gracefully...", signum)
-
-    term()
 
 
 def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
@@ -160,15 +158,19 @@ def create_app(config: Config, settings: RuntimeSettings) -> flask.Flask:
     return app
 
 
-if __name__ == "__main__":
-    import unit_cooler.cli
+def _load_config(config_file, args):
+    import pathlib
+
+    from unit_cooler.config import Config
+
+    return Config.load(config_file, pathlib.Path("schema/config.schema"))
+
+
+def _app_factory(config, ctx):
     from unit_cooler.config import RuntimeSettings
 
-    assert __doc__ is not None  # noqa: S101
-    args, config = unit_cooler.cli.init(__doc__)
-
     settings = RuntimeSettings.from_args(
-        args,
+        ctx.args,
         {
             "control_host": "-s",
             "pub_port": "-p",
@@ -186,20 +188,22 @@ if __name__ == "__main__":
         # NOTE: ダミーモード指定時は下流コードが参照する環境変数も揃えておく
         os.environ["DUMMY_MODE"] = "true"
 
-    app = create_app(config, settings)
+    return create_app(config, settings)
 
-    # コンテナでは PID 1 で動作するため、明示的に登録しないと SIGTERM が無視される
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
 
-    # Flaskアプリケーションを実行
-    try:
-        # NOTE: use_reloader=True にすると reloader の親プロセスでも create_app() が走り、
-        # ZMQ 購読ワーカースレッドが親子で二重起動してしまう。本番では自動リロードは
-        # 不要なので False にする。
-        app.run(host="0.0.0.0", threaded=True, use_reloader=False, port=config.webui.webapp.port)  # noqa: S104
-    except KeyboardInterrupt:
-        logger.info("Received KeyboardInterrupt, shutting down...")
-        signal_handler(signal.SIGINT, None)
-    finally:
-        term()
+SPEC = my_lib.webapp.runner.WebAppSpec(
+    logger_name="hems.unit_cooler",
+    config_loader=_load_config,
+    app_factory=_app_factory,
+    term_hooks=(_shutdown_workers,),
+    # NOTE: use_reloader=True にすると reloader の親プロセスでも create_app() が走り、
+    # ZMQ 購読ワーカースレッドが親子で二重起動してしまう。本番では自動リロードは
+    # 不要なので False にする。
+    use_reloader=False,
+    # -p は ZMQ Pub ポートのため、WEB サーバのポートは config から取る
+    port_resolver=lambda config, args: config.webui.webapp.port,
+)
+
+if __name__ == "__main__":
+    assert __doc__ is not None  # noqa: S101
+    my_lib.webapp.runner.run(SPEC, __doc__)
