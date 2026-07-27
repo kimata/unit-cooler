@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import queue
+import time
 import traceback
 from typing import TYPE_CHECKING, Any
 
@@ -17,6 +18,12 @@ from unit_cooler.messages import ControlMessage
 
 logger = logging.getLogger(__name__)
 
+# 受信がこの秒数途絶えたら SUB ソケットを作り直して再接続する。
+# Publisher 側ノードの突然死（電源断等）では FIN/RST が届かず、SUB は自分からは
+# 何も送信しないため、ハーフオープン接続を掴んだまま永遠に受信できなくなる。
+# Controller の配信間隔（60 秒）の 3 倍を目安とする。
+RECONNECT_TIMEOUT_SEC = 180
+
 if TYPE_CHECKING:
     import pathlib
     import threading
@@ -29,6 +36,27 @@ if TYPE_CHECKING:
     MessageQueue = Queue[ControlMessage] | queue.Queue[ControlMessage]
 
 
+def create_subscriber(context: zmq.Context, host: str, port: int, topic: str) -> zmq.Socket:
+    """死活検知付きの SUB ソケットを作成して接続する
+
+    NOTE: Publisher ノードの突然死では FIN/RST が届かないため、TCP keepalive と
+    ZMTP heartbeat でカーネル / ZeroMQ レベルでも切断を検知・再接続させる。
+    """
+    socket = context.socket(zmq.SUB)
+    socket.setsockopt(zmq.TCP_KEEPALIVE, 1)
+    socket.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 60)
+    socket.setsockopt(zmq.TCP_KEEPALIVE_INTVL, 10)
+    socket.setsockopt(zmq.TCP_KEEPALIVE_CNT, 3)
+    socket.setsockopt(zmq.HEARTBEAT_IVL, 10 * 1000)
+    socket.setsockopt(zmq.HEARTBEAT_TIMEOUT, 30 * 1000)
+    # ノンブロッキング受信のためにタイムアウトを設定（終了フラグ確認用）
+    socket.setsockopt(zmq.RCVTIMEO, 1000)  # 1秒タイムアウト
+    socket.setsockopt(zmq.LINGER, 0)
+    socket.connect(f"tcp://{host}:{port}")
+    socket.setsockopt_string(zmq.SUBSCRIBE, topic)
+    return socket
+
+
 def start_client(
     server_host: str,
     server_port: int,
@@ -39,17 +67,12 @@ def start_client(
     logger.info("Start ZMQ client...")
 
     context = zmq.Context()
-    socket = context.socket(zmq.SUB)
-    target = f"tcp://{server_host}:{server_port}"
-    socket.connect(target)
-    socket.setsockopt_string(zmq.SUBSCRIBE, unit_cooler.const.PUBSUB_CH)
-
-    # ノンブロッキング受信のためにタイムアウトを設定
-    socket.setsockopt(zmq.RCVTIMEO, 1000)  # 1秒タイムアウト
+    socket = create_subscriber(context, server_host, server_port, unit_cooler.const.PUBSUB_CH)
 
     logger.info("Client initialize done.")
 
     receive_count = 0
+    last_recv_time = time.monotonic()
     while True:
         # 終了フラグをチェック
         if should_terminate and should_terminate.is_set():
@@ -59,13 +82,24 @@ def start_client(
         try:
             raw_message = socket.recv_string()
         except zmq.Again:
-            # タイムアウト時は継続してループを回す
+            # タイムアウト時: 受信が長時間途絶えていたらソケットを作り直す
+            # （ハーフオープン接続を掴んだままだと自然回復しないため）
+            if time.monotonic() - last_recv_time > RECONNECT_TIMEOUT_SEC:
+                logger.warning(
+                    "No message received for %.0f sec, recreating socket...",
+                    time.monotonic() - last_recv_time,
+                )
+                socket.close()
+                socket = create_subscriber(context, server_host, server_port, unit_cooler.const.PUBSUB_CH)
+                last_recv_time = time.monotonic()
             continue
+
+        last_recv_time = time.monotonic()
 
         # NOTE: 不正なメッセージ 1 通でワーカーが止まらないよう、
         # メッセージ単位で例外を処理してスキップする
         try:
-            ch, json_str = raw_message.split(" ", 1)
+            _, json_str = raw_message.split(" ", 1)
             json_data = my_lib.json_util.loads(json_str)
             logger.debug("recv %s", json_data)
             func(json_data)
@@ -82,7 +116,6 @@ def start_client(
 
     logger.warning("Stop ZMQ client")
 
-    socket.disconnect(target)
     socket.close()
     context.destroy()
 

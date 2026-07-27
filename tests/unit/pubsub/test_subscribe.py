@@ -142,9 +142,61 @@ class TestStartClient:
             should_terminate=should_terminate,
         )
 
-        mock_socket.disconnect.assert_called_with("tcp://localhost:2222")
         mock_socket.close.assert_called()
         mock_context.destroy.assert_called()
+
+    def test_reconnects_after_receive_timeout(self, mocker):
+        """受信途絶が続くとソケットを作り直して再接続する"""
+        import unit_cooler.pubsub.subscribe
+
+        mock_context = MagicMock()
+        mock_socket = MagicMock()
+        mock_context.socket.return_value = mock_socket
+        mocker.patch("zmq.Context", return_value=mock_context)
+        # 経過時間によらず即座にウォッチドッグが発動するようにする
+        mocker.patch("unit_cooler.pubsub.subscribe.RECONNECT_TIMEOUT_SEC", -1)
+
+        should_terminate = threading.Event()
+        call_count = [0]
+
+        def recv_side_effect():
+            call_count[0] += 1
+            if call_count[0] >= 2:
+                should_terminate.set()
+            raise zmq.Again()
+
+        mock_socket.recv_string.side_effect = recv_side_effect
+
+        unit_cooler.pubsub.subscribe.start_client(
+            server_host="localhost",
+            server_port=2222,
+            func=lambda x: None,
+            msg_count=0,
+            should_terminate=should_terminate,
+        )
+
+        # 初回接続 + ウォッチドッグによる再接続でソケットが複数回作成される
+        assert mock_context.socket.call_count >= 2
+        mock_socket.close.assert_called()
+
+
+class TestCreateSubscriber:
+    """create_subscriber のテスト"""
+
+    def test_sets_keepalive_options(self):
+        """TCP keepalive と受信タイムアウトが設定される"""
+        import unit_cooler.pubsub.subscribe
+
+        context = zmq.Context()
+        socket = unit_cooler.pubsub.subscribe.create_subscriber(context, "localhost", 42223, "test_topic")
+        try:
+            assert socket.getsockopt(zmq.TCP_KEEPALIVE) == 1
+            assert socket.getsockopt(zmq.TCP_KEEPALIVE_IDLE) == 60
+            assert socket.getsockopt(zmq.RCVTIMEO) == 1000
+            assert socket.getsockopt(zmq.LINGER) == 0
+        finally:
+            socket.close()
+            context.term()
 
 
 class TestMessageParsing:

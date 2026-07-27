@@ -283,6 +283,42 @@ class TestActuatorStatusWorker:
         # エラーが発生しても正常終了
         assert result == 0
 
+    def test_reconnects_after_receive_timeout(self, config, mocker):
+        """受信途絶が続くとソケットを作り直して再接続する"""
+        import zmq
+
+        import unit_cooler.webui.worker
+
+        unit_cooler.webui.worker.should_terminate.clear()
+
+        mock_socket = mocker.MagicMock()
+        mock_context = mocker.MagicMock()
+        mock_context.socket.return_value = mock_socket
+        mocker.patch("zmq.Context", return_value=mock_context)
+        # 経過時間によらず即座にウォッチドッグが発動するようにする
+        mocker.patch("unit_cooler.webui.worker.STATUS_RECONNECT_TIMEOUT_SEC", -1)
+
+        call_count = [0]
+
+        def recv_side_effect():
+            call_count[0] += 1
+            if call_count[0] >= 2:
+                unit_cooler.webui.worker.should_terminate.set()
+            raise zmq.Again()
+
+        mock_socket.recv_string.side_effect = recv_side_effect
+
+        result = unit_cooler.webui.worker.actuator_status_worker(
+            config=config,
+            actuator_host="localhost",
+            status_pub_port=5560,
+        )
+
+        assert result == 0
+        # 初回接続 + ウォッチドッグによる再接続でソケットが複数回作成される
+        assert mock_context.socket.call_count >= 2
+        mock_socket.close.assert_called()
+
     def test_handles_connection_error(self, config, mocker):
         """接続エラーを処理"""
         import unit_cooler.webui.worker

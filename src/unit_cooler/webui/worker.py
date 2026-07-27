@@ -5,6 +5,7 @@ import json
 import logging
 import pathlib
 import threading
+import time
 import traceback
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,10 @@ import unit_cooler.util
 from unit_cooler.messages import ActuatorStatus, ControlMessage
 
 logger = logging.getLogger(__name__)
+
+# ActuatorStatus は毎秒配信のため、この秒数受信が途絶えたらソケットを作り直す
+# （Actuator ノードの突然死でハーフオープン接続が残った場合の自己復旧用）
+STATUS_RECONNECT_TIMEOUT_SEC = 60
 
 if TYPE_CHECKING:
     import datetime
@@ -107,16 +112,33 @@ def actuator_status_worker(
     socket = None
     try:
         context = zmq.Context()
-        socket = context.socket(zmq.SUB)
-        socket.connect(f"tcp://{actuator_host}:{status_pub_port}")
-        socket.setsockopt_string(zmq.SUBSCRIBE, "actuator_status")
-        socket.setsockopt(zmq.RCVTIMEO, 1000)  # 1秒タイムアウト
+        socket = unit_cooler.pubsub.subscribe.create_subscriber(
+            context, actuator_host, status_pub_port, "actuator_status"
+        )
 
         logger.info("Connected to ActuatorStatus publisher")
 
+        last_recv_time = time.monotonic()
         while not should_terminate.is_set():
             try:
                 message = socket.recv_string()
+            except zmq.Again:
+                # タイムアウト - 受信が長時間途絶えていたらソケットを作り直す
+                # （Actuator ノードの突然死でハーフオープン接続が残ると自然回復しないため）
+                if time.monotonic() - last_recv_time > STATUS_RECONNECT_TIMEOUT_SEC:
+                    logger.warning(
+                        "No ActuatorStatus received for %.0f sec, recreating socket...",
+                        time.monotonic() - last_recv_time,
+                    )
+                    socket.close()
+                    socket = unit_cooler.pubsub.subscribe.create_subscriber(
+                        context, actuator_host, status_pub_port, "actuator_status"
+                    )
+                    last_recv_time = time.monotonic()
+                continue
+
+            last_recv_time = time.monotonic()
+            try:
                 # メッセージ形式: "actuator_status {json_data}"
                 if message.startswith("actuator_status "):
                     json_data = message[len("actuator_status ") :]
@@ -124,9 +146,6 @@ def actuator_status_worker(
                     status = ActuatorStatus.from_dict(data)
                     set_last_actuator_status(status)
                     logger.debug("Received ActuatorStatus: %s", status)
-            except zmq.Again:
-                # タイムアウト - 終了フラグをチェックして継続
-                continue
             except Exception:
                 logger.warning("Failed to parse ActuatorStatus", exc_info=True)
 
