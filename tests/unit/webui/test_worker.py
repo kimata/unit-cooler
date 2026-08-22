@@ -46,6 +46,7 @@ class TestSetLastActuatorStatus:
             flow_lpm=1.5,
             cooling_mode_index=3,
             hazard_detected=False,
+            override_active=False,
         )
 
         before = my_lib.time.now()
@@ -180,6 +181,7 @@ class TestActuatorStatusWorker:
             flow_lpm=2.5,
             cooling_mode_index=4,
             hazard_detected=False,
+            override_active=False,
         )
 
         # モックソケットを作成

@@ -43,10 +43,19 @@ class TestCreateStatus:
         assert isinstance(status.timestamp, str)
 
     def test_hazard_defaults_to_false(self):
-        """hazard_detected の既定値は False"""
+        """hazard_detected / override_active の既定値は False"""
         status = unit_cooler.actuator.status_publisher.create_status(_mist_condition(), _control_message())
 
         assert status.hazard_detected is False
+        assert status.override_active is False
+
+    def test_override_active_is_mapped(self):
+        """override_active が ActuatorStatus に配線される"""
+        status = unit_cooler.actuator.status_publisher.create_status(
+            _mist_condition(), _control_message(), override_active=True
+        )
+
+        assert status.override_active is True
 
     def test_flow_none_is_preserved(self):
         """流量が None の場合もそのまま保持する"""

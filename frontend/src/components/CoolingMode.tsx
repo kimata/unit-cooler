@@ -33,6 +33,13 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     // 「残り秒を毎秒デクリメント」ではなく終了時刻基準で毎回計算することで、
     // setInterval の遅延・バックグラウンドタブによるドリフトを防ぐ。
     const [deadlineMs, setDeadlineMs] = useState<number | null>(null);
+
+    // Actuator 側で Duty 制御が停止されているか（手動オーバーライド or ハザード）。
+    // stat.mode.duty は Controller の生メッセージ由来でこれらを反映しないため、
+    // ActuatorStatus の実効状態で判定する（未受信・鮮度切れで null の場合は判定しない）。
+    const overrideActive = stat.actuator_status?.override_active === true;
+    const hazardDetected = stat.actuator_status?.hazard_detected === true;
+    const dutySuspended = overrideActive || hazardDetected;
     const [remainingTime, setRemainingTime] = useState(0);
     const [currentFlow, setCurrentFlow] = useState(0);
 
@@ -60,7 +67,7 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
 
     // バルブ状態の更新時に終了予定時刻を再計算する
     useEffect(() => {
-        if (!isReady || !stat.mode?.duty?.enable || valveLoading) {
+        if (!isReady || !stat.mode?.duty?.enable || valveLoading || dutySuspended) {
             setDeadlineMs(null);
             return;
         }
@@ -70,7 +77,7 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
         const remaining = Math.max(0, maxDuration - valveStatus.duration);
 
         setDeadlineMs(Date.now() + remaining * 1000);
-    }, [isReady, stat.mode?.duty?.enable, stat.mode?.duty?.on_sec, stat.mode?.duty?.off_sec, valveStatus, valveLoading]);
+    }, [isReady, stat.mode?.duty?.enable, stat.mode?.duty?.on_sec, stat.mode?.duty?.off_sec, valveStatus, valveLoading, dutySuspended]);
 
     // 終了時刻基準のリアルタイムカウントダウン
     useEffect(() => {
@@ -184,25 +191,37 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                     </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="flex items-center mb-1">
-                    <ProgressBar
-                        fillPercent={progress}
-                        animationKey={`${valveStatus.state}-${maxDuration}-${valveStatus.duration}`}
-                        ariaValueNow={progress}
-                        ariaValueMax={100}
-                        overlayClassName="text-gray-400"
-                    >
-                        <small className="mr-2">残り</small>
-                        <b>{formatTime(remainingTime)}</b>
-                    </ProgressBar>
-                </div>
-
-                {/* Warning Message */}
-                {remainingTime <= 5 && remainingTime > 0 && (
-                    <div className="text-center mt-1">
-                        <small className="text-yellow-500">まもなく切り替え</small>
+                {/* Progress Bar / 強制停止中の表示 */}
+                {dutySuspended ? (
+                    <div className="text-center mb-1" data-testid="duty-suspended">
+                        <small className="text-gray-500">
+                            {hazardDetected
+                                ? "ハザード検知のため散水を停止しています"
+                                : "手動停止中のため Duty 制御を停止しています"}
+                        </small>
                     </div>
+                ) : (
+                    <>
+                        <div className="flex items-center mb-1">
+                            <ProgressBar
+                                fillPercent={progress}
+                                animationKey={`${valveStatus.state}-${maxDuration}-${valveStatus.duration}`}
+                                ariaValueNow={progress}
+                                ariaValueMax={100}
+                                overlayClassName="text-gray-400"
+                            >
+                                <small className="mr-2">残り</small>
+                                <b>{formatTime(remainingTime)}</b>
+                            </ProgressBar>
+                        </div>
+
+                        {/* Warning Message */}
+                        {remainingTime <= 5 && remainingTime > 0 && (
+                            <div className="text-center mt-1">
+                                <small className="text-yellow-500">まもなく切り替え</small>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         );

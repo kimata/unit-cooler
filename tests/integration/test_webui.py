@@ -130,6 +130,7 @@ class TestWebuiApi:
             flow_lpm=2.0,
             cooling_mode_index=4,
             hazard_detected=False,
+            override_active=False,
         )
         mocker.patch(
             "unit_cooler.webui.worker.get_last_actuator_status",

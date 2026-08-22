@@ -30,6 +30,7 @@ import my_lib.footprint
 
 import unit_cooler.actuator.control
 import unit_cooler.actuator.monitor
+import unit_cooler.actuator.override
 import unit_cooler.actuator.status_publisher
 import unit_cooler.actuator.valve_controller
 import unit_cooler.actuator.work_log
@@ -229,6 +230,7 @@ def monitor_worker(
                         mist_condition,
                         get_last_control_message(),
                         hazard_detected=my_lib.footprint.exists(config.actuator.control.hazard.file),
+                        override_active=unit_cooler.actuator.override.is_active(config),
                     )
                     unit_cooler.actuator.status_publisher.publish_status(status_handle, status)
                 except Exception:

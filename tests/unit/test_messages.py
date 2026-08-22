@@ -206,12 +206,14 @@ class TestActuatorStatus:
             flow_lpm=2.5,
             cooling_mode_index=3,
             hazard_detected=False,
+            override_active=False,
         )
         assert status.timestamp == "2024-01-01T12:00:00"
         assert status.valve == valve
         assert status.flow_lpm == 2.5
         assert status.cooling_mode_index == 3
         assert status.hazard_detected is False
+        assert status.override_active is False
 
     def test_with_none_flow(self):
         """flow_lpm が None の場合"""
@@ -222,6 +224,7 @@ class TestActuatorStatus:
             flow_lpm=None,
             cooling_mode_index=0,
             hazard_detected=True,
+            override_active=False,
         )
         assert status.flow_lpm is None
 
@@ -234,6 +237,7 @@ class TestActuatorStatus:
             flow_lpm=3.0,
             cooling_mode_index=2,
             hazard_detected=False,
+            override_active=False,
         )
         d = status.to_dict()
         assert d["timestamp"] == "2024-01-01T12:00:00"
@@ -241,6 +245,7 @@ class TestActuatorStatus:
         assert d["flow_lpm"] == 3.0
         assert d["cooling_mode_index"] == 2
         assert d["hazard_detected"] is False
+        assert d["override_active"] is False
 
     def test_to_json(self):
         """JSON 変換"""
@@ -251,6 +256,7 @@ class TestActuatorStatus:
             flow_lpm=None,
             cooling_mode_index=0,
             hazard_detected=False,
+            override_active=False,
         )
         json_str = status.to_json()
         data = json.loads(json_str)
@@ -264,6 +270,7 @@ class TestActuatorStatus:
             "flow_lpm": 4.5,
             "cooling_mode_index": 4,
             "hazard_detected": True,
+            "override_active": True,
         }
         status = ActuatorStatus.from_dict(data)
         assert status.timestamp == "2024-06-15T15:30:00"
@@ -272,9 +279,10 @@ class TestActuatorStatus:
         assert status.flow_lpm == 4.5
         assert status.cooling_mode_index == 4
         assert status.hazard_detected is True
+        assert status.override_active is True
 
     def test_from_json(self):
-        """JSON からの作成"""
+        """JSON からの作成（override_active 欠落時は False にフォールバック）"""
         json_str = """
         {
             "timestamp": "2024-01-01T00:00:00",
@@ -287,6 +295,8 @@ class TestActuatorStatus:
         status = ActuatorStatus.from_json(json_str)
         assert status.valve.state == VALVE_STATE.CLOSE
         assert status.flow_lpm is None
+        # NOTE: 旧バージョンの Actuator からのメッセージ（フィールドなし）との互換性
+        assert status.override_active is False
 
     def test_roundtrip(self):
         """to_json と from_json のラウンドトリップ"""
@@ -297,6 +307,7 @@ class TestActuatorStatus:
             flow_lpm=5.5,
             cooling_mode_index=6,
             hazard_detected=False,
+            override_active=True,
         )
         restored = ActuatorStatus.from_json(original.to_json())
         assert restored.timestamp == original.timestamp
@@ -305,3 +316,4 @@ class TestActuatorStatus:
         assert restored.flow_lpm == original.flow_lpm
         assert restored.cooling_mode_index == original.cooling_mode_index
         assert restored.hazard_detected == original.hazard_detected
+        assert restored.override_active == original.override_active

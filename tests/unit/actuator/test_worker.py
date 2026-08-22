@@ -195,6 +195,19 @@ class TestMonitorWorker:
         monitor_mocks.assert_called_once()
         assert monitor_mocks.call_args.kwargs["hazard_detected"] is hazard_exists
 
+    @pytest.mark.parametrize("override_active", [True, False])
+    def test_passes_override_active_to_status(self, config, mocker, tmp_path, monitor_mocks, override_active):
+        """手動オーバーライドの有無が ActuatorStatus の override_active に配線される"""
+        mocker.patch("unit_cooler.actuator.override.is_active", return_value=override_active)
+
+        ret = unit_cooler.actuator.worker.monitor_worker(
+            config, tmp_path / "liveness", msg_count=1, status_pub_port=5555
+        )
+
+        assert ret == 0
+        monitor_mocks.assert_called_once()
+        assert monitor_mocks.call_args.kwargs["override_active"] is override_active
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

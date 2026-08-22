@@ -207,6 +207,7 @@ def validate_actuator_status(data: dict[str, Any], path: str = "") -> list[str]:
         SchemaField("flow_lpm", (int, float), nullable=True),
         SchemaField("cooling_mode_index", int),
         SchemaField("hazard_detected", bool),
+        SchemaField("override_active", bool),
     ]
     return validate_schema(data, fields, path)
 
@@ -404,6 +405,7 @@ class TestApiStatSchema:
             flow_lpm=2.5,
             cooling_mode_index=3,
             hazard_detected=False,
+            override_active=False,
         )
 
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=actuator_status)
@@ -480,6 +482,7 @@ class TestApiStatSchema:
             flow_lpm=None,
             cooling_mode_index=0,
             hazard_detected=True,
+            override_active=False,
         )
 
         mocker.patch("unit_cooler.webui.worker.get_last_actuator_status", return_value=actuator_status)
@@ -665,6 +668,7 @@ class TestMessageSchemaConsistency:
             flow_lpm=3.5,
             cooling_mode_index=2,
             hazard_detected=False,
+            override_active=False,
         )
 
         status_dict = actuator_status.to_dict()

@@ -160,6 +160,7 @@ def _make_actuator_status():
         flow_lpm=1.5,
         cooling_mode_index=3,
         hazard_detected=False,
+        override_active=False,
     )
 
 

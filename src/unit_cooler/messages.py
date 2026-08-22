@@ -215,6 +215,7 @@ class ActuatorStatus:
     flow_lpm: float | None
     cooling_mode_index: int
     hazard_detected: bool
+    override_active: bool
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -223,6 +224,7 @@ class ActuatorStatus:
             "flow_lpm": self.flow_lpm,
             "cooling_mode_index": self.cooling_mode_index,
             "hazard_detected": self.hazard_detected,
+            "override_active": self.override_active,
         }
 
     def to_json(self) -> str:
@@ -236,6 +238,8 @@ class ActuatorStatus:
             flow_lpm=data["flow_lpm"],
             cooling_mode_index=data["cooling_mode_index"],
             hazard_detected=data["hazard_detected"],
+            # NOTE: ローリングデプロイ中の旧 Actuator からのメッセージには存在しない
+            override_active=data.get("override_active", False),
         )
 
     @classmethod

@@ -53,6 +53,8 @@ export interface ActuatorStatus {
     flow_lpm: number | null;
     cooling_mode_index: number;
     hazard_detected: boolean;
+    // 手動オーバーライド（強制 OFF）中かどうか
+    override_active: boolean;
 }
 
 // 各コンポーネントからの最終受信からの経過秒（未受信は null）

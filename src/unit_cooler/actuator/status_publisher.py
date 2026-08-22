@@ -47,6 +47,7 @@ def create_status(
     mist_condition: MistCondition,
     control_message: ControlMessage,
     hazard_detected: bool = False,
+    override_active: bool = False,
 ) -> ActuatorStatus:
     """ActuatorStatus を作成する
 
@@ -54,6 +55,7 @@ def create_status(
         mist_condition: ミスト状態
         control_message: 制御メッセージ
         hazard_detected: ハザード検出フラグ
+        override_active: 手動オーバーライド（強制 OFF）中かどうか
 
     Returns:
         ActuatorStatus インスタンス
@@ -64,6 +66,7 @@ def create_status(
         flow_lpm=mist_condition.flow,
         cooling_mode_index=control_message.mode_index,
         hazard_detected=hazard_detected,
+        override_active=override_active,
     )
 
 
