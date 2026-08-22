@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { API_ENDPOINT } from "../lib/api";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { useApi } from "../hooks/useApi";
+import { useOverride } from "../hooks/useOverride";
 import { AnimatedNumber } from "./common/AnimatedNumber";
 import { CardBody } from "./common/Card";
 import { DashboardCard } from "./common/DashboardCard";
@@ -16,7 +18,19 @@ type Props = {
     isReady: boolean;
     stat: ApiResponse.Stat;
     logUpdateTrigger: number;
+    // 停止・再開操作後に Actuator の実効状態を追いかけるための stat 再取得
+    refetchStat: () => Promise<void>;
 };
+
+// Duty 表示エリアの状態。stopping / resuming は操作直後の遷移中（実効状態の反映待ち）。
+type DutyPhase = "countdown" | "stopping" | "resuming" | "suspended-override" | "suspended-hazard";
+
+const Spinner = () => (
+    <span
+        className="inline-block size-4 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin"
+        aria-hidden="true"
+    />
+);
 
 const emptyValveStatus: ApiResponse.ValveStatus = {
     state: "CLOSE",
@@ -28,7 +42,7 @@ const emptyFlowStatus: ApiResponse.FlowStatus = {
     flow: 0,
 };
 
-const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
+const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger, refetchStat }: Props) => {
     // カウントダウンの終了予定時刻（ms）。null はカウントダウンなし。
     // 「残り秒を毎秒デクリメント」ではなく終了時刻基準で毎回計算することで、
     // setInterval の遅延・バックグラウンドタブによるドリフトを防ぐ。
@@ -39,7 +53,27 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
     // ActuatorStatus の実効状態で判定する（未受信・鮮度切れで null の場合は判定しない）。
     const overrideActive = stat.actuator_status?.override_active === true;
     const hazardDetected = stat.actuator_status?.hazard_detected === true;
-    const dutySuspended = overrideActive || hazardDetected;
+
+    const {
+        override,
+        loading: overrideLoading,
+        pending: overridePending,
+        postError: overridePostError,
+        pause: overridePause,
+        resume: overrideResume,
+    } = useOverride(stat.actuator_status != null ? overrideActive : null, refetchStat);
+
+    // 表示フェーズの決定。遷移中（pending）は実効状態より優先して「処理中」を出す。
+    const dutyPhase: DutyPhase = hazardDetected
+        ? "suspended-hazard"
+        : overridePending === "resume"
+          ? "resuming"
+          : overridePending === "stop" && !overrideActive
+            ? "stopping"
+            : overrideActive
+              ? "suspended-override"
+              : "countdown";
+    const dutySuspended = dutyPhase !== "countdown";
     const [remainingTime, setRemainingTime] = useState(0);
     const [currentFlow, setCurrentFlow] = useState(0);
 
@@ -78,6 +112,16 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
 
         setDeadlineMs(Date.now() + remaining * 1000);
     }, [isReady, stat.mode?.duty?.enable, stat.mode?.duty?.on_sec, stat.mode?.duty?.off_sec, valveStatus, valveLoading, dutySuspended]);
+
+    // 停止・ハザード状態からカウントダウン表示に復帰したとき、バルブ状態を取り直して
+    // カウントダウンの起点（経過時間）を最新化する
+    const prevDutySuspendedRef = useRef(dutySuspended);
+    useEffect(() => {
+        if (prevDutySuspendedRef.current && !dutySuspended) {
+            refetchValveStatus();
+        }
+        prevDutySuspendedRef.current = dutySuspended;
+    }, [dutySuspended, refetchValveStatus]);
 
     // 終了時刻基準のリアルタイムカウントダウン
     useEffect(() => {
@@ -191,38 +235,67 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
                     </div>
                 </div>
 
-                {/* Progress Bar / 強制停止中の表示 */}
-                {dutySuspended ? (
-                    <div className="text-center mb-1" data-testid="duty-suspended">
-                        <small className="text-gray-500">
-                            {hazardDetected
-                                ? "ハザード検知のため散水を停止しています"
-                                : "手動停止中のため Duty 制御を停止しています"}
-                        </small>
-                    </div>
-                ) : (
-                    <>
-                        <div className="flex items-center mb-1">
-                            <ProgressBar
-                                fillPercent={progress}
-                                animationKey={`${valveStatus.state}-${maxDuration}-${valveStatus.duration}`}
-                                ariaValueNow={progress}
-                                ariaValueMax={100}
-                                overlayClassName="text-gray-400"
+                {/* Progress Bar / 停止・再開の遷移中 / 強制停止中の表示（クロスフェードで切り替え） */}
+                <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                        key={dutyPhase}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                    >
+                        {dutyPhase === "stopping" && (
+                            <div
+                                className="flex items-center justify-center gap-2 mb-1"
+                                data-testid="duty-stopping"
                             >
-                                <small className="mr-2">残り</small>
-                                <b>{formatTime(remainingTime)}</b>
-                            </ProgressBar>
-                        </div>
-
-                        {/* Warning Message */}
-                        {remainingTime <= 5 && remainingTime > 0 && (
-                            <div className="text-center mt-1">
-                                <small className="text-yellow-500">まもなく切り替え</small>
+                                <Spinner />
+                                <small className="text-gray-500">停止処理中です…</small>
                             </div>
                         )}
-                    </>
-                )}
+                        {dutyPhase === "resuming" && (
+                            <div
+                                className="flex items-center justify-center gap-2 mb-1"
+                                data-testid="duty-resuming"
+                            >
+                                <Spinner />
+                                <small className="text-gray-500">再開処理中です…</small>
+                            </div>
+                        )}
+                        {(dutyPhase === "suspended-override" || dutyPhase === "suspended-hazard") && (
+                            <div className="text-center mb-1" data-testid="duty-suspended">
+                                <small className="text-gray-500">
+                                    {dutyPhase === "suspended-hazard"
+                                        ? "ハザード検知のため散水を停止しています"
+                                        : "手動停止中のため Duty 制御を停止しています"}
+                                </small>
+                            </div>
+                        )}
+                        {dutyPhase === "countdown" && (
+                            <>
+                                <div className="flex items-center mb-1">
+                                    <ProgressBar
+                                        fillPercent={progress}
+                                        animationKey={`${valveStatus.state}-${maxDuration}-${valveStatus.duration}`}
+                                        ariaValueNow={progress}
+                                        ariaValueMax={100}
+                                        overlayClassName="text-gray-400"
+                                    >
+                                        <small className="mr-2">残り</small>
+                                        <b>{formatTime(remainingTime)}</b>
+                                    </ProgressBar>
+                                </div>
+
+                                {/* Warning Message */}
+                                {remainingTime <= 5 && remainingTime > 0 && (
+                                    <div className="text-center mt-1">
+                                        <small className="text-yellow-500">まもなく切り替え</small>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </motion.div>
+                </AnimatePresence>
             </div>
         );
     };
@@ -253,7 +326,14 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger }: Props) => {
             <CardBody>
                 {isReady || stat.mode.mode_index !== 0 ? modeInfo(stat.mode) : <Loading size="large" />}
                 {/* 散水の手動一時停止（オーバーライド）。モード表示のロード状態とは独立に描画する */}
-                <OverrideControl />
+                <OverrideControl
+                    override={override}
+                    loading={overrideLoading}
+                    pending={overridePending}
+                    postError={overridePostError}
+                    onPause={overridePause}
+                    onResume={overrideResume}
+                />
             </CardBody>
         </DashboardCard>
     );

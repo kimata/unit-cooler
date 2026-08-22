@@ -211,7 +211,7 @@ frontend/                      # React フロントエンド
 │   │   ├── Log.tsx            # アクティビティログ
 │   │   ├── common/            # 共通コンポーネント
 │   │   └── icons/             # Heroicons + カスタム SVG
-│   ├── hooks/                 # カスタムフック（useApi, useEventSource）
+│   ├── hooks/                 # カスタムフック（useApi, useEventSource, useOverride）
 │   └── lib/                   # ユーティリティ（ApiResponse 型定義等）
 
 tests/
