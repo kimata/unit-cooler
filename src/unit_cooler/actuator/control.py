@@ -14,7 +14,6 @@ import unit_cooler.actuator.override
 import unit_cooler.actuator.valve_controller
 import unit_cooler.actuator.work_log
 import unit_cooler.const
-import unit_cooler.util
 from unit_cooler.messages import ControlMessage, DutyConfig
 from unit_cooler.metrics import get_metrics_collector
 
@@ -48,6 +47,9 @@ class ControlHandle:
     # 最後に「受信した」メッセージのモード。last_message にはハザード等で差し替えた実効メッセージが
     # 入るため、モード変更ログの判定は受信メッセージ同士で行う（None は未受信）。
     last_receive_mode_index: int | None = None
+    # 最後に「受信した」メッセージそのもの。ハザード・オーバーライド解除後に、Controller の
+    # 次回配信（最大 interval_sec 秒後）を待たずに受信済みの指示へ復帰するために保持する。
+    last_receive_message: ControlMessage | None = None
 
 
 def gen_handle(config: Config, message_queue: Queue[ControlMessage]) -> ControlHandle:
@@ -112,7 +114,10 @@ def get_control_message_impl(handle: ControlHandle, last_message: ControlMessage
             # まま散水を続けると、水漏れ等のリスクが残るため IDLE に落として停止する。
             return MESSAGE_IDLE
 
-        return last_message
+        # NOTE: last_message はハザード・オーバーライドで IDLE に差し替えた実効メッセージのため、
+        # 受信した生メッセージを優先して返す。これにより解除後は Controller の次回配信を
+        # 待たずに（次の制御ループで）受信済みの指示へ復帰できる。
+        return handle.last_receive_message if handle.last_receive_message is not None else last_message
 
     control_message: ControlMessage | None = None
     while not handle.message_queue.empty():
@@ -145,6 +150,7 @@ def get_control_message_impl(handle: ControlHandle, last_message: ControlMessage
             )
         )
     handle.last_receive_mode_index = control_message.mode_index
+    handle.last_receive_message = control_message
 
     return control_message
 

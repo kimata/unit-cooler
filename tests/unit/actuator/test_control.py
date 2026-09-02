@@ -185,6 +185,37 @@ class TestGetControlMessage:
 
         assert result == last_message
 
+    def test_returns_received_message_over_effective_idle(self, config, mocker):
+        """キュー空のとき、実効メッセージ (IDLE 差し替え) より受信済みの生メッセージを優先する
+
+        ハザード・オーバーライド解除後、Controller の次回配信を待たずに
+        受信済みの WORKING 指示へ復帰できることを保証する。
+        """
+        now = datetime.datetime.now()
+        mocker.patch("my_lib.time.now", return_value=now)
+        mocker.patch("unit_cooler.actuator.work_log.add")
+
+        received_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=10, off_sec=5),
+        )
+
+        # 1 回目: キューから WORKING メッセージを受信
+        mock_queue = MagicMock()
+        mock_queue.empty.side_effect = [False, False, True, True]
+        mock_queue.get.return_value = received_message
+
+        handle = unit_cooler.actuator.control.gen_handle(config, mock_queue)
+        unit_cooler.actuator.control.get_control_message(handle, received_message)
+
+        # 2 回目: キュー空。last_message はハザード中に差し替えられた実効 IDLE を想定
+        result = unit_cooler.actuator.control.get_control_message(
+            handle, unit_cooler.actuator.control.MESSAGE_IDLE
+        )
+
+        assert result == received_message
+
     def test_falls_back_to_idle_on_timeout(self, config, mocker):
         """制御指示が閾値を超えて途絶したら IDLE にフォールバックする (BUG #6)"""
         now = datetime.datetime.now()

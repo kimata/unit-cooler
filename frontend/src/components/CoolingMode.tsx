@@ -292,6 +292,17 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger, refetchStat }
                                         <small className="text-yellow-500">まもなく切り替え</small>
                                     </div>
                                 )}
+                                {/* 残り 0 秒はバルブの切り替え反映待ち（Actuator の制御ループと
+                                    作動ログ経由の再取得を待つ間、固まって見えないようにする） */}
+                                {remainingTime === 0 && (
+                                    <div
+                                        className="flex items-center justify-center gap-2 mt-1"
+                                        data-testid="duty-switching"
+                                    >
+                                        <Spinner />
+                                        <small className="text-gray-500">切り替え待ちです…</small>
+                                    </div>
+                                )}
                             </>
                         )}
                     </motion.div>
