@@ -25,17 +25,17 @@
         "react-string-replace": "^2.0.1"
     },
     "devDependencies": {
-        "@tailwindcss/vite": "^4.1.18",
-        "@types/react": "^19.1.6",
-        "@types/react-dom": "^19.1.5",
-        "@typescript-eslint/eslint-plugin": "^8.33.0",
-        "@typescript-eslint/parser": "^8.33.0",
+        "@tailwindcss/vite": "^4.3.3",
+        "@types/react": "^19.2.9",
+        "@types/react-dom": "^19.2.3",
+        "@typescript-eslint/eslint-plugin": "^8.69.0",
+        "@typescript-eslint/parser": "^8.69.0",
         "@vitejs/plugin-react-swc": "^4.2.2",
-        "eslint": "^9.27.0",
+        "eslint": "^9.39.2",
         "eslint-plugin-react-hooks": "^7.0.1",
-        "eslint-plugin-react-refresh": "^0.4.20",
+        "eslint-plugin-react-refresh": "^0.5.0",
         "globals": "^17.0.0",
-        "tailwindcss": "^4.1.18",
+        "tailwindcss": "^4.3.3",
         "typescript": "^5.8.3",
         "vite": "^7.3.1"
     }
