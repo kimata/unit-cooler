@@ -13,8 +13,6 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self
 
-import my_lib.time
-
 import unit_cooler.actuator.state_file
 
 logger = logging.getLogger(__name__)
@@ -132,8 +130,3 @@ def get_setting(config: Config) -> SeasonSetting:
     setting = unit_cooler.actuator.state_file.load(get_file_path(config), SeasonSetting.parse)
 
     return setting if setting is not None else SeasonSetting.default()
-
-
-def is_in_season(config: Config) -> bool:
-    """現在が稼働期間内かどうかを返す"""
-    return get_setting(config).contains(my_lib.time.now().date())

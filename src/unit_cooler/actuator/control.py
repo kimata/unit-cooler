@@ -51,6 +51,9 @@ class ControlHandle:
     # 最後に「受信した」メッセージそのもの。ハザード・オーバーライド等の解除後に、Controller の
     # 次回配信（最大 interval_sec 秒後）を待たずに受信済みの指示へ復帰するために保持する。
     last_receive_message: ControlMessage | None = None
+    # 前回の制御ループで稼働期間内だったか。期間への出入りを作動ログに残すために保持する
+    # （None は未判定。起動直後は記録せず、状態の変化のみ記録する）。
+    in_season: bool | None = None
 
 
 def gen_handle(config: Config, message_queue: Queue[ControlMessage]) -> ControlHandle:
@@ -165,19 +168,45 @@ def get_control_message(handle: ControlHandle, last_message: ControlMessage) -> 
         return last_message
 
 
-def execute(config: Config, control_message: ControlMessage) -> ControlMessage:
+def check_season(handle: ControlHandle) -> bool:
+    """現在が稼働期間内かどうかを返す（期間への出入りは作動ログに記録する）
+
+    日付が変わって期間を出入りした場合に加え、WebUI から設定を変更した結果として
+    出入りした場合も記録する。
+    """
+    setting = unit_cooler.actuator.season.get_setting(handle.config)
+    in_season = setting.contains(my_lib.time.now().date())
+
+    if handle.in_season is not None and in_season != handle.in_season:
+        if in_season:
+            unit_cooler.actuator.work_log.add("稼働期間内に入ったので、動作を開始します。")
+        else:
+            unit_cooler.actuator.work_log.add(
+                f"稼働期間外になったので、{setting.start.month}月{setting.start.day}日まで動作を停止します。"
+            )
+    handle.in_season = in_season
+
+    return in_season
+
+
+def execute(handle: ControlHandle, control_message: ControlMessage) -> ControlMessage:
     """制御メッセージを実行し、実際に適用した「実効メッセージ」を返す
 
     ハザード発動中・手動オーバーライド中・稼働期間外は IDLE に差し替えたメッセージを適用・返却する。
     呼び出し元は戻り値を last_control_message として保存することで、
     monitor 側の送信・配信に実際の運転状態が反映される。
     """
+    config = handle.config
+
+    # NOTE: 期間への出入りを漏れなく記録するため、ハザード・オーバーライド中でも毎回判定する
+    in_season = check_season(handle)
+
     if hazard_check(config):
         control_message = MESSAGE_IDLE
     elif unit_cooler.actuator.override.is_active(config):
         # NOTE: 手動オーバーライド中は強制 OFF（失効時刻を過ぎると自動で通常運転に戻る）
         control_message = MESSAGE_IDLE
-    elif not unit_cooler.actuator.season.is_in_season(config):
+    elif not in_season:
         # NOTE: 稼働期間外（冬季など）は強制 OFF
         control_message = MESSAGE_IDLE
 

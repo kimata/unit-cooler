@@ -139,7 +139,7 @@ class TestSeasonSettingParse:
 
 
 class TestPersistence:
-    """get_setting / set_setting / is_in_season のテスト"""
+    """get_setting / set_setting のテスト"""
 
     def test_default_is_all_year(self, config_mock):
         """未設定なら通年稼働"""
@@ -147,7 +147,6 @@ class TestPersistence:
 
         assert setting == SeasonSetting.default()
         assert setting.enabled is False
-        assert unit_cooler.actuator.season.is_in_season(config_mock) is True
 
     def test_file_is_next_to_hazard_file(self, config_mock, tmp_path):
         """ハザードファイルと同じディレクトリ（永続領域）に配置される"""
@@ -171,22 +170,6 @@ class TestPersistence:
         path.write_text('{"enabled": true, "start": {"month": 13, "day": 1}, "end": {"month": 1, "day": 1}}')
 
         assert unit_cooler.actuator.season.get_setting(config_mock) == SeasonSetting.default()
-
-    @pytest.mark.parametrize(
-        ("today", "expected"),
-        [
-            (datetime.datetime(2026, 7, 1, 12, 0), True),
-            (datetime.datetime(2026, 12, 1, 12, 0), False),
-        ],
-    )
-    def test_is_in_season_uses_current_date(self, config_mock, mocker, today, expected):
-        """現在日付で期間内かどうかを判定する"""
-        unit_cooler.actuator.season.set_setting(
-            config_mock, SeasonSetting(enabled=True, start=MonthDay(5, 1), end=MonthDay(10, 31))
-        )
-        mocker.patch("my_lib.time.now", return_value=today)
-
-        assert unit_cooler.actuator.season.is_in_season(config_mock) is expected
 
 
 if __name__ == "__main__":

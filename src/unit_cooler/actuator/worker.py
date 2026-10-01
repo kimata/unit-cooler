@@ -300,7 +300,7 @@ def control_worker(
 
                 # NOTE: ハザードやオーバーライドで IDLE に差し替えられた「実効メッセージ」を
                 # 保存し、monitor 側の送信・配信に実際の運転状態が反映されるようにする
-                set_last_control_message(unit_cooler.actuator.control.execute(config, current_message))
+                set_last_control_message(unit_cooler.actuator.control.execute(handle, current_message))
 
                 # 環境データのメトリクス収集（定期的に実行）
                 try:

@@ -9,6 +9,7 @@ import multiprocessing
 from unittest.mock import MagicMock
 
 import unit_cooler.actuator.control
+from unit_cooler.actuator.season import MonthDay, SeasonSetting
 from unit_cooler.const import COOLING_STATE, LOG_LEVEL
 from unit_cooler.messages import ControlMessage, DutyConfig
 
@@ -385,6 +386,55 @@ class TestGetControlMessage:
         assert "init" in call_message
 
 
+class TestCheckSeason:
+    """check_season のテスト"""
+
+    SUMMER_ONLY = SeasonSetting(enabled=True, start=MonthDay(5, 1), end=MonthDay(10, 31))
+
+    def _handle(self, config, mocker, today):
+        mocker.patch("unit_cooler.actuator.season.get_setting", return_value=self.SUMMER_ONLY)
+        mocker.patch("my_lib.time.now", return_value=today)
+        return unit_cooler.actuator.control.gen_handle(config, MagicMock())
+
+    def test_does_not_log_on_first_check(self, config, mocker):
+        """起動直後（前回状態なし）は記録しない"""
+        handle = self._handle(config, mocker, datetime.datetime(2026, 12, 1, 12, 0))
+        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
+
+        assert unit_cooler.actuator.control.check_season(handle) is False
+        assert handle.in_season is False
+        mock_add.assert_not_called()
+
+    def test_does_not_log_without_transition(self, config, mocker):
+        """状態が変わらなければ記録しない"""
+        handle = self._handle(config, mocker, datetime.datetime(2026, 7, 1, 12, 0))
+        handle.in_season = True
+        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
+
+        assert unit_cooler.actuator.control.check_season(handle) is True
+        mock_add.assert_not_called()
+
+    def test_logs_when_leaving_season(self, config, mocker):
+        """期間外になったら、再開日（開始月日）付きで記録する"""
+        handle = self._handle(config, mocker, datetime.datetime(2026, 11, 1, 0, 0))
+        handle.in_season = True
+        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
+
+        assert unit_cooler.actuator.control.check_season(handle) is False
+        mock_add.assert_called_once_with("稼働期間外になったので、5月1日まで動作を停止します。")
+        assert handle.in_season is False
+
+    def test_logs_when_entering_season(self, config, mocker):
+        """期間内に入ったら記録する"""
+        handle = self._handle(config, mocker, datetime.datetime(2026, 5, 1, 0, 0))
+        handle.in_season = False
+        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
+
+        assert unit_cooler.actuator.control.check_season(handle) is True
+        mock_add.assert_called_once_with("稼働期間内に入ったので、動作を開始します。")
+        assert handle.in_season is True
+
+
 class TestExecute:
     """execute のテスト"""
 
@@ -403,7 +453,9 @@ class TestExecute:
             state=COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
         )
-        result = unit_cooler.actuator.control.execute(config, control_message)
+        result = unit_cooler.actuator.control.execute(
+            unit_cooler.actuator.control.gen_handle(config, MagicMock()), control_message
+        )
 
         mock_controller.set_cooling_state.assert_called_once_with(control_message)
         # 差し替えがない場合は受信メッセージがそのまま実効メッセージになる
@@ -424,7 +476,9 @@ class TestExecute:
             state=COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
         )
-        result = unit_cooler.actuator.control.execute(config, control_message)
+        result = unit_cooler.actuator.control.execute(
+            unit_cooler.actuator.control.gen_handle(config, MagicMock()), control_message
+        )
 
         # IDLE に上書きされることを確認
         call_args = mock_controller.set_cooling_state.call_args[0][0]
@@ -449,7 +503,9 @@ class TestExecute:
             state=COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
         )
-        result = unit_cooler.actuator.control.execute(config, control_message)
+        result = unit_cooler.actuator.control.execute(
+            unit_cooler.actuator.control.gen_handle(config, MagicMock()), control_message
+        )
 
         call_args = mock_controller.set_cooling_state.call_args[0][0]
         assert call_args.state == COOLING_STATE.IDLE
@@ -460,7 +516,7 @@ class TestExecute:
         """稼働期間外は IDLE に差し替える"""
         mocker.patch("my_lib.footprint.exists", return_value=False)  # hazard なし
         mocker.patch("unit_cooler.actuator.override.is_active", return_value=False)
-        mocker.patch("unit_cooler.actuator.season.is_in_season", return_value=False)
+        mocker.patch("unit_cooler.actuator.control.check_season", return_value=False)
         mocker.patch("unit_cooler.metrics.get_metrics_collector", return_value=MagicMock())
         mock_controller = MagicMock()
         mocker.patch(
@@ -472,7 +528,9 @@ class TestExecute:
             state=COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
         )
-        result = unit_cooler.actuator.control.execute(config, control_message)
+        result = unit_cooler.actuator.control.execute(
+            unit_cooler.actuator.control.gen_handle(config, MagicMock()), control_message
+        )
 
         call_args = mock_controller.set_cooling_state.call_args[0][0]
         assert call_args.state == COOLING_STATE.IDLE
@@ -494,7 +552,9 @@ class TestExecute:
             state=COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
         )
-        result = unit_cooler.actuator.control.execute(config, control_message)
+        result = unit_cooler.actuator.control.execute(
+            unit_cooler.actuator.control.gen_handle(config, MagicMock()), control_message
+        )
 
         assert result == control_message
         mock_controller.set_cooling_state.assert_called_once_with(control_message)
@@ -512,7 +572,9 @@ class TestExecute:
             state=COOLING_STATE.WORKING,
             duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
         )
-        unit_cooler.actuator.control.execute(config, control_message)
+        unit_cooler.actuator.control.execute(
+            unit_cooler.actuator.control.gen_handle(config, MagicMock()), control_message
+        )
 
         mock_collector.update_cooling_mode.assert_called_once_with(5)
         mock_collector.update_duty_ratio.assert_called_once()
@@ -532,7 +594,9 @@ class TestExecute:
             duty=DutyConfig(enable=False, on_sec=0, off_sec=0),
         )
         # 例外が発生しても set_cooling_state は呼ばれる
-        unit_cooler.actuator.control.execute(config, control_message)
+        unit_cooler.actuator.control.execute(
+            unit_cooler.actuator.control.gen_handle(config, MagicMock()), control_message
+        )
 
         mock_controller.set_cooling_state.assert_called_once()
 

@@ -141,7 +141,8 @@ KEYENCE FD-Q10C を SPI 経由で読み取ります（`my_lib.sensor.fd_q10c`）
   「開始月日〜終了月日」を指定する。年は持たず毎年適用され、期間外は強制 IDLE になる。
   開始日・終了日はどちらも期間に含み、開始 > 終了 は年をまたぐ期間として扱う。
   状態はラッチと同じディレクトリの `unit_cooler.season.json` に永続化され、
-  未設定（または `enabled: false`）なら通年稼働。
+  未設定（または `enabled: false`）なら通年稼働。期間への出入り（日付の変化・設定変更）は
+  `control.check_season()` が検知し、作動ログに記録する（起動直後は記録しない）。
 - override / season の JSON 永続化（一時ファイル経由の置き換え・破損時の無視）は
   `state_file.py` に共通化している。
 
