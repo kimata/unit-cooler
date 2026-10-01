@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-import { API_ENDPOINT } from "../lib/api";
+import { API_ENDPOINT, postJson, toErrorMessage } from "../lib/api";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { useApi } from "./useApi";
 
@@ -58,21 +58,10 @@ export function useOverride(actuatorOverrideActive: boolean | null, refetchStat:
             setPostError(null);
             setPending(action);
             try {
-                const response = await fetch(url, {
-                    method: "POST",
-                    ...(body != null && {
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(body),
-                    }),
-                });
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                await response.json();
+                await postJson(url, body);
                 await refetch();
             } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : "通信に失敗しました";
-                setPostError(errorMessage);
+                setPostError(toErrorMessage(err));
                 setPending(null);
                 console.error("Override API error:", err);
             }

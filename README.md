@@ -361,6 +361,8 @@ controller:
 - **ハザードラッチの永続化** - 水漏れ等の検知はファイル（デフォルト: `data/unit_cooler.hazard`）に
   永続化され、再起動しても解除されない。Web UI または API から手動クリア可能
 - **手動オーバーライド** - API から「強制 OFF（n 分間）」を指定可能（メンテナンス時などに使用）
+- **稼働期間** - Web UI から「開始月日〜終了月日」を指定すると、期間外（冬季など）は散水を行わない
+  （年の指定は不要で毎年適用。未設定時は通年稼働）
 
 ## 💻 実行方法
 
@@ -538,6 +540,9 @@ URL prefix はいずれも `/unit-cooler` です。
 - `GET /unit-cooler/api/override` - 手動オーバーライドの状態取得
 - `POST /unit-cooler/api/override` - 強制 OFF の設定（JSON `{"duration_min": N}`）
 - `POST /unit-cooler/api/override/clear` - 手動オーバーライドの解除
+- `GET /unit-cooler/api/season` - 稼働期間（散水を行う季節）の設定取得
+- `POST /unit-cooler/api/season` - 稼働期間の設定
+  （JSON `{"enabled": true, "start": {"month": 5, "day": 1}, "end": {"month": 10, "day": 31}}`）
 
 ### メトリクス（Actuator、ポート5001）
 

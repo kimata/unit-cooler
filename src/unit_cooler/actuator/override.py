@@ -3,20 +3,19 @@
 手動オーバーライド（強制 OFF）の状態管理を提供します。
 
 WebUI からの指示で一定時間だけ散水を強制停止するための状態を管理します。
-状態は再起動を跨いで保持するため、ハザードファイルと同じディレクトリの
-JSON ファイルに永続化します。
+状態は再起動を跨いで保持するため、state_file 経由で永続化します。
 """
 
 from __future__ import annotations
 
 import datetime
-import json
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import my_lib.pytest_util
 import my_lib.time
+
+import unit_cooler.actuator.state_file
 
 logger = logging.getLogger(__name__)
 
@@ -39,20 +38,21 @@ class OverrideState:
     # オーバーライドの失効時刻
     until: datetime.datetime
 
-    def to_json(self) -> str:
-        return json.dumps({"until": self.until.isoformat()})
+    def to_dict(self) -> dict[str, Any]:
+        return {"until": self.until.isoformat()}
 
     @classmethod
     def parse(cls, data: dict[str, Any]) -> OverrideState:
-        return cls(until=datetime.datetime.fromisoformat(data["until"]))
+        until = datetime.datetime.fromisoformat(data["until"])
+        # NOTE: naive datetime は現在時刻（aware）と比較できないので、破損扱いにする
+        if until.tzinfo is None:
+            raise ValueError(f"until must be timezone-aware: {data['until']}")
+        return cls(until=until)
 
 
 def get_file_path(config: Config) -> pathlib.Path:
-    """オーバーライド状態の永続化ファイルのパスを返す（ハザードファイルと同じディレクトリ）
-
-    my_lib.footprint と同様、pytest-xdist 並列実行時はワーカー固有のパスを返す。
-    """
-    return my_lib.pytest_util.get_path(config.actuator.control.hazard.file.parent / OVERRIDE_FILE_NAME)
+    """オーバーライド状態の永続化ファイルのパスを返す"""
+    return unit_cooler.actuator.state_file.get_path(config, OVERRIDE_FILE_NAME)
 
 
 def set_override(config: Config, duration_min: int) -> OverrideState:
@@ -64,9 +64,7 @@ def set_override(config: Config, duration_min: int) -> OverrideState:
 
     state = OverrideState(until=my_lib.time.now() + datetime.timedelta(minutes=duration_min))
 
-    path = get_file_path(config)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(state.to_json())
+    unit_cooler.actuator.state_file.save(get_file_path(config), state.to_dict())
 
     logger.info("Manual override set until %s", state.until.isoformat())
 
@@ -83,19 +81,11 @@ def get_override(config: Config) -> OverrideState | None:
 
     失効している場合は永続化ファイルを削除して自動的に通常運転へ戻す。
     """
-    path = get_file_path(config)
-    if not path.exists():
+    state = unit_cooler.actuator.state_file.load(get_file_path(config), OverrideState.parse)
+    if state is None:
         return None
 
-    try:
-        state = OverrideState.parse(json.loads(path.read_text()))
-        # NOTE: naive datetime が紛れ込んでいた場合の比較は TypeError になるので、まとめて破損扱いにする
-        expired = state.until <= my_lib.time.now()
-    except (ValueError, KeyError, TypeError, OSError):
-        logger.warning("Override file is broken, ignoring: %s", path)
-        return None
-
-    if expired:
+    if state.until <= my_lib.time.now():
         logger.info("Manual override expired, back to normal operation")
         clear_override(config)
         return None

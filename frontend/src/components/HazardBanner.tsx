@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 
-import { API_ENDPOINT } from "../lib/api";
+import { API_ENDPOINT, postJson, toErrorMessage } from "../lib/api";
 import { ExclamationTriangleIcon } from "./icons";
 
 type Props = {
@@ -31,18 +31,11 @@ const HazardBanner = React.memo(({ onCleared }: Props) => {
         setSubmitting(true);
         setError(null);
         try {
-            const response = await fetch(`${API_ENDPOINT}/proxy/json/api/hazard/clear`, {
-                method: "POST",
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            await response.json();
+            await postJson(`${API_ENDPOINT}/proxy/json/api/hazard/clear`);
             setConfirming(false);
             onCleared();
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "通信に失敗しました";
-            setError(errorMessage);
+            setError(toErrorMessage(err));
             console.error("Hazard clear error:", err);
         } finally {
             setSubmitting(false);

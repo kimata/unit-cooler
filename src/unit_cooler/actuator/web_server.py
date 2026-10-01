@@ -29,6 +29,7 @@ import werkzeug.serving
 import unit_cooler.actuator.webapi.flow_status
 import unit_cooler.actuator.webapi.hazard
 import unit_cooler.actuator.webapi.override
+import unit_cooler.actuator.webapi.season
 import unit_cooler.actuator.webapi.valve_status
 import unit_cooler.const
 import unit_cooler.metrics.webapi.page
@@ -77,6 +78,9 @@ def create_app(config: Config, event_queue: Queue[Any]) -> flask.Flask:
     )
     app.register_blueprint(
         unit_cooler.actuator.webapi.override.blueprint, url_prefix=unit_cooler.const.URL_PREFIX
+    )
+    app.register_blueprint(
+        unit_cooler.actuator.webapi.season.blueprint, url_prefix=unit_cooler.const.URL_PREFIX
     )
     app.register_blueprint(unit_cooler.metrics.webapi.page.blueprint, url_prefix=unit_cooler.const.URL_PREFIX)
 

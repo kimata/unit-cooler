@@ -11,6 +11,7 @@ import my_lib.time
 import pytest
 
 import unit_cooler.actuator.override
+import unit_cooler.actuator.state_file
 
 
 @pytest.fixture
@@ -85,11 +86,10 @@ class TestGetOverride:
     def test_expired_override_is_inactive_and_removed(self, config_mock):
         """失効時刻を過ぎたら自動で無効になり、ファイルも削除される"""
         path = unit_cooler.actuator.override.get_file_path(config_mock)
-        path.parent.mkdir(parents=True, exist_ok=True)
         expired = unit_cooler.actuator.override.OverrideState(
             until=my_lib.time.now() - datetime.timedelta(minutes=1)
         )
-        path.write_text(expired.to_json())
+        unit_cooler.actuator.state_file.save(path, expired.to_dict())
 
         assert unit_cooler.actuator.override.get_override(config_mock) is None
         assert not path.exists()
@@ -121,17 +121,20 @@ class TestClearOverride:
 
 
 class TestOverrideState:
-    """OverrideState の parse / to_json のテスト"""
+    """OverrideState の parse / to_dict のテスト"""
 
     def test_round_trip(self):
-        """to_json → parse で往復できる"""
-        import json
-
+        """to_dict → parse で往復できる"""
         state = unit_cooler.actuator.override.OverrideState(until=my_lib.time.now())
 
-        restored = unit_cooler.actuator.override.OverrideState.parse(json.loads(state.to_json()))
+        restored = unit_cooler.actuator.override.OverrideState.parse(state.to_dict())
 
         assert restored == state
+
+    def test_parse_rejects_naive_datetime(self):
+        """タイムゾーンなしの失効時刻は拒否する（現在時刻と比較できないため）"""
+        with pytest.raises(ValueError, match="timezone-aware"):
+            unit_cooler.actuator.override.OverrideState.parse({"until": "2026-07-01T12:00:00"})
 
 
 if __name__ == "__main__":

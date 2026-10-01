@@ -456,6 +456,29 @@ class TestExecute:
         assert result.mode_index == 0
         assert result.state == COOLING_STATE.IDLE
 
+    def test_overrides_to_idle_when_out_of_season(self, config, mocker):
+        """稼働期間外は IDLE に差し替える"""
+        mocker.patch("my_lib.footprint.exists", return_value=False)  # hazard なし
+        mocker.patch("unit_cooler.actuator.override.is_active", return_value=False)
+        mocker.patch("unit_cooler.actuator.season.is_in_season", return_value=False)
+        mocker.patch("unit_cooler.metrics.get_metrics_collector", return_value=MagicMock())
+        mock_controller = MagicMock()
+        mocker.patch(
+            "unit_cooler.actuator.valve_controller.get_valve_controller", return_value=mock_controller
+        )
+
+        control_message = ControlMessage(
+            mode_index=3,
+            state=COOLING_STATE.WORKING,
+            duty=DutyConfig(enable=True, on_sec=100, off_sec=60),
+        )
+        result = unit_cooler.actuator.control.execute(config, control_message)
+
+        call_args = mock_controller.set_cooling_state.call_args[0][0]
+        assert call_args.state == COOLING_STATE.IDLE
+        assert result.mode_index == 0
+        assert result.state == COOLING_STATE.IDLE
+
     def test_returns_to_normal_when_override_inactive(self, config, mocker):
         """オーバーライドが無効（失効）なら通常運転に戻る"""
         mocker.patch("my_lib.footprint.exists", return_value=False)

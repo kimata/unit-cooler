@@ -180,12 +180,15 @@ src/
     │   ├── worker.py          # subscribe / monitor / control ワーカー
     │   ├── control.py         # 制御メッセージ処理・ハザード管理
     │   ├── valve_controller.py # 電磁弁制御（GPIO・Duty サイクル）
+    │   ├── override.py        # 手動オーバーライド（一定時間の強制 OFF）
+    │   ├── season.py          # 稼働期間（月日指定。期間外は強制 OFF）
+    │   ├── state_file.py      # override / season の状態永続化（JSON）
     │   ├── monitor.py         # 流量監視・異常検知
     │   ├── sensor.py          # 流量センサー（FD-Q10C）制御
     │   ├── work_log.py        # 作動ログ記録
     │   ├── web_server.py      # ログ提供用 Flask サーバー
     │   ├── status_publisher.py # ActuatorStatus 配信
-    │   └── webapi/            # 流量・バルブ状態 API
+    │   └── webapi/            # 流量・バルブ状態・ハザード・override・season API
     │
     ├── webui/                 # Web UI コンポーネント
     │   ├── worker.py          # ZeroMQ サブスクライバーワーカー
@@ -205,13 +208,15 @@ frontend/                      # React フロントエンド
 │   ├── components/            # UI コンポーネント
 │   │   ├── Watering.tsx       # 散水状況
 │   │   ├── CoolingMode.tsx    # 冷却モード
+│   │   ├── OverrideControl.tsx # 散水の手動一時停止
+│   │   ├── SeasonControl.tsx  # 稼働期間の設定
 │   │   ├── AirConditioner.tsx # エアコン稼働状況
 │   │   ├── Sensor.tsx         # センサー値
 │   │   ├── History.tsx        # 散水履歴
 │   │   ├── Log.tsx            # アクティビティログ
 │   │   ├── common/            # 共通コンポーネント
 │   │   └── icons/             # Heroicons + カスタム SVG
-│   ├── hooks/                 # カスタムフック（useApi, useEventSource, useOverride）
+│   ├── hooks/                 # カスタムフック（useApi, useEventSource, useOverride, useSeason）
 │   └── lib/                   # ユーティリティ（ApiResponse 型定義等）
 
 tests/
@@ -236,6 +241,19 @@ tests/
   2223（ZeroMQ Pub。Actuator → Web UI の ActuatorStatus 配信。`-S` /
   `HEMS_STATUS_PUB_PORT` で有効化。デフォルト 0 = 無効）
 - ポートは config ではなくコマンドライン引数（`-p` 等）/ 環境変数（`HEMS_CONTROL_HOST` 等）で指定
+
+### Actuator 側の強制停止（WebUI から設定する状態）
+
+Controller の指示によらず、Actuator は以下の場合に散水を強制停止（IDLE）する
+（`actuator/control.py: execute()`）:
+
+- **ハザード**: 水漏れ・電磁弁故障の検知ラッチ
+- **手動オーバーライド**（`override.py`）: WebUI から指定した時間だけ停止
+- **稼働期間外**（`season.py`）: WebUI から指定した「開始月日〜終了月日」の外。
+  年は持たず毎年適用。両端の日を含み、開始 > 終了 は年またぎ。未設定時は通年稼働
+
+override / season の状態は config ではなく、ハザードファイルと同じディレクトリ
+（永続領域）の JSON に `state_file.py` 経由で保存する。
 
 ### 技術スタック
 

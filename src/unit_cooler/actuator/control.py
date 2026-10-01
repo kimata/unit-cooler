@@ -11,6 +11,7 @@ import my_lib.footprint
 import my_lib.time
 
 import unit_cooler.actuator.override
+import unit_cooler.actuator.season
 import unit_cooler.actuator.valve_controller
 import unit_cooler.actuator.work_log
 import unit_cooler.const
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 
 HAZARD_NOTIFY_INTERVAL_MIN = 30
 
-# 安全側フォールバック用の制御メッセージ（ハザード・オーバーライド・受信途絶時に使用）
+# 安全側フォールバック用の制御メッセージ（ハザード・オーバーライド・稼働期間外・受信途絶時に使用）
 MESSAGE_IDLE = ControlMessage(
     mode_index=0,
     state=unit_cooler.const.COOLING_STATE.IDLE,
@@ -47,7 +48,7 @@ class ControlHandle:
     # 最後に「受信した」メッセージのモード。last_message にはハザード等で差し替えた実効メッセージが
     # 入るため、モード変更ログの判定は受信メッセージ同士で行う（None は未受信）。
     last_receive_mode_index: int | None = None
-    # 最後に「受信した」メッセージそのもの。ハザード・オーバーライド解除後に、Controller の
+    # 最後に「受信した」メッセージそのもの。ハザード・オーバーライド等の解除後に、Controller の
     # 次回配信（最大 interval_sec 秒後）を待たずに受信済みの指示へ復帰するために保持する。
     last_receive_message: ControlMessage | None = None
 
@@ -114,7 +115,7 @@ def get_control_message_impl(handle: ControlHandle, last_message: ControlMessage
             # まま散水を続けると、水漏れ等のリスクが残るため IDLE に落として停止する。
             return MESSAGE_IDLE
 
-        # NOTE: last_message はハザード・オーバーライドで IDLE に差し替えた実効メッセージのため、
+        # NOTE: last_message はハザード・オーバーライド等で IDLE に差し替えた実効メッセージのため、
         # 受信した生メッセージを優先して返す。これにより解除後は Controller の次回配信を
         # 待たずに（次の制御ループで）受信済みの指示へ復帰できる。
         return handle.last_receive_message if handle.last_receive_message is not None else last_message
@@ -167,7 +168,7 @@ def get_control_message(handle: ControlHandle, last_message: ControlMessage) -> 
 def execute(config: Config, control_message: ControlMessage) -> ControlMessage:
     """制御メッセージを実行し、実際に適用した「実効メッセージ」を返す
 
-    ハザード発動中や手動オーバーライド中は IDLE に差し替えたメッセージを適用・返却する。
+    ハザード発動中・手動オーバーライド中・稼働期間外は IDLE に差し替えたメッセージを適用・返却する。
     呼び出し元は戻り値を last_control_message として保存することで、
     monitor 側の送信・配信に実際の運転状態が反映される。
     """
@@ -175,6 +176,9 @@ def execute(config: Config, control_message: ControlMessage) -> ControlMessage:
         control_message = MESSAGE_IDLE
     elif unit_cooler.actuator.override.is_active(config):
         # NOTE: 手動オーバーライド中は強制 OFF（失効時刻を過ぎると自動で通常運転に戻る）
+        control_message = MESSAGE_IDLE
+    elif not unit_cooler.actuator.season.is_in_season(config):
+        # NOTE: 稼働期間外（冬季など）は強制 OFF
         control_message = MESSAGE_IDLE
 
     # メトリクス収集

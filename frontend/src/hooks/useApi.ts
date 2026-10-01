@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 
+import { toErrorMessage } from "../lib/api";
+
 interface UseApiState<T> {
     data: T;
     loading: boolean;
@@ -40,10 +42,9 @@ export function useApi<T>(
             setError(null);
             setFailureCount(0);
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "通信に失敗しました";
             // NOTE: 成功するまで error を保持する（フェッチ開始時にはクリアしない）。
             // リトライのたびに error が null ↔ メッセージで振動するのを防ぐ。
-            setError(errorMessage);
+            setError(toErrorMessage(err));
             setFailureCount((prev) => prev + 1);
             console.error("API fetch error:", err);
         }

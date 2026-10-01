@@ -95,6 +95,27 @@ export interface OverrideStatus {
     until: string | null;
 }
 
+// 年を持たない月日
+export interface MonthDay {
+    month: number;
+    day: number;
+}
+
+// POST /api/proxy/json/api/season（稼働期間）のリクエスト
+export interface SeasonSetting {
+    // false の場合は期間を限定しない（通年稼働）
+    enabled: boolean;
+    // 開始日・終了日はどちらも期間に含む。開始 > 終了 は年をまたぐ期間
+    start: MonthDay;
+    end: MonthDay;
+}
+
+// GET/POST /api/proxy/json/api/season のレスポンス
+export interface SeasonStatus extends SeasonSetting {
+    // 現在が稼働期間内か（期間外は Actuator が散水を強制停止する）
+    in_season: boolean;
+}
+
 export interface WateringResponse {
     watering: Watering[];
 }

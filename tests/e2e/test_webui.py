@@ -53,5 +53,7 @@ def test_valve(page, host, port):
     expect(page.get_by_test_id("history-info")).to_have_count(1, timeout=30 * 1000)
     expect(page.get_by_test_id("cooling-info")).to_have_count(1, timeout=100 * 1000)
     expect(page.get_by_test_id("log")).to_have_count(1, timeout=30 * 1000)
+    # 稼働期間の設定 UI（Actuator から設定を取得できたら表示される）
+    expect(page.get_by_test_id("season-control")).to_have_count(1, timeout=30 * 1000)
 
     expect(page.get_by_test_id("error")).to_have_count(0)

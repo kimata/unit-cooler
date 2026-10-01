@@ -5,6 +5,8 @@ import { API_ENDPOINT } from "../lib/api";
 import type * as ApiResponse from "../lib/ApiResponse";
 import { useApi } from "../hooks/useApi";
 import { useOverride } from "../hooks/useOverride";
+import { useSeason } from "../hooks/useSeason";
+import { formatSeasonRange } from "../lib/season";
 import { AnimatedNumber } from "./common/AnimatedNumber";
 import { CardBody } from "./common/Card";
 import { DashboardCard } from "./common/DashboardCard";
@@ -12,7 +14,8 @@ import { Loading } from "./common/Loading";
 import { ProgressBar } from "./common/ProgressBar";
 import { Unit } from "./common/Unit";
 import { OverrideControl } from "./OverrideControl";
-import { AdjustmentsVerticalIcon, MoonIcon } from "./icons";
+import { SeasonControl } from "./SeasonControl";
+import { AdjustmentsVerticalIcon, CalendarDaysIcon, MoonIcon } from "./icons";
 
 type Props = {
     isReady: boolean;
@@ -23,7 +26,20 @@ type Props = {
 };
 
 // Duty 表示エリアの状態。stopping / resuming は操作直後の遷移中（実効状態の反映待ち）。
-type DutyPhase = "countdown" | "stopping" | "resuming" | "suspended-override" | "suspended-hazard";
+type DutyPhase =
+    | "countdown"
+    | "stopping"
+    | "resuming"
+    | "suspended-override"
+    | "suspended-hazard"
+    | "suspended-season";
+
+// 散水を停止している理由の表示
+const SUSPENDED_MESSAGES: Partial<Record<DutyPhase, string>> = {
+    "suspended-hazard": "ハザード検知のため散水を停止しています",
+    "suspended-override": "手動停止中のため Duty 制御を停止しています",
+    "suspended-season": "稼働期間外のため散水を停止しています",
+};
 
 const Spinner = () => (
     <span
@@ -63,6 +79,16 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger, refetchStat }
         resume: overrideResume,
     } = useOverride(stat.actuator_status != null ? overrideActive : null, refetchStat);
 
+    const {
+        season,
+        loading: seasonLoading,
+        saving: seasonSaving,
+        saveError: seasonSaveError,
+        save: seasonSave,
+    } = useSeason();
+    // 稼働期間外（冬季など）は Actuator が散水を強制停止している
+    const outOfSeason = !seasonLoading && !season.in_season;
+
     // 表示フェーズの決定。遷移中（pending）は実効状態より優先して「処理中」を出す。
     const dutyPhase: DutyPhase = hazardDetected
         ? "suspended-hazard"
@@ -72,7 +98,9 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger, refetchStat }
             ? "stopping"
             : overrideActive
               ? "suspended-override"
-              : "countdown";
+              : outOfSeason
+                ? "suspended-season"
+                : "countdown";
     const dutySuspended = dutyPhase !== "countdown";
     const [remainingTime, setRemainingTime] = useState(0);
     const [currentFlow, setCurrentFlow] = useState(0);
@@ -262,13 +290,9 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger, refetchStat }
                                 <small className="text-gray-500">再開処理中です…</small>
                             </div>
                         )}
-                        {(dutyPhase === "suspended-override" || dutyPhase === "suspended-hazard") && (
+                        {SUSPENDED_MESSAGES[dutyPhase] != null && (
                             <div className="text-center mb-1" data-testid="duty-suspended">
-                                <small className="text-gray-500">
-                                    {dutyPhase === "suspended-hazard"
-                                        ? "ハザード検知のため散水を停止しています"
-                                        : "手動停止中のため Duty 制御を停止しています"}
-                                </small>
+                                <small className="text-gray-500">{SUSPENDED_MESSAGES[dutyPhase]}</small>
                             </div>
                         )}
                         {dutyPhase === "countdown" && (
@@ -326,6 +350,15 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger, refetchStat }
                         </span>
                     </div>
                 )}
+                {/* 稼働期間外の表示（Controller のモードによらず散水しない理由が分かるように） */}
+                {outOfSeason && (
+                    <div className="mt-1 mb-2 flex justify-center" data-testid="out-of-season-badge">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded bg-slate-100 border border-slate-300 text-slate-600 text-sm">
+                            <CalendarDaysIcon className="size-4" />
+                            稼働期間外（{formatSeasonRange(season)}）
+                        </span>
+                    </div>
+                )}
                 {dutyInfo(mode)}
                 {valveStatusDisplay()}
             </div>
@@ -344,6 +377,14 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger, refetchStat }
                     postError={overridePostError}
                     onPause={overridePause}
                     onResume={overrideResume}
+                />
+                {/* 稼働期間（散水を行う季節）の設定 */}
+                <SeasonControl
+                    season={season}
+                    loading={seasonLoading}
+                    saving={seasonSaving}
+                    saveError={seasonSaveError}
+                    onSave={seasonSave}
                 />
             </CardBody>
         </DashboardCard>

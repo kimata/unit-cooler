@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ruff: noqa: S101
-"""unit_cooler.actuator.webapi.hazard / override のテスト"""
+"""unit_cooler.actuator.webapi.hazard / override / season のテスト"""
 
 from __future__ import annotations
 
@@ -14,6 +14,9 @@ import unit_cooler.actuator.control
 import unit_cooler.actuator.web_server
 
 URL_PREFIX = "/unit-cooler"
+
+# 稼働期間の設定例（5月1日〜10月31日）
+SUMMER_ONLY = {"enabled": True, "start": {"month": 5, "day": 1}, "end": {"month": 10, "day": 31}}
 
 
 @pytest.fixture
@@ -35,6 +38,14 @@ def override_file(mocker, tmp_path):
     """オーバーライドの永続化先を tmp_path に隔離する"""
     path = tmp_path / "unit_cooler.override.json"
     mocker.patch("unit_cooler.actuator.override.get_file_path", return_value=path)
+    return path
+
+
+@pytest.fixture
+def season_file(mocker, tmp_path):
+    """稼働期間設定の永続化先を tmp_path に隔離する"""
+    path = tmp_path / "unit_cooler.season.json"
+    mocker.patch("unit_cooler.actuator.season.get_file_path", return_value=path)
     return path
 
 
@@ -140,6 +151,76 @@ class TestOverrideApi:
         assert not override_file.exists()
         # 設定時と解除時の 2 回記録される
         assert mock_add.call_count == 2
+
+
+class TestSeasonApi:
+    """/api/season のテスト"""
+
+    def test_get_returns_all_year_initially(self, client, season_file):
+        """未設定なら通年稼働（enabled=False, in_season=True）"""
+        response = client.get(f"{URL_PREFIX}/api/season")
+
+        assert response.status_code == 200
+        assert response.json == {
+            "enabled": False,
+            "start": {"month": 1, "day": 1},
+            "end": {"month": 12, "day": 31},
+            "in_season": True,
+        }
+
+    @pytest.mark.parametrize(
+        ("today", "in_season"),
+        [
+            (datetime.datetime(2026, 7, 1, 12, 0), True),
+            (datetime.datetime(2026, 12, 1, 12, 0), False),
+        ],
+    )
+    def test_post_sets_season(self, client, season_file, mocker, today, in_season):
+        """設定すると永続化され、現在日付に応じた in_season を返す"""
+        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
+        mocker.patch("my_lib.time.now", return_value=today)
+
+        response = client.post(f"{URL_PREFIX}/api/season", json=SUMMER_ONLY)
+
+        assert response.status_code == 200
+        assert response.json == {**SUMMER_ONLY, "in_season": in_season}
+        assert season_file.exists()
+        mock_add.assert_called_once()
+        assert "5月1日〜10月31日" in mock_add.call_args[0][0]
+
+        # GET でも同じ状態が見える
+        assert client.get(f"{URL_PREFIX}/api/season").json == response.json
+
+    def test_post_disabled_keeps_dates(self, client, season_file, mocker):
+        """無効化しても月日は保持される（再度有効化するときの初期値になる）"""
+        mock_add = mocker.patch("unit_cooler.actuator.work_log.add")
+
+        response = client.post(f"{URL_PREFIX}/api/season", json={**SUMMER_ONLY, "enabled": False})
+
+        assert response.status_code == 200
+        assert response.json == {**SUMMER_ONLY, "enabled": False, "in_season": True}
+        assert "通年稼働" in mock_add.call_args[0][0]
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {},
+            {"enabled": True},
+            {"enabled": "true", "start": {"month": 5, "day": 1}, "end": {"month": 10, "day": 31}},
+            {"enabled": True, "start": {"month": 13, "day": 1}, "end": {"month": 10, "day": 31}},
+            {"enabled": True, "start": {"month": 2, "day": 30}, "end": {"month": 10, "day": 31}},
+            {"enabled": True, "start": {"month": "5", "day": 1}, "end": {"month": 10, "day": 31}},
+            {"enabled": True, "start": "5/1", "end": "10/31"},
+            {"enabled": True, "start": {"month": 5, "day": 1}, "end": {"month": 10}},
+        ],
+    )
+    def test_post_rejects_invalid_setting(self, client, season_file, body):
+        """不正な設定は 400 を返し、永続化しない"""
+        response = client.post(f"{URL_PREFIX}/api/season", json=body)
+
+        assert response.status_code == 400
+        assert "error" in response.json
+        assert not season_file.exists()
 
 
 if __name__ == "__main__":

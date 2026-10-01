@@ -107,7 +107,7 @@ Web UI が配信する React フロントエンドで構成されます。
 - **control_worker**（1 秒周期） — キューをドレインして最新メッセージを採用し、
   `control.execute()` → `ValveController.set_cooling_state()` でバルブを制御する。
   - 受信途絶が `controller.interval_sec × 3` を超えたら IDLE にフォールバック。
-  - `execute()` はハザードラッチ / 手動オーバーライドが有効な場合に IDLE へ差し替えた
+  - `execute()` はハザードラッチ / 手動オーバーライドが有効な場合や稼働期間外に IDLE へ差し替えた
     「実効メッセージ」を返し、worker はそれを `set_last_control_message()` に保存する
     （Fluentd・ActuatorStatus にも実効値が反映される）。
   - ループはイテレーション単位で例外を捕捉して継続し、脱出時は finally で必ず閉弁する。
@@ -127,7 +127,7 @@ KEYENCE FD-Q10C を SPI 経由で読み取ります（`my_lib.sensor.fd_q10c`）
 長時間閉弁が続き流量が 0 になるとセンサーの電源を切り、開弁で再開します。
 無応答が続く場合は `monitor.check_sensing()` が周期的にリセットを試みます。
 
-### ハザードラッチと手動オーバーライド（`control.py` / `override.py`）
+### ハザードラッチ・手動オーバーライド・稼働期間（`control.py` / `override.py` / `season.py`）
 
 - **ハザードラッチ** — 水漏れ・電磁弁故障などの検知は `actuator.control.hazard.file`
   （base_dir 相対パスは解決される。永続領域に置く想定）に footprint として記録され、
@@ -136,6 +136,14 @@ KEYENCE FD-Q10C を SPI 経由で読み取ります（`my_lib.sensor.fd_q10c`）
 - **手動オーバーライド** — `POST /api/override`（JSON `{"duration_min": N}`、1〜1440 分）で
   指定時間だけ強制 IDLE にする。状態はラッチと同じディレクトリの
   `unit_cooler.override.json` に永続化され、失効すると自動で通常運転に戻る。
+- **稼働期間** — 冬季など散水させたくない季節を除外するため、`POST /api/season`
+  （JSON `{"enabled": bool, "start": {"month": M, "day": D}, "end": {"month": M, "day": D}}`）で
+  「開始月日〜終了月日」を指定する。年は持たず毎年適用され、期間外は強制 IDLE になる。
+  開始日・終了日はどちらも期間に含み、開始 > 終了 は年をまたぐ期間として扱う。
+  状態はラッチと同じディレクトリの `unit_cooler.season.json` に永続化され、
+  未設定（または `enabled: false`）なら通年稼働。
+- override / season の JSON 永続化（一時ファイル経由の置き換え・破損時の無視）は
+  `state_file.py` に共通化している。
 
 ### 作動ログ（`work_log.py`）
 
@@ -149,7 +157,8 @@ KEYENCE FD-Q10C を SPI 経由で読み取ります（`my_lib.sensor.fd_q10c`）
 `my_lib.webapp` の log_view / event(SSE) / util、`webapi/valve_status.py`（`GET /api/valve_status`）、
 `webapi/flow_status.py`（`GET /api/get_flow`）、`webapi/hazard.py`
 （`GET /api/hazard`, `POST /api/hazard/clear`）、`webapi/override.py`
-（`GET|POST /api/override`, `POST /api/override/clear`）、`metrics/webapi/page.py`（ダッシュボード）。
+（`GET|POST /api/override`, `POST /api/override/clear`）、`webapi/season.py`
+（`GET|POST /api/season`）、`metrics/webapi/page.py`（ダッシュボード）。
 
 ## フェイルセーフ設計
 
@@ -190,7 +199,7 @@ KEYENCE FD-Q10C を SPI 経由で読み取ります（`my_lib.sensor.fd_q10c`）
     エアコン別電力履歴（背景スパークライン・頻度ヒートバー用）。
 - `my_lib.webapp.proxy` が `/api/proxy/json/<subpath>`・`/api/proxy/event/<subpath>`（SSE）を
   actuator :5001 へ転送する。フロントエンドからの actuator API 呼び出し
-  （log_view / valve_status / get_flow / hazard / override）はすべてこのプロキシ経由。
+  （log_view / valve_status / get_flow / hazard / override / season）はすべてこのプロキシ経由。
 
 ### フロントエンド（`frontend/`）
 
@@ -203,7 +212,8 @@ Web UI が静的配信します。
 - **主要コンポーネント**: `ConnectionStatus`（freshness / SSE 状態から接続・鮮度を表示、
   Controller 途絶時はカードを淡色化）、`HazardBanner`（`hazard_detected` 時の警告と解除ボタン）、
   `Watering` / `History`（散水量・水道代）、`CoolingMode`（冷却モード・Duty カウントダウン・
-  夜間停止バッジ・手動停止 UI `OverrideControl`）、`AirConditioner`（エアコン別電力バー）、
+  夜間停止バッジ・手動停止 UI `OverrideControl`・稼働期間の設定 UI `SeasonControl`）、
+  `AirConditioner`（エアコン別電力バー）、
   `Sensor`、`Log`。カード単位の `ErrorBoundary` で部分障害を隔離。
 - 型定義は `lib/ApiResponse.ts` にあり、バックエンドのレスポンス形状と対応する
   （整合性は `tests/integration/test_api_schema.py` で検証）。
