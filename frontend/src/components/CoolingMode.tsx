@@ -341,8 +341,9 @@ const CoolingMode = React.memo(({ isReady, stat, logUpdateTrigger, refetchStat }
                 <div className="text-6xl font-light align-middle ml-1">
                     <AnimatedNumber value={mode.mode_index} decimals={0} className="font-bold digit" />
                 </div>
-                {/* 夜間停止によるモード 0 固定中の表示（モード 0 の理由が分かるように） */}
-                {mode.night_stop && (
+                {/* 夜間停止によるモード 0 固定中の表示（モード 0 の理由が分かるように）。
+                    稼働期間外は夜間かどうかによらず停止しているため、稼働期間外バッジだけを出す */}
+                {mode.night_stop && !outOfSeason && (
                     <div className="mt-1 mb-2 flex justify-center" data-testid="night-stop-badge">
                         <span className="inline-flex items-center gap-1 px-3 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-600 text-sm">
                             <MoonIcon className="size-4" />
