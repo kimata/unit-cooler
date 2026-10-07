@@ -36,7 +36,7 @@ jobs:
               working-directory: ./frontend
 
             - name: Upload built file
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: frontend-dist
                   path: frontend/dist
@@ -61,7 +61,7 @@ jobs:
                   python-version: ${{ matrix.python-version }}
 
             - name: Download frontend built files
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   name: frontend-dist
                   path: frontend/dist
@@ -111,7 +111,7 @@ jobs:
                   reporter: java-junit
 
             - name: Upload coverage file
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               if: always()
               with:
                   name: pytest-${{ matrix.python-version }}
@@ -139,7 +139,7 @@ jobs:
                   python-version: "3.12"
 
             - name: Download frontend built files
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   name: frontend-dist
                   path: frontend/dist
