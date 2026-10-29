@@ -63,7 +63,7 @@ build-react:
 
     needs: []
 
-    image: node:24.18@sha256:19cd848a0e073d34bd8cd5545a1b6b4d28489b3e3b607366621ced442bd5f6b4
+    image: node:24.22@sha256:e7add2a490bb17d97b485b8641bd88455fff7839ade0f5eba493c3508124d413
 
     variables:
         # NOTE: vite 等がバンドルに埋め込むビルド日時を決定論的にする
